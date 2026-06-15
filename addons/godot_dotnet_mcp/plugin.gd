@@ -693,7 +693,9 @@ func _build_dock_refresh_status_signature_data() -> Dictionary:
 		if _server_controller.has_method("get_connection_count"):
 			connection_count = int(_server_controller.get_connection_count())
 		var status = {}
-		if _server_controller.has_method("peek_tool_loader_status"):
+		if _server_controller.has_method("peek_light_tool_loader_status"):
+			status = _server_controller.peek_light_tool_loader_status()
+		elif _server_controller.has_method("peek_tool_loader_status"):
 			status = _server_controller.peek_tool_loader_status()
 		elif _server_controller.has_method("get_tool_loader_status"):
 			status = _server_controller.get_tool_loader_status()

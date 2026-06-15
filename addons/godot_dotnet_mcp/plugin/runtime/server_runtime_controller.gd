@@ -312,6 +312,12 @@ func peek_tool_loader_status() -> Dictionary:
 	return get_tool_loader_status()
 
 
+func peek_light_tool_loader_status() -> Dictionary:
+	if _has_server_method("peek_light_tool_loader_status"):
+		return _server.peek_light_tool_loader_status()
+	return peek_tool_loader_status()
+
+
 func get_tool_loader():
 	return _resolve_tool_loader()
 

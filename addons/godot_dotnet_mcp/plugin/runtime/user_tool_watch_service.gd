@@ -5,9 +5,9 @@ class_name UserToolWatchService
 const CUSTOM_TOOLS_DIR := "res://addons/godot_dotnet_mcp/custom_tools"
 const ENABLE_RUNTIME_LOADING_SETTING := "godot_dotnet_mcp/user_tools/enable_runtime_loading"
 const ENABLE_RUNTIME_LOADING_SETTING_LEGACY := "user_tools/enable_runtime_loading"
-const POLL_INTERVAL_MSEC := 2500
+const POLL_INTERVAL_MSEC := 5000
 const SETTLE_DELAY_MSEC := 300
-const SCAN_ENTRY_BUDGET_PER_TICK := 32
+const SCAN_ENTRY_BUDGET_PER_TICK := 16
 
 var _plugin: Object
 var _reload_coordinator = null
@@ -70,6 +70,11 @@ func stop() -> void:
 func tick() -> void:
 	if not _watching:
 		return
+	var now_msec := Time.get_ticks_msec()
+	if not _scan_in_progress and not _initial_scan_pending:
+		if _last_poll_msec > 0 and now_msec - _last_poll_msec < POLL_INTERVAL_MSEC:
+			return
+		_last_poll_msec = now_msec
 	_runtime_loading_enabled_cache = _is_runtime_loading_enabled()
 	if not _runtime_loading_enabled_cache:
 		_pending_snapshot.clear()
@@ -78,7 +83,6 @@ func tick() -> void:
 		_reset_scan_state()
 		_initial_scan_pending = false
 		return
-	var now_msec := Time.get_ticks_msec()
 	if _scan_in_progress:
 		var sliced_result := _continue_scan_snapshot()
 		if bool(sliced_result.get("complete", false)):
@@ -89,9 +93,6 @@ func tick() -> void:
 		if bool(baseline_result.get("complete", false)):
 			_handle_scan_result(baseline_result, now_msec)
 		return
-	if _last_poll_msec > 0 and now_msec - _last_poll_msec < POLL_INTERVAL_MSEC:
-		return
-	_last_poll_msec = now_msec
 	var scan_result := _begin_incremental_scan()
 	if bool(scan_result.get("complete", false)):
 		_handle_scan_result(scan_result, now_msec)
@@ -110,6 +111,7 @@ func _handle_scan_result(scan_result: Dictionary, now_msec: int) -> void:
 	if _initial_scan_pending:
 		_known_snapshot = snapshot.duplicate(true)
 		_initial_scan_pending = false
+		_last_poll_msec = now_msec
 		_last_error = ""
 		_last_change_reason = "watch_baseline_ready"
 		return
