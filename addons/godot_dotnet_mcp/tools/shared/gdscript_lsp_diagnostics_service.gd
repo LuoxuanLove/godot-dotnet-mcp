@@ -143,12 +143,6 @@ func get_status_summary() -> Dictionary:
 
 
 func tick(delta: float) -> void:
-	MCPDebugBuffer.record("info", "gdscript_lsp_diagnostics_service",
-		"tick active=%s pending=%s state=%s" % [
-			str(has_active_request()),
-			str(not _pending_script_path.is_empty()),
-			str(_status.get("state", "idle"))
-		])
 	if _client != null and _client.has_method("tick") and _client.has_active_request():
 		_client.tick(delta)
 		var client_status_raw: Variant = _client.get_status()

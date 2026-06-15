@@ -33,6 +33,12 @@ func get_debug_snapshot(tool_loader_status: Dictionary = {}) -> Dictionary:
 	}
 
 
+func has_active_request() -> bool:
+	if _diagnostics_adapter != null and _diagnostics_adapter.has_method("has_active_request"):
+		return bool(_diagnostics_adapter.has_active_request())
+	return false
+
+
 func reset() -> void:
 	var diagnostics_adapter = ensure_adapter()
 	if diagnostics_adapter != null and diagnostics_adapter.has_method("reset"):

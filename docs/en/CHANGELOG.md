@@ -53,6 +53,7 @@ Target version: 2.0.0.
 - Fixed Config tab one-click CLI setup actions so they run through a non-blocking process path with immediate in-panel status instead of freezing the editor until the client command exits.
 - Fixed first-open responsiveness of the Dock Tools tab by building only the active tool presentation view up front and deferring Internal Executors / Diagnostics trees until those views are selected.
 - Fixed Dock status snapshots so lightweight views reuse cached lifecycle context and avoid calling heavy server diagnostics unless the active tab explicitly needs them.
+- Fixed idle runtime ticking so HTTP/stdio transports no longer drive loaded tool executors and GDScript LSP diagnostics every editor frame, while exposing lifecycle tick timing in performance diagnostics.
 
 ### Documentation
 
