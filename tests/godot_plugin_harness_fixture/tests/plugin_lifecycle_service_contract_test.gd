@@ -28,6 +28,7 @@ class FakeLifecycleContext:
 			"attach_server_controller": Callable(self, "attach_server_controller"),
 			"configure_user_tool_watch_service": Callable(self, "configure_user_tool_watch_service"),
 			"configure_config_tab_action_service": Callable(self, "configure_config_tab_action_service"),
+			"install_performance_monitors": Callable(self, "install_performance_monitors"),
 			"ensure_runtime_bridge_autoload": Callable(self, "ensure_runtime_bridge_autoload"),
 			"install_editor_debugger_bridge": Callable(self, "install_editor_debugger_bridge"),
 			"create_dock": Callable(self, "create_dock"),
@@ -46,6 +47,7 @@ class FakeLifecycleContext:
 			"remove_dock": Callable(self, "remove_dock"),
 			"remove_client_executable_dialog": Callable(self, "remove_client_executable_dialog"),
 			"uninstall_editor_debugger_bridge": Callable(self, "uninstall_editor_debugger_bridge"),
+			"remove_performance_monitors": Callable(self, "remove_performance_monitors"),
 			"remove_runtime_bridge_autoload": Callable(self, "remove_runtime_bridge_autoload"),
 			"dispose_action_router": Callable(self, "dispose_action_router"),
 			"dispose_server_controller": Callable(self, "dispose_server_controller"),
@@ -64,6 +66,7 @@ class FakeLifecycleContext:
 	func attach_server_controller() -> void: calls.append("attach_server_controller")
 	func configure_user_tool_watch_service() -> void: calls.append("configure_user_tool_watch_service")
 	func configure_config_tab_action_service() -> void: calls.append("configure_config_tab_action_service")
+	func install_performance_monitors() -> void: calls.append("install_performance_monitors")
 	func ensure_runtime_bridge_autoload() -> void: calls.append("ensure_runtime_bridge_autoload")
 	func install_editor_debugger_bridge() -> void: calls.append("install_editor_debugger_bridge")
 	func create_dock() -> void: calls.append("create_dock")
@@ -80,6 +83,7 @@ class FakeLifecycleContext:
 	func remove_dock() -> void: calls.append("remove_dock")
 	func remove_client_executable_dialog() -> void: calls.append("remove_client_executable_dialog")
 	func uninstall_editor_debugger_bridge() -> void: calls.append("uninstall_editor_debugger_bridge")
+	func remove_performance_monitors() -> void: calls.append("remove_performance_monitors")
 	func remove_runtime_bridge_autoload() -> void: calls.append("remove_runtime_bridge_autoload")
 	func dispose_action_router() -> void: calls.append("dispose_action_router")
 	func dispose_server_controller() -> void: calls.append("dispose_server_controller")
@@ -119,6 +123,7 @@ class FakeLifecycleContext:
 	func _attach_server_controller() -> void: attach_server_controller()
 	func _configure_user_tool_watch_service() -> void: configure_user_tool_watch_service()
 	func _configure_config_tab_action_service() -> void: configure_config_tab_action_service()
+	func _install_performance_monitors() -> void: install_performance_monitors()
 	func _ensure_runtime_bridge_autoload() -> void: ensure_runtime_bridge_autoload()
 	func _install_editor_debugger_bridge() -> void: install_editor_debugger_bridge()
 	func _create_dock() -> void: create_dock()
@@ -137,6 +142,7 @@ class FakeLifecycleContext:
 	func _remove_dock() -> void: remove_dock()
 	func _remove_client_executable_dialog() -> void: remove_client_executable_dialog()
 	func _uninstall_editor_debugger_bridge() -> void: uninstall_editor_debugger_bridge()
+	func _remove_performance_monitors() -> void: remove_performance_monitors()
 	func _remove_runtime_bridge_autoload() -> void: remove_runtime_bridge_autoload()
 	func _dispose_action_router() -> void: dispose_action_router()
 	func _dispose_server_controller() -> void: dispose_server_controller()
@@ -169,6 +175,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"attach_server_controller",
 		"configure_user_tool_watch_service",
 		"configure_config_tab_action_service",
+		"install_performance_monitors",
 		"ensure_runtime_bridge_autoload",
 		"install_editor_debugger_bridge",
 		"create_dock",
@@ -202,6 +209,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"remove_dock",
 		"remove_client_executable_dialog",
 		"uninstall_editor_debugger_bridge",
+		"remove_performance_monitors",
 		"remove_runtime_bridge_autoload",
 		"dispose_action_router",
 		"dispose_server_controller",
@@ -257,6 +265,11 @@ func _assert_plugin_entrypoint_delegates_to_lifecycle_service() -> String:
 		"_plugin_lifecycle_service.exit_tree(_build_plugin_lifecycle_context())",
 		"_plugin_lifecycle_service.disable_plugin(_build_plugin_lifecycle_context())",
 		"_plugin_lifecycle_service.process(delta, _status_poll_accumulator, _update_refs_discovery_retry_pending, _get_plugin_lifecycle_context())",
+		"const PluginPerformanceMonitorScript = preload(\"res://addons/godot_dotnet_mcp/plugin/runtime/plugin_performance_monitor.gd\")",
+		"var _performance_monitor := PluginPerformanceMonitorScript.new()",
+		"func _install_performance_monitors()",
+		"func _remove_performance_monitors()",
+		"_performance_monitor.record_process_frame(started_usec, delta)",
 		"func _defer_initial_dock_refresh()",
 		"call_deferred(\"_refresh_dock\")",
 		"func _defer_start_server_for_lifecycle()",

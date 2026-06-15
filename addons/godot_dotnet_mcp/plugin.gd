@@ -25,6 +25,7 @@ const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/
 const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_instance_freshness.gd")
 const MCPMaintenanceContract = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_maintenance_contract.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const PluginPerformanceMonitorScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_performance_monitor.gd")
 const MCP_DOCK_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.tscn"
 const MCP_DOCK_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.gd"
 const PLUGIN_ID := "godot_dotnet_mcp"
@@ -114,6 +115,7 @@ var _user_tool_service = null
 var _user_tool_watch_service = null
 var _action_router := PluginActionRouterScript.new()
 var _dock_coordinator := PluginDockCoordinatorScript.new()
+var _performance_monitor := PluginPerformanceMonitorScript.new()
 var _localization: LocalizationService
 var _dock: Control
 var _client_executable_dialog: FileDialog
@@ -136,16 +138,6 @@ var _update_ref_version_requests_in_flight := {}
 var _update_sync_request_serial := 0
 var _last_dock_refresh_status_signature := ""
 var _cached_lifecycle_context: Dictionary = {}
-var _process_perf := {
-	"frame_count": 0,
-	"total_ms": 0.0,
-	"max_ms": 0.0,
-	"last_ms": 0.0,
-	"slow_frame_count": 0,
-	"last_slow_frame_ms": 0.0
-}
-
-const PROCESS_SLOW_FRAME_THRESHOLD_MS := 8.0
 const USER_TOOL_WATCH_TICK_INTERVAL := 0.25
 
 
@@ -183,7 +175,7 @@ func _process(delta: float) -> void:
 	var started_usec := Time.get_ticks_usec()
 	_user_tool_watch_tick_accumulator += maxf(delta, 0.0)
 	_status_poll_accumulator = _plugin_lifecycle_service.process(delta, _status_poll_accumulator, _update_refs_discovery_retry_pending, _get_plugin_lifecycle_context())
-	_record_process_perf(started_usec)
+	_record_process_perf(started_usec, delta)
 
 
 func _build_plugin_lifecycle_context() -> Dictionary:
@@ -3512,29 +3504,27 @@ func _get_user_tool_watch_status() -> Dictionary:
 	return _user_tool_watch_service.get_status()
 
 
-func _record_process_perf(started_usec: int) -> void:
-	var elapsed_ms := maxf(float(Time.get_ticks_usec() - started_usec) / 1000.0, 0.0)
-	_process_perf["frame_count"] = int(_process_perf.get("frame_count", 0)) + 1
-	_process_perf["total_ms"] = float(_process_perf.get("total_ms", 0.0)) + elapsed_ms
-	_process_perf["last_ms"] = elapsed_ms
-	_process_perf["max_ms"] = maxf(float(_process_perf.get("max_ms", 0.0)), elapsed_ms)
-	if elapsed_ms > PROCESS_SLOW_FRAME_THRESHOLD_MS:
-		_process_perf["slow_frame_count"] = int(_process_perf.get("slow_frame_count", 0)) + 1
-		_process_perf["last_slow_frame_ms"] = elapsed_ms
+func _install_performance_monitors() -> void:
+	if _performance_monitor == null:
+		_performance_monitor = PluginPerformanceMonitorScript.new()
+	_performance_monitor.install_custom_monitors()
+
+
+func _remove_performance_monitors() -> void:
+	if _performance_monitor != null:
+		_performance_monitor.remove_custom_monitors()
+
+
+func _record_process_perf(started_usec: int, delta: float) -> void:
+	if _performance_monitor == null:
+		_performance_monitor = PluginPerformanceMonitorScript.new()
+	_performance_monitor.record_process_frame(started_usec, delta)
 
 
 func _get_process_performance_status() -> Dictionary:
-	var frame_count := int(_process_perf.get("frame_count", 0))
-	var total_ms := float(_process_perf.get("total_ms", 0.0))
-	return {
-		"frame_count": frame_count,
-		"last_ms": float(_process_perf.get("last_ms", 0.0)),
-		"max_ms": float(_process_perf.get("max_ms", 0.0)),
-		"average_ms": total_ms / float(frame_count) if frame_count > 0 else 0.0,
-		"slow_frame_count": int(_process_perf.get("slow_frame_count", 0)),
-		"last_slow_frame_ms": float(_process_perf.get("last_slow_frame_ms", 0.0)),
-		"slow_frame_threshold_ms": PROCESS_SLOW_FRAME_THRESHOLD_MS
-	}
+	if _performance_monitor == null:
+		_performance_monitor = PluginPerformanceMonitorScript.new()
+	return _performance_monitor.get_status()
 
 
 func _cleanup_disabled_tools() -> void:
