@@ -89,6 +89,7 @@ var _update_refs_request_serial := 0
 var _update_refs_pending := {}
 var _update_refs_discovery_loaded := false
 var _update_refs_discovery_retry_pending := false
+var _update_sync_after_refs_discovery_pending := false
 var _update_compare_request_serial := 0
 var _update_ref_version_request_serial := 0
 var _update_ref_version_requests_in_flight := {}
@@ -812,6 +813,7 @@ func _on_language_changed(language_code: String) -> void:
 
 func _on_update_source_changed(source: String) -> void:
 	_ensure_runtime_state()
+	_update_sync_after_refs_discovery_pending = false
 	_state.settings["update_source"] = _normalize_update_source(source)
 	if _state.settings["update_source"] == "custom_branch":
 		_state.settings["update_custom_branch"] = "dev"
@@ -879,6 +881,7 @@ func _get_update_request_parent() -> Node:
 
 func _on_update_custom_branch_changed(branch: String) -> void:
 	_ensure_runtime_state()
+	_update_sync_after_refs_discovery_pending = false
 	_state.settings["update_custom_branch"] = branch
 	_save_settings()
 	if _ensure_update_refs_discovery_requested(true):
@@ -939,6 +942,7 @@ func _on_update_sync_requested() -> void:
 		_state.update_sync_status = ""
 		_refresh_dock()
 		return
+	_update_sync_after_refs_discovery_pending = false
 	_update_sync_request_serial += 1
 	var serial := _update_sync_request_serial
 	_state.update_sync_state = "loading"
@@ -1353,6 +1357,15 @@ func _mark_update_refs_request_failed(kind: String, message: String, serial: int
 	else:
 		_update_refs_pending["release_done"] = true
 	_finalize_update_refs_discovery_if_ready(serial)
+
+
+func _fail_pending_update_sync_after_refs_discovery(message: String) -> void:
+	if not _update_sync_after_refs_discovery_pending or _state == null:
+		return
+	_update_sync_after_refs_discovery_pending = false
+	_state.update_sync_state = "error"
+	_state.update_sync_error = message
+	_state.update_sync_status = ""
 
 
 func _mark_update_sync_failed(message: String, serial: int) -> void:
@@ -1776,7 +1789,29 @@ func _finalize_update_refs_discovery_if_ready(serial: int) -> void:
 		_state.update_refs_error = "; ".join(errors)
 		_state.update_refs_status = ""
 		_reset_update_compare_state()
+		_fail_pending_update_sync_after_refs_discovery("Update target discovery failed before sync: %s" % _state.update_refs_error)
+	var continued_sync := _continue_pending_update_sync_after_refs_discovery()
+	if continued_sync:
+		return
 	_refresh_dock()
+
+
+func _continue_pending_update_sync_after_refs_discovery() -> bool:
+	if not _update_sync_after_refs_discovery_pending or _state == null:
+		return false
+	if str(_state.update_refs_state) != "success":
+		return false
+	var target := _resolve_update_sync_target()
+	var target_ref := str(target.get("ref", "")).strip_edges()
+	if target_ref.is_empty():
+		_update_sync_after_refs_discovery_pending = false
+		_state.update_sync_state = "error"
+		_state.update_sync_error = _localization.get_text("settings_update_sync_no_target") if _localization != null else "Select an update target before syncing."
+		_state.update_sync_status = ""
+		return false
+	_update_sync_after_refs_discovery_pending = false
+	_on_update_sync_requested()
+	return str(_state.update_sync_state) == "loading"
 
 
 func _refresh_update_compare_for_current_target() -> void:
@@ -2055,18 +2090,22 @@ func start_plugin_update_sync_from_tools() -> Dictionary:
 	var target_ref := str(target.get("ref", "")).strip_edges()
 	if target_ref.is_empty():
 		if _should_discover_update_target_before_sync():
+			_update_sync_after_refs_discovery_pending = true
 			var discovery_accepted := _ensure_update_refs_discovery_requested(true)
 			var discovery_data := _build_plugin_update_status_snapshot()
-			discovery_data["accepted"] = false
+			var discovery_loading := str(_state.update_refs_state) == "loading" or _update_refs_discovery_retry_pending
+			discovery_data["accepted"] = discovery_accepted or discovery_loading
 			discovery_data["discovery_accepted"] = discovery_accepted
-			discovery_data["action_status"] = _resolve_plugin_update_request_status("refs", discovery_accepted)
+			discovery_data["pending_sync_after_refs_discovery"] = _update_sync_after_refs_discovery_pending
+			discovery_data["next_action"] = "poll_update_status"
+			discovery_data["action_status"] = "preparing_sync" if discovery_loading else _resolve_plugin_update_request_status("refs", discovery_accepted)
 			return _build_plugin_update_tool_response({
 				"success": true,
-				"accepted": false,
-				"loading": str(_state.update_refs_state) == "loading",
+				"accepted": bool(discovery_data.get("accepted", false)),
+				"loading": discovery_loading,
 				"status": str(discovery_data.get("action_status", "")),
 				"data": discovery_data,
-				"message": "Plugin update target discovery is required before sync"
+				"message": "Plugin update target discovery started before sync"
 			})
 		_on_update_sync_requested()
 		var missing_target_data := _build_plugin_update_status_snapshot()
@@ -2154,6 +2193,8 @@ func _build_plugin_update_status_snapshot() -> Dictionary:
 		"current_commit": _resolve_current_update_commit(),
 		"request_host_available": _get_update_request_parent() != null,
 		"discovery_retry_pending": _update_refs_discovery_retry_pending,
+		"pending_sync_after_refs_discovery": _update_sync_after_refs_discovery_pending,
+		"next_action": "poll_update_status" if _update_sync_after_refs_discovery_pending else "",
 		"refs": _build_plugin_update_refs_status(),
 		"compare": _build_plugin_update_compare_status(),
 		"sync": _build_plugin_update_sync_status(),
@@ -2206,13 +2247,16 @@ func _build_plugin_update_sync_status() -> Dictionary:
 		"status": str(_state.update_sync_status),
 		"error": str(_state.update_sync_error),
 		"target_ref": str(_state.update_sync_target_ref),
-		"target_kind": str(_state.update_sync_target_kind)
+		"target_kind": str(_state.update_sync_target_kind),
+		"pending_after_refs_discovery": _update_sync_after_refs_discovery_pending
 	}
 
 
 func _resolve_plugin_update_overall_status() -> String:
 	if str(_state.update_sync_state) == "loading":
 		return "syncing"
+	if _update_sync_after_refs_discovery_pending:
+		return "preparing_sync"
 	if str(_state.update_refs_state) == "loading" or str(_state.update_compare_state) == "loading":
 		return "loading"
 	if str(_state.update_sync_state) == "error" or str(_state.update_refs_state) == "error" or str(_state.update_compare_state) == "error":
