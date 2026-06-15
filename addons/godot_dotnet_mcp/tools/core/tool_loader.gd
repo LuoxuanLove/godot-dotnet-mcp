@@ -57,6 +57,11 @@ var _tool_activity_registry = null
 var _performance: Dictionary = {}
 var _preload_runtimes_on_initialize := false
 var _catalog_revision := 0
+var _lifecycle_tick_accumulator := 0.0
+
+const IDLE_LIFECYCLE_TICK_INTERVAL_SECONDS := 0.5
+const ACTIVE_LSP_LIFECYCLE_TICK_INTERVAL_SECONDS := 0.05
+const MAX_LIFECYCLE_TICK_DELTA_SECONDS := 2.0
 
 
 func _init() -> void:
@@ -315,7 +320,18 @@ func execute_tool_async(category: String, tool_name: String, args: Dictionary) -
 
 func tick(delta: float) -> void:
 	_ensure_services_ready()
-	_lifecycle_service.tick(delta, _build_lifecycle_context())
+	_lifecycle_tick_accumulator = minf(
+		_lifecycle_tick_accumulator + maxf(delta, 0.0),
+		MAX_LIFECYCLE_TICK_DELTA_SECONDS
+	)
+	var tick_interval := _get_lifecycle_tick_interval_seconds()
+	if _lifecycle_tick_accumulator < tick_interval:
+		return
+	var tick_delta := _lifecycle_tick_accumulator
+	_lifecycle_tick_accumulator = 0.0
+	var started_usec := Time.get_ticks_usec()
+	_lifecycle_service.tick(tick_delta, _build_lifecycle_context())
+	_record_lifecycle_tick_performance(started_usec, tick_interval, tick_delta)
 
 
 func get_gdscript_lsp_diagnostics_service():
@@ -555,6 +571,25 @@ func _dispose_gdscript_lsp_diagnostics_adapter() -> void:
 
 func _tick_gdscript_lsp_diagnostics(delta: float) -> void:
 	_lsp_diagnostics_service.tick(delta)
+
+
+func _has_active_gdscript_lsp_diagnostics_request() -> bool:
+	return _lsp_diagnostics_service != null \
+		and _lsp_diagnostics_service.has_method("has_active_request") \
+		and _lsp_diagnostics_service.has_active_request()
+
+
+func _get_lifecycle_tick_interval_seconds() -> float:
+	return ACTIVE_LSP_LIFECYCLE_TICK_INTERVAL_SECONDS if _has_active_gdscript_lsp_diagnostics_request() else IDLE_LIFECYCLE_TICK_INTERVAL_SECONDS
+
+
+func _record_lifecycle_tick_performance(started_usec: int, interval_seconds: float, tick_delta: float) -> void:
+	var elapsed_ms := float(Time.get_ticks_usec() - started_usec) / 1000.0
+	_performance["lifecycle_tick_count"] = int(_performance.get("lifecycle_tick_count", 0)) + 1
+	_performance["lifecycle_tick_last_ms"] = elapsed_ms
+	_performance["lifecycle_tick_max_ms"] = maxf(float(_performance.get("lifecycle_tick_max_ms", 0.0)), elapsed_ms)
+	_performance["lifecycle_tick_interval_seconds"] = interval_seconds
+	_performance["lifecycle_tick_delta_seconds"] = tick_delta
 
 
 func _is_exposed_tool_definition(tool_def: Dictionary) -> bool:

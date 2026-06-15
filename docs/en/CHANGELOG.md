@@ -55,6 +55,7 @@ Target version: 2.0.0.
 - Fixed repeated Dock Tools refreshes so unchanged tool catalogs reuse the last presentation model through a lightweight catalog revision instead of rebuilding the full tool snapshot on every active-tab refresh.
 - Fixed Dock status snapshots so lightweight views reuse cached lifecycle context and avoid calling heavy server diagnostics unless the active tab explicitly needs them.
 - Fixed MCP tool discovery recovery after update or hot reload so `tools/list` / `tools/call` lazily reinitialize empty registries, overlapping editor automation calls fail fast with `editor_automation_busy`, and idle GDScript LSP tick logs no longer make the editor or MCP clients appear stuck.
+- Fixed idle runtime ticking so HTTP/stdio transports no longer drive loaded tool executors and GDScript LSP diagnostics every editor frame, while exposing lifecycle tick timing in performance diagnostics.
 
 ### Documentation
 

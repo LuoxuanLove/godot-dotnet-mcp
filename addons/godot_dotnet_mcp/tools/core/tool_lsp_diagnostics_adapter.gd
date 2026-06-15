@@ -31,6 +31,12 @@ func tick(delta: float) -> void:
 		service.tick(delta)
 
 
+func has_active_request() -> bool:
+	if _service != null and is_instance_valid(_service) and _service.has_method("has_active_request"):
+		return bool(_service.has_active_request())
+	return false
+
+
 func reset() -> void:
 	if _service != null and is_instance_valid(_service) and _service.has_method("clear"):
 		_service.clear()

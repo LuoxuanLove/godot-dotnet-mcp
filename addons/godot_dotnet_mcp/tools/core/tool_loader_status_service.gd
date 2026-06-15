@@ -32,6 +32,11 @@ func build_performance_summary(performance: Dictionary, tool_call_metrics) -> Di
 		"preload_ms": performance.get("preload_ms", 0.0),
 		"reload_total_ms": performance.get("reload_total_ms", 0.0),
 		"reload_count": performance.get("reload_count", 0),
+		"lifecycle_tick_count": performance.get("lifecycle_tick_count", 0),
+		"lifecycle_tick_last_ms": performance.get("lifecycle_tick_last_ms", 0.0),
+		"lifecycle_tick_max_ms": performance.get("lifecycle_tick_max_ms", 0.0),
+		"lifecycle_tick_interval_seconds": performance.get("lifecycle_tick_interval_seconds", 0.0),
+		"lifecycle_tick_delta_seconds": performance.get("lifecycle_tick_delta_seconds", 0.0),
 		"tool_calls": tool_call_metrics
 	}
 
