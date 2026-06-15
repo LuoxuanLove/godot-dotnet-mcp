@@ -1,6 +1,7 @@
 extends RefCounted
 
 const ToolLoaderScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
+const ToolLoaderTickServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_tick_service.gd")
 const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
 const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
@@ -51,6 +52,13 @@ var _loader = null
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	var tick_source_guard := _assert_tick_service_uses_light_definition_signatures()
+	if not tick_source_guard.is_empty():
+		return _failure(tick_source_guard)
+	var tick_behavior_guard := _assert_tick_service_detects_metadata_changes()
+	if not bool(tick_behavior_guard.get("success", false)):
+		return tick_behavior_guard
+
 	PluginSelfDiagnosticStore.clear()
 	PluginSelfDiagnosticStore.record_incident(
 		"warning",
@@ -500,6 +508,42 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _assert_tick_service_uses_light_definition_signatures() -> String:
+	var source_path := "res://addons/godot_dotnet_mcp/tools/core/tool_loader_tick_service.gd"
+	if not FileAccess.file_exists(source_path):
+		return "Tool loader tick service source should exist for signature guard."
+	var source := FileAccess.get_file_as_string(source_path)
+	if source.find("JSON.stringify(previous_defs)") != -1 or source.find("JSON.stringify(next_defs)") != -1:
+		return "Tool loader tick service should not stringify full definition arrays every tick."
+	if source.find("_tool_definitions_match") == -1:
+		return "Tool loader tick service should compare user definitions through lightweight signatures."
+	return ""
+
+
+func _assert_tick_service_detects_metadata_changes() -> Dictionary:
+	var service = ToolLoaderTickServiceScript.new()
+	var original := [{
+		"name": "sample",
+		"description": "before",
+		"inputSchema": {"type": "object", "properties": {"value": {"type": "string"}}}
+	}]
+	var same := [{
+		"name": "sample",
+		"description": "before",
+		"inputSchema": {"type": "object", "properties": {"value": {"type": "string"}}}
+	}]
+	var changed := [{
+		"name": "sample",
+		"description": "after",
+		"inputSchema": {"type": "object", "properties": {"value": {"type": "number"}}}
+	}]
+	if not service._tool_definitions_match(original, same):
+		return _failure("Tool loader tick service should treat equivalent user definition signatures as unchanged.")
+	if service._tool_definitions_match(original, changed):
+		return _failure("Tool loader tick service should detect user definition metadata changes.")
+	return {"success": true}
 
 
 func _assert_loader_recovers_services_after_hot_reload() -> Dictionary:

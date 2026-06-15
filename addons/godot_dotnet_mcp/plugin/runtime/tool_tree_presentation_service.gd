@@ -162,13 +162,15 @@ static func build_agent_tool_tree(exposed_tools: Array, disabled_tools: Array = 
 			"enabledCount": group_node.get("enabledCount", 0),
 			"totalCount": group_node.get("totalCount", 0)
 		})
-	return {
+	var presentation := {
 		"presentationVersion": PRESENTATION_VERSION,
 		"view": "agent_tools",
 		"toolTree": roots,
 		"toolGroups": groups,
 		"toolMetadataByName": metadata_by_name
 	}
+	presentation["signature"] = ToolPresentationService.build_presentation_signature("agent_tools", roots, groups, metadata_by_name)
+	return presentation
 
 
 static func build_internal_executor_tree(
@@ -256,12 +258,14 @@ static func build_internal_executor_tree(
 			"totalCount": category_nodes.size(),
 			"children": category_nodes
 		})
-	return {
+	var presentation := {
 		"presentationVersion": PRESENTATION_VERSION,
 		"view": "internal_executors",
 		"toolTree": roots,
 		"toolGroups": groups
 	}
+	presentation["signature"] = ToolPresentationService.build_presentation_signature("internal_executors", roots, groups)
+	return presentation
 
 
 static func build_diagnostics_tree(exposed_tools: Array, all_tools_by_category: Dictionary, loader_status: Dictionary = {}) -> Dictionary:
@@ -346,11 +350,13 @@ static func build_diagnostics_tree(exposed_tools: Array, all_tools_by_category: 
 		"status": loader_status.duplicate(true),
 		"children": category_children
 	})
-	return {
+	var presentation := {
 		"presentationVersion": PRESENTATION_VERSION,
 		"view": "tool_diagnostics",
 		"toolTree": diagnostics
 	}
+	presentation["signature"] = ToolPresentationService.build_presentation_signature("tool_diagnostics", diagnostics)
+	return presentation
 
 
 static func _build_public_tool_node(tool_name: String, tool: Dictionary, group_key: String, disabled_lookup: Dictionary) -> Dictionary:

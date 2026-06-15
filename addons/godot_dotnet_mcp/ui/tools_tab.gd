@@ -2171,12 +2171,11 @@ func _build_tree_signature(model: Dictionary) -> String:
 		_get_search_query(),
 		JSON.stringify(model.get("settings", {}).get("disabled_tools", [])),
 		JSON.stringify(TreeCollapseState.get_collapsed_nodes(model.get("settings", {}))),
-		JSON.stringify(model.get("tool_load_errors", [])),
-		JSON.stringify(_active_tool_presentation().get("toolTree", []))
+		JSON.stringify(model.get("tool_load_errors", []))
 	]
 	if _has_presentation_tree(model):
 		var presentation = _active_tool_presentation()
-		parts.append(JSON.stringify((presentation as Dictionary).get("toolMetadataByName", {}) if presentation is Dictionary else {}))
+		parts.append(_get_presentation_signature(presentation as Dictionary))
 		return "\n".join(parts)
 	var categories: Array = tools_by_category.keys()
 	categories.sort()
@@ -2194,6 +2193,18 @@ func _build_tree_signature(model: Dictionary) -> String:
 				str(tool_dict.get("load_state", ""))
 			])
 	return "\n".join(parts)
+
+
+func _get_presentation_signature(presentation: Dictionary) -> String:
+	var signature := str(presentation.get("signature", ""))
+	if not signature.is_empty():
+		return signature
+	return ToolPresentationService.build_presentation_signature(
+		str(presentation.get("view", _active_tools_view)),
+		presentation.get("toolTree", []),
+		presentation.get("toolGroups", []),
+		presentation.get("toolMetadataByName", {})
+	)
 
 
 func _get_tree_language_signature(model: Dictionary) -> String:

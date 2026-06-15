@@ -395,11 +395,11 @@ func _build_tool_catalog_signature(loader, tools_by_category: Dictionary, settin
 	for category in tools_by_category.keys():
 		var tools = tools_by_category.get(category, [])
 		if not (tools is Array):
-			tool_entries.append({"category": str(category), "invalid": true})
+			tool_entries.append(JSON.stringify([str(category), "invalid"]))
 			continue
 		for tool in tools:
 			tool_entries.append(_build_tool_signature_entry(str(category), tool))
-	tool_entries.sort_custom(Callable(self, "_sort_tool_signature_entries"))
+	tool_entries.sort()
 	return JSON.stringify({
 		"tools": tool_entries,
 		"disabled": settings.get("disabled_tools", []),
@@ -412,26 +412,24 @@ func _build_tool_catalog_signature(loader, tools_by_category: Dictionary, settin
 	})
 
 
-func _build_tool_signature_entry(category: String, tool) -> Dictionary:
+func _build_tool_signature_entry(category: String, tool) -> String:
 	if not (tool is Dictionary):
-		return {"category": category, "invalid": true}
+		return JSON.stringify([category, "invalid"])
 	var tool_def := tool as Dictionary
-	return {
-		"category": category,
-		"name": str(tool_def.get("name", "")),
-		"description": str(tool_def.get("description", "")),
-		"source": str(tool_def.get("source", "")),
-		"load_state": str(tool_def.get("load_state", "")),
-		"script_path": str(tool_def.get("script_path", "")),
-		"input_schema": tool_def.get("inputSchema", tool_def.get("parameters", {})),
-		"output_schema": tool_def.get("outputSchema", {}),
-		"annotations": tool_def.get("annotations", {}),
-		"presentation": tool_def.get("presentation", {})
-	}
-
-
-func _sort_tool_signature_entries(left, right) -> bool:
-	return JSON.stringify(left) < JSON.stringify(right)
+	return JSON.stringify([
+		category,
+		str(tool_def.get("name", "")),
+		str(tool_def.get("full_name", tool_def.get("fullName", ""))),
+		str(tool_def.get("description", "")),
+		str(tool_def.get("source", "")),
+		str(tool_def.get("load_state", tool_def.get("loadState", ""))),
+		str(tool_def.get("script_path", tool_def.get("scriptPath", ""))),
+		tool_def.get("inputSchema", tool_def.get("parameters", {})),
+		tool_def.get("outputSchema", {}),
+		tool_def.get("annotations", {}),
+		tool_def.get("presentation", {}),
+		tool_def.get("icons", [])
+	])
 
 
 func _build_mcp_projection_signature() -> String:

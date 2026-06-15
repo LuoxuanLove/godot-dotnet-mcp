@@ -48,7 +48,7 @@ func _evaluate_user_runtime(executor, tool_definitions_by_category: Dictionary, 
 		var extracted = extract_tool_definitions.call("user", executor)
 		if extracted is Array:
 			next_defs = (extracted as Array).duplicate(true)
-	var definitions_changed := JSON.stringify(previous_defs) != JSON.stringify(next_defs)
+	var definitions_changed := not _tool_definitions_match(previous_defs, next_defs)
 	var should_unload := false
 	if executor.has_method("should_unload_runtime"):
 		should_unload = _as_bool(executor.should_unload_runtime())
@@ -58,6 +58,36 @@ func _evaluate_user_runtime(executor, tool_definitions_by_category: Dictionary, 
 		"should_unload": should_unload,
 		"definitions": next_defs
 	}
+
+
+func _tool_definitions_match(left: Array, right: Array) -> bool:
+	if left.size() != right.size():
+		return false
+	for index in range(left.size()):
+		if _tool_definition_signature(left[index]) != _tool_definition_signature(right[index]):
+			return false
+	return true
+
+
+func _tool_definition_signature(tool) -> String:
+	if not (tool is Dictionary):
+		return str(typeof(tool))
+	var tool_def := tool as Dictionary
+	return JSON.stringify([
+		str(tool_def.get("name", "")),
+		str(tool_def.get("full_name", tool_def.get("fullName", ""))),
+		str(tool_def.get("description", "")),
+		str(tool_def.get("source", "")),
+		str(tool_def.get("load_state", tool_def.get("loadState", ""))),
+		str(tool_def.get("script_path", tool_def.get("scriptPath", ""))),
+		bool(tool_def.get("enabled", true)),
+		bool(tool_def.get("compatibility_alias", false)),
+		tool_def.get("inputSchema", tool_def.get("parameters", {})),
+		tool_def.get("outputSchema", {}),
+		tool_def.get("annotations", {}),
+		tool_def.get("presentation", {}),
+		tool_def.get("icons", [])
+	])
 
 
 func _as_bool(value) -> bool:
