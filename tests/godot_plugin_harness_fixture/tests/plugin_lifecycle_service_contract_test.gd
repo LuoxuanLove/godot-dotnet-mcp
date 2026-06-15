@@ -265,7 +265,8 @@ func _assert_plugin_entrypoint_delegates_to_lifecycle_service() -> String:
 		"const USER_TOOL_WATCH_TICK_INTERVAL := 0.25",
 		"func _get_plugin_lifecycle_context()",
 		"_cached_lifecycle_context = _build_plugin_lifecycle_context()",
-		"func _invalidate_plugin_lifecycle_context()"
+		"func _invalidate_plugin_lifecycle_context()",
+		"peek_light_tool_loader_status"
 	]:
 		if source.find(required) == -1:
 			return "Plugin entrypoint should delegate lifecycle wiring through PluginLifecycleService: %s" % required

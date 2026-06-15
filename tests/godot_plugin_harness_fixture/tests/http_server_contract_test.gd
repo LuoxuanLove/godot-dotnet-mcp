@@ -41,6 +41,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP server initialize should remain lightweight and not register tools before the first tool request.")
 	if int(loader_status.get("tool_count", 0)) != 0:
 		return _failure("Lightweight HTTP server initialize should not scan tool definitions.")
+	var light_loader_status: Dictionary = _server.peek_light_tool_loader_status()
+	if _server.get("_service_bundle") != null:
+		return _failure("HTTP server light status reads should not create the service bundle before runtime work is requested.")
+	if not light_loader_status.is_empty():
+		return _failure("HTTP server light status should remain empty before service bundle creation.")
 
 	var expected_schema_version := ProtocolFactsScript.get_tool_schema_version()
 	var rpc_initialize: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
@@ -141,6 +146,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader did not report any exposed tools after on-demand setup.")
 	if not bool(loader_status.get("healthy", false)):
 		return _failure("Tool loader should be healthy when the default tool access provider is active.")
+	light_loader_status = _server.peek_light_tool_loader_status()
+	if light_loader_status.has("last_summary"):
+		return _failure("HTTP server light status should not include the heavy last_summary payload.")
+	if int(light_loader_status.get("tool_count", 0)) != int(loader_status.get("tool_count", -1)):
+		return _failure("HTTP server light status should preserve scalar tool counts.")
 	if float(_server.get_performance_summary().get("preload_ms", 1.0)) != 0.0:
 		return _failure("On-demand tool registration should not preload every executor runtime during startup.")
 	var lsp_service = _server.get_gdscript_lsp_diagnostics_service()

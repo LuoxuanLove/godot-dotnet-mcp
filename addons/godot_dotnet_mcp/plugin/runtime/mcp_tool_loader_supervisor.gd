@@ -94,6 +94,12 @@ func tick(delta: float) -> void:
 
 
 func get_status() -> Dictionary:
+	var status := get_light_status()
+	status["last_summary"] = _tool_loader_last_summary.duplicate(true)
+	return status
+
+
+func get_light_status() -> Dictionary:
 	return {
 		"initialized": _tool_loader_initialized,
 		"healthy": _tool_loader_healthy,
@@ -101,8 +107,7 @@ func get_status() -> Dictionary:
 		"tool_count": int(_tool_loader_last_summary.get("tool_count", 0)),
 		"exposed_tool_count": int(_tool_loader_last_summary.get("exposed_tool_count", 0)),
 		"category_count": int(_tool_loader_last_summary.get("category_count", 0)),
-		"tool_load_error_count": int(_tool_loader_last_summary.get("tool_load_error_count", 0)),
-		"last_summary": _tool_loader_last_summary.duplicate(true)
+		"tool_load_error_count": int(_tool_loader_last_summary.get("tool_load_error_count", 0))
 	}
 
 

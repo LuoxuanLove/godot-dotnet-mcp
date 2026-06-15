@@ -236,6 +236,7 @@ func handle_jsonrpc_request_async(body: String) -> Dictionary:
 	return await _service_bundle.get_json_rpc_request_service().handle_request_async(body)
 func get_tool_loader_status() -> Dictionary: return peek_tool_loader_status()
 func peek_tool_loader_status() -> Dictionary: return {} if _service_bundle == null else _service_bundle.get_tool_loader_supervisor().get_status()
+func peek_light_tool_loader_status() -> Dictionary: return {} if _service_bundle == null else _service_bundle.get_tool_loader_supervisor().get_light_status()
 func get_all_tools_by_category() -> Dictionary:
 	if not _ensure_runtime_ready_for_requests():
 		return {}
