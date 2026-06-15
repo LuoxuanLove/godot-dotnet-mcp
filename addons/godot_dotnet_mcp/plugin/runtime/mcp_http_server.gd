@@ -2,12 +2,12 @@
 extends Node
 class_name MCPHttpServer
 
-const MCPToolLoader = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
 const MCPHttpConnectionStateScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_connection_state.gd")
-const MCPHttpServiceBundleScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_service_bundle.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const MCPDefaultToolAccessProviderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/default_tool_access_provider.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
+
+const SERVICE_BUNDLE_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_service_bundle.gd"
 
 signal server_started
 signal server_stopped
@@ -22,6 +22,7 @@ var _running: bool = false
 var _debug_mode: bool = false
 var _connection_state = MCPHttpConnectionStateScript.new()
 var _service_bundle = null
+var _service_bundle_script_path := SERVICE_BUNDLE_SCRIPT_PATH
 var _default_tool_access_provider = MCPDefaultToolAccessProviderScript.new()
 
 func _ready() -> void:
@@ -36,7 +37,8 @@ func _process(delta: float) -> void:
 		return
 	if not _has_pending_http_work():
 		return
-	_ensure_service_bundle()
+	if not _ensure_service_bundle():
+		return
 	_service_bundle.get_http_transport_service().process_frame(_tcp_server, _running, delta)
 
 func initialize(port: int, host: String, debug: bool, diagnostic_operation_id: String = "") -> void:
@@ -62,7 +64,13 @@ func reinitialize(port: int, host: String, debug: bool, disabled_tools: Array = 
 	var force_reload_tools = reason == "tool_soft_reload" or reason == "tool_full_reload" or reason == "plugin_lifecycle_reload"
 	if force_reload_tools:
 		phase_started = PluginSelfDiagnosticStore.begin_phase()
-		_ensure_service_bundle_shell(diagnostic_operation_id)
+		if not _ensure_service_bundle_shell(diagnostic_operation_id):
+			return {
+				"tool_count": 0,
+				"tool_category_count": 0,
+				"tool_load_error_count": 1,
+				"tool_loader_status": _build_service_bundle_unavailable_error()
+			}
 		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "service_bundle.ensure_shell", phase_started)
 		phase_started = PluginSelfDiagnosticStore.begin_phase()
 		var registration_summary = _service_bundle.get_tool_loader_supervisor().register_tools(reason, force_reload_tools)
@@ -168,13 +176,30 @@ func get_connection_stats() -> Dictionary:
 func set_disabled_tools(disabled: Array) -> void:
 	if _service_bundle == null and disabled.is_empty():
 		return
-	_ensure_service_bundle_shell()
+	if not _ensure_service_bundle_shell():
+		return
 	_service_bundle.get_tool_loader_supervisor().set_disabled_tools(disabled)
-func get_disabled_tools() -> Array: _ensure_service_bundle_shell(); return _service_bundle.get_tool_loader_supervisor().get_disabled_tools()
-func is_tool_enabled(tool_name: String) -> bool: _ensure_runtime_ready_for_requests(); return _service_bundle.get_tool_loader_supervisor().is_tool_enabled(tool_name)
-func is_tool_exposed(tool_name: String) -> bool: _ensure_runtime_ready_for_requests(); return _service_bundle.get_tool_loader_supervisor().is_tool_exposed(tool_name)
-func get_tools_by_category() -> Dictionary: _ensure_runtime_ready_for_requests(); var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader(); return {} if loader == null else loader.get_tools_by_category()
-func get_tool_loader() -> MCPToolLoader: _ensure_service_bundle_shell(); return _service_bundle.get_tool_loader_supervisor().get_tool_loader()
+func get_disabled_tools() -> Array:
+	if not _ensure_service_bundle_shell():
+		return []
+	return _service_bundle.get_tool_loader_supervisor().get_disabled_tools()
+
+func is_tool_enabled(tool_name: String) -> bool:
+	return _ensure_runtime_ready_for_requests() and _service_bundle.get_tool_loader_supervisor().is_tool_enabled(tool_name)
+
+func is_tool_exposed(tool_name: String) -> bool:
+	return _ensure_runtime_ready_for_requests() and _service_bundle.get_tool_loader_supervisor().is_tool_exposed(tool_name)
+
+func get_tools_by_category() -> Dictionary:
+	if not _ensure_runtime_ready_for_requests():
+		return {}
+	var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader()
+	return {} if loader == null else loader.get_tools_by_category()
+
+func get_tool_loader():
+	if not _ensure_service_bundle_shell():
+		return null
+	return _service_bundle.get_tool_loader_supervisor().get_tool_loader()
 func peek_tool_loader():
 	if _service_bundle == null:
 		return null
@@ -182,20 +207,39 @@ func peek_tool_loader():
 
 func get_runtime_control_service(): return _get_runtime_control_service(true)
 
-func build_tools_api_snapshot() -> Dictionary: _ensure_runtime_ready_for_requests(); return _service_bundle.get_tools_api_service().build_tools_list_response()
-func handle_editor_lifecycle_post(body: String) -> Dictionary: _ensure_service_bundle_shell(); return _service_bundle.get_editor_lifecycle_endpoint().handle_post_request(body)
-func handle_editor_lifecycle_request(action: String, args: Dictionary) -> Dictionary: _ensure_service_bundle_shell(); return _service_bundle.get_editor_lifecycle_endpoint().handle_request(action, args)
+func build_tools_api_snapshot() -> Dictionary:
+	if not _ensure_runtime_ready_for_requests():
+		return {}
+	return _service_bundle.get_tools_api_service().build_tools_list_response()
+
+func handle_editor_lifecycle_post(body: String) -> Dictionary:
+	if not _ensure_service_bundle_shell():
+		return _build_service_bundle_unavailable_error()
+	return _service_bundle.get_editor_lifecycle_endpoint().handle_post_request(body)
+
+func handle_editor_lifecycle_request(action: String, args: Dictionary) -> Dictionary:
+	if not _ensure_service_bundle_shell():
+		return _build_service_bundle_unavailable_error()
+	return _service_bundle.get_editor_lifecycle_endpoint().handle_request(action, args)
+
 func handle_jsonrpc_request_async(body: String) -> Dictionary:
-	_ensure_service_bundle()
+	if not _ensure_service_bundle():
+		return _build_json_rpc_service_unavailable_response(body)
 	if _jsonrpc_body_requires_tool_runtime(body):
-		_ensure_runtime_ready_for_requests()
+		if not _ensure_runtime_ready_for_requests():
+			return _build_json_rpc_service_unavailable_response(body)
 	return await _service_bundle.get_json_rpc_request_service().handle_request_async(body)
 func get_tool_loader_status() -> Dictionary: return peek_tool_loader_status()
 func peek_tool_loader_status() -> Dictionary: return {} if _service_bundle == null else _service_bundle.get_tool_loader_supervisor().get_status()
-func get_all_tools_by_category() -> Dictionary: _ensure_runtime_ready_for_requests(); var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader(); return {} if loader == null else loader.get_all_tools_by_category()
+func get_all_tools_by_category() -> Dictionary:
+	if not _ensure_runtime_ready_for_requests():
+		return {}
+	var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader()
+	return {} if loader == null else loader.get_all_tools_by_category()
 
 func get_enabled_tools() -> Array[Dictionary]:
-	_ensure_runtime_ready_for_requests()
+	if not _ensure_runtime_ready_for_requests():
+		return []
 	var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader()
 	if loader == null:
 		return []
@@ -205,10 +249,15 @@ func get_enabled_tools() -> Array[Dictionary]:
 			enabled.append(tool_def)
 	return enabled
 
-func get_tool_load_errors() -> Array[Dictionary]: _ensure_service_bundle_shell(); var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader(); return [] if loader == null else loader.get_tool_load_errors()
+func get_tool_load_errors() -> Array[Dictionary]:
+	if not _ensure_service_bundle_shell():
+		return []
+	var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader()
+	return [] if loader == null else loader.get_tool_load_errors()
 
 func get_gdscript_lsp_diagnostics_service():
-	_ensure_runtime_ready_for_requests()
+	if not _ensure_runtime_ready_for_requests():
+		return null
 	var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader()
 	if loader != null and loader.has_method("get_gdscript_lsp_diagnostics_service"):
 		var service = loader.get_gdscript_lsp_diagnostics_service()
@@ -216,12 +265,41 @@ func get_gdscript_lsp_diagnostics_service():
 			return service
 	return null
 
-func get_domain_states() -> Array[Dictionary]: _ensure_service_bundle_shell(); var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader(); return [] if loader == null else loader.get_domain_states()
-func get_all_domain_states() -> Array[Dictionary]: _ensure_service_bundle_shell(); var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader(); return [] if loader == null else loader.get_all_domain_states()
-func get_reload_status() -> Dictionary: _ensure_service_bundle_shell(); var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader(); return {} if loader == null else loader.get_reload_status()
-func get_performance_summary() -> Dictionary: _ensure_service_bundle_shell(); var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader(); return {} if loader == null else loader.get_performance_summary()
-func reload_tool_domain(domain: String) -> Dictionary: _ensure_runtime_ready_for_requests(); var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader(); return {} if loader == null else loader.reload_domain(domain)
-func reload_all_tool_domains() -> Dictionary: _ensure_runtime_ready_for_requests(); var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader(); return {} if loader == null else loader.reload_all_domains()
+func get_domain_states() -> Array[Dictionary]:
+	if not _ensure_service_bundle_shell():
+		return []
+	var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader()
+	return [] if loader == null else loader.get_domain_states()
+
+func get_all_domain_states() -> Array[Dictionary]:
+	if not _ensure_service_bundle_shell():
+		return []
+	var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader()
+	return [] if loader == null else loader.get_all_domain_states()
+
+func get_reload_status() -> Dictionary:
+	if not _ensure_service_bundle_shell():
+		return {}
+	var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader()
+	return {} if loader == null else loader.get_reload_status()
+
+func get_performance_summary() -> Dictionary:
+	if not _ensure_service_bundle_shell():
+		return {}
+	var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader()
+	return {} if loader == null else loader.get_performance_summary()
+
+func reload_tool_domain(domain: String) -> Dictionary:
+	if not _ensure_runtime_ready_for_requests():
+		return {}
+	var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader()
+	return {} if loader == null else loader.reload_domain(domain)
+
+func reload_all_tool_domains() -> Dictionary:
+	if not _ensure_runtime_ready_for_requests():
+		return {}
+	var loader = _service_bundle.get_tool_loader_supervisor().get_tool_loader()
+	return {} if loader == null else loader.reload_all_domains()
 
 func get_tool_access_provider():
 	var plugin = get_parent()
@@ -235,15 +313,17 @@ func get_tool_access_provider():
 		_default_tool_access_provider.configure({"show_user_tools": true})
 	return _default_tool_access_provider
 
-func _ensure_initialized(diagnostic_operation_id: String = "") -> void:
+func _ensure_initialized(diagnostic_operation_id: String = "") -> bool:
 	_ensure_tcp_server(diagnostic_operation_id)
-	_ensure_service_bundle(diagnostic_operation_id)
+	if not _ensure_service_bundle(diagnostic_operation_id):
+		return false
 	var supervisor = _service_bundle.get_tool_loader_supervisor()
 	if not bool(supervisor.get_status().get("initialized", false)):
 		var register_started = PluginSelfDiagnosticStore.begin_phase()
 		var registration_summary = supervisor.register_tools()
 		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "tool_loader.register_tools", register_started, registration_summary)
 		_record_tool_loader_performance_phases(diagnostic_operation_id, registration_summary)
+	return true
 
 
 func _ensure_tcp_server(diagnostic_operation_id: String = "") -> void:
@@ -253,8 +333,8 @@ func _ensure_tcp_server(diagnostic_operation_id: String = "") -> void:
 		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "http_server.create_tcp_server", tcp_server_started)
 
 
-func _ensure_runtime_ready_for_requests(diagnostic_operation_id: String = "") -> void:
-	_ensure_initialized(diagnostic_operation_id)
+func _ensure_runtime_ready_for_requests(diagnostic_operation_id: String = "") -> bool:
+	return _ensure_initialized(diagnostic_operation_id)
 
 
 func _has_pending_http_work() -> bool:
@@ -299,23 +379,78 @@ func _jsonrpc_entry_requires_tool_runtime(entry) -> bool:
 	return true
 
 
-func _ensure_service_bundle_shell(diagnostic_operation_id: String = "") -> void:
+func _ensure_service_bundle_shell(diagnostic_operation_id: String = "") -> bool:
 	if _service_bundle == null:
+		var load_started = PluginSelfDiagnosticStore.begin_phase()
+		var bundle_script = ResourceLoader.load(_service_bundle_script_path, "", ResourceLoader.CACHE_MODE_REUSE)
+		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "service_bundle.load_script", load_started)
+		if bundle_script == null or not (bundle_script is Script) or not (bundle_script as Script).can_instantiate():
+			PluginSelfDiagnosticStore.record_incident(
+				"error",
+				"server_error",
+				"service_bundle_load_failed",
+				"HTTP service bundle could not be loaded on demand",
+				"mcp_http_server",
+				"service_bundle.load",
+				_service_bundle_script_path,
+				"",
+				diagnostic_operation_id,
+				true,
+				"Inspect the HTTP service bundle script for parse errors or missing files."
+			)
+			return false
 		var create_started = PluginSelfDiagnosticStore.begin_phase()
-		_service_bundle = MCPHttpServiceBundleScript.new()
+		_service_bundle = (bundle_script as Script).new()
 		PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "service_bundle.create", create_started)
+		if _service_bundle == null or not _is_valid_service_bundle_instance(_service_bundle):
+			PluginSelfDiagnosticStore.record_incident(
+				"error",
+				"server_error",
+				"service_bundle_instance_invalid",
+				"HTTP service bundle script could not create a valid instance",
+				"mcp_http_server",
+				"service_bundle.create",
+				_service_bundle_script_path,
+				"",
+				diagnostic_operation_id,
+				true,
+				"Inspect the HTTP service bundle script constructor and public methods."
+			)
+			_service_bundle = null
+			return false
 	var configure_started = PluginSelfDiagnosticStore.begin_phase()
 	_service_bundle.configure(self, _connection_state)
 	PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "service_bundle.configure", configure_started)
 	var shell_started = PluginSelfDiagnosticStore.begin_phase()
 	_service_bundle.ensure_shell_initialized()
 	PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "service_bundle.shell_initialize", shell_started)
+	return true
 
-func _ensure_service_bundle(diagnostic_operation_id: String = "") -> void:
-	_ensure_service_bundle_shell(diagnostic_operation_id)
+
+func _is_valid_service_bundle_instance(candidate) -> bool:
+	if candidate == null:
+		return false
+	for method_name in [
+		"configure",
+		"ensure_shell_initialized",
+		"ensure_initialized",
+		"get_http_transport_service",
+		"get_tool_loader_supervisor",
+		"get_json_rpc_request_service",
+		"get_editor_lifecycle_endpoint",
+		"get_tools_api_service"
+	]:
+		if not candidate.has_method(method_name):
+			return false
+	return true
+
+func _ensure_service_bundle(diagnostic_operation_id: String = "") -> bool:
+	if not _ensure_service_bundle_shell(diagnostic_operation_id):
+		return false
 	var ensure_started = PluginSelfDiagnosticStore.begin_phase()
 	_service_bundle.ensure_initialized()
 	PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "service_bundle.initialize", ensure_started)
+	return true
 
 func _record_tool_loader_performance_phases(diagnostic_operation_id: String, summary: Dictionary) -> void:
 	var performance = summary.get("performance", {})
@@ -334,11 +469,35 @@ func _record_tool_loader_performance_phases(diagnostic_operation_id: String, sum
 
 func _get_runtime_control_service(ensure_initialized: bool = true):
 	if ensure_initialized:
-		_ensure_service_bundle()
+		if not _ensure_service_bundle():
+			return null
 		return _service_bundle.get_runtime_control_service()
 	if _service_bundle == null:
 		return null
 	return _service_bundle.get_runtime_control_service()
+
+
+func _build_service_bundle_unavailable_error() -> Dictionary:
+	return {
+		"success": false,
+		"error": "service_unavailable",
+		"message": "HTTP service bundle could not be loaded on demand."
+	}
+
+
+func _build_json_rpc_service_unavailable_response(body: String) -> Dictionary:
+	var response_id = null
+	var parsed = JSON.parse_string(body)
+	if parsed is Dictionary:
+		response_id = (parsed as Dictionary).get("id", null)
+	return {
+		"jsonrpc": "2.0",
+		"id": response_id,
+		"error": {
+			"code": -32603,
+			"message": "HTTP service bundle could not be loaded on demand."
+		}
+	}
 
 
 func _build_listen_failure_context(error_code: int, error_text_override: String = "") -> Dictionary:
