@@ -24,6 +24,7 @@ var _connection_state = MCPHttpConnectionStateScript.new()
 var _service_bundle = null
 var _service_bundle_script_path := SERVICE_BUNDLE_SCRIPT_PATH
 var _default_tool_access_provider = MCPDefaultToolAccessProviderScript.new()
+var _pending_disabled_tools: Array = []
 
 func _ready() -> void:
 	set_process(true)
@@ -143,6 +144,7 @@ func dispose() -> void:
 	_default_tool_access_provider = null
 	_connection_state = null
 	_tcp_server = null
+	_pending_disabled_tools.clear()
 
 func is_running() -> bool: return _running
 func set_port(port: int) -> void: _port = port
@@ -174,14 +176,17 @@ func get_connection_stats() -> Dictionary:
 	return stats
 
 func set_disabled_tools(disabled: Array) -> void:
-	if _service_bundle == null and disabled.is_empty():
+	_pending_disabled_tools = _normalize_disabled_tools(disabled)
+	if _service_bundle == null:
 		return
 	if not _ensure_service_bundle_shell():
 		return
-	_service_bundle.get_tool_loader_supervisor().set_disabled_tools(disabled)
+	_apply_pending_disabled_tools_to_supervisor()
 func get_disabled_tools() -> Array:
+	if _service_bundle == null:
+		return _pending_disabled_tools.duplicate()
 	if not _ensure_service_bundle_shell():
-		return []
+		return _pending_disabled_tools.duplicate()
 	return _service_bundle.get_tool_loader_supervisor().get_disabled_tools()
 
 func is_tool_enabled(tool_name: String) -> bool:
@@ -424,6 +429,7 @@ func _ensure_service_bundle_shell(diagnostic_operation_id: String = "") -> bool:
 	var shell_started = PluginSelfDiagnosticStore.begin_phase()
 	_service_bundle.ensure_shell_initialized()
 	PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "service_bundle.shell_initialize", shell_started)
+	_apply_pending_disabled_tools_to_supervisor()
 	return true
 
 
@@ -451,6 +457,23 @@ func _ensure_service_bundle(diagnostic_operation_id: String = "") -> bool:
 	_service_bundle.ensure_initialized()
 	PluginSelfDiagnosticStore.record_operation_phase(diagnostic_operation_id, "service_bundle.initialize", ensure_started)
 	return true
+
+
+func _apply_pending_disabled_tools_to_supervisor() -> void:
+	if _service_bundle == null:
+		return
+	var supervisor = _service_bundle.get_tool_loader_supervisor()
+	if supervisor != null and supervisor.has_method("set_disabled_tools"):
+		supervisor.set_disabled_tools(_pending_disabled_tools)
+
+
+func _normalize_disabled_tools(disabled: Array) -> Array[String]:
+	var result: Array[String] = []
+	for tool_name in disabled:
+		var normalized := str(tool_name).strip_edges()
+		if not normalized.is_empty() and not result.has(normalized):
+			result.append(normalized)
+	return result
 
 func _record_tool_loader_performance_phases(diagnostic_operation_id: String, summary: Dictionary) -> void:
 	var performance = summary.get("performance", {})
