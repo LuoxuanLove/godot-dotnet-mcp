@@ -7,6 +7,7 @@ func build_plugin_lifecycle_context(plugin, constants: Dictionary) -> Dictionary
 	return {
 		"runtime_bridge_autoload_name": str(constants.get("runtime_bridge_autoload_name", "")),
 		"runtime_bridge_autoload_path": str(constants.get("runtime_bridge_autoload_path", "")),
+		"cleanup_stale_update_sync_addon_files": _plugin_callable(plugin, "_cleanup_stale_update_sync_addon_files"),
 		"refresh_service_instances": _plugin_callable(plugin, "_refresh_service_instances"),
 		"load_state": _plugin_callable(plugin, "_load_state"),
 		"configure_lifecycle_enter_state": _plugin_callable(plugin, "_configure_lifecycle_enter_state"),

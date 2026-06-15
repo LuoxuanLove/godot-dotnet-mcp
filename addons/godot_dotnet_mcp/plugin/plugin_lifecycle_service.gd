@@ -16,6 +16,7 @@ func enter_tree(context: Dictionary) -> void:
 	PluginInstanceFreshness.capture_running_instance("plugin_enter_tree")
 
 	for step in [
+		"cleanup_stale_update_sync_addon_files",
 		"refresh_service_instances",
 		"load_state",
 		"configure_lifecycle_enter_state",

@@ -55,6 +55,46 @@ const UPDATE_SYNC_BODY_SIZE_LIMIT := 67108864
 const UPDATE_SYNC_ADDON_ROOT := "res://addons/godot_dotnet_mcp"
 const UPDATE_SYNC_ADDON_PREFIX := "addons/godot_dotnet_mcp/"
 const UPDATE_SYNC_EDITOR_REFRESH_TIMEOUT_MS := 15000
+const UPDATE_SYNC_STALE_ADDON_FILES := [
+	"tools/animation_tools.gd",
+	"tools/animation_tools.gd.uid",
+	"tools/audio_tools.gd",
+	"tools/audio_tools.gd.uid",
+	"tools/filesystem_tools.gd",
+	"tools/filesystem_tools.gd.uid",
+	"tools/geometry_tools.gd",
+	"tools/geometry_tools.gd.uid",
+	"tools/group_tools.gd",
+	"tools/group_tools.gd.uid",
+	"tools/lighting_tools.gd",
+	"tools/lighting_tools.gd.uid",
+	"tools/material_tools.gd",
+	"tools/material_tools.gd.uid",
+	"tools/navigation_tools.gd",
+	"tools/navigation_tools.gd.uid",
+	"tools/node_tools.gd",
+	"tools/node_tools.gd.uid",
+	"tools/particle_tools.gd",
+	"tools/particle_tools.gd.uid",
+	"tools/physics_tools.gd",
+	"tools/physics_tools.gd.uid",
+	"tools/project_tools.gd",
+	"tools/project_tools.gd.uid",
+	"tools/resource_tools.gd",
+	"tools/resource_tools.gd.uid",
+	"tools/scene_tools.gd",
+	"tools/scene_tools.gd.uid",
+	"tools/script_tools.gd",
+	"tools/script_tools.gd.uid",
+	"tools/shader_tools.gd",
+	"tools/shader_tools.gd.uid",
+	"tools/signal_tools.gd",
+	"tools/signal_tools.gd.uid",
+	"tools/tilemap_tools.gd",
+	"tools/tilemap_tools.gd.uid",
+	"tools/ui_tools.gd",
+	"tools/ui_tools.gd.uid"
+]
 
 var _state = null
 var _settings_store = null
@@ -933,9 +973,6 @@ func _on_update_check_requested() -> void:
 
 
 func _on_update_sync_requested() -> void:
-	if str(_state.update_sync_state) == "loading":
-		_refresh_dock()
-		return
 	var target := _resolve_update_sync_target()
 	var target_ref := str(target.get("ref", "")).strip_edges()
 	if target_ref.is_empty():
@@ -944,6 +981,18 @@ func _on_update_sync_requested() -> void:
 		_state.update_sync_status = ""
 		_refresh_dock()
 		return
+	_request_update_sync(target, "dock")
+
+
+func _request_update_sync(target: Dictionary, source: String = "unknown") -> bool:
+	if _state == null:
+		return false
+	if str(_state.update_sync_state) == "loading":
+		_refresh_dock()
+		return false
+	var target_ref := str(target.get("ref", "")).strip_edges()
+	if target_ref.is_empty():
+		return false
 	_update_sync_after_refs_discovery_pending = false
 	_update_sync_request_serial += 1
 	var serial := _update_sync_request_serial
@@ -953,7 +1002,9 @@ func _on_update_sync_requested() -> void:
 	_state.update_sync_error = ""
 	_state.update_sync_status = (_localization.get_text("settings_update_sync_loading") % target_ref) if _localization != null else "Syncing %s..." % target_ref
 	_refresh_dock()
+	MCPDebugBuffer.record("info", "plugin", "Plugin update sync requested from %s for %s" % [source, target_ref])
 	_start_update_archive_sync_request(target, serial)
+	return true
 
 
 func _resolve_update_sync_target() -> Dictionary:
@@ -1582,6 +1633,33 @@ func _get_update_sync_addon_root() -> String:
 	return UPDATE_SYNC_ADDON_ROOT
 
 
+func _cleanup_stale_update_sync_addon_files() -> Dictionary:
+	var addon_root := _get_update_sync_addon_root().simplify_path()
+	if addon_root.is_empty() or not addon_root.begins_with("res://") or _is_update_sync_link_path(addon_root):
+		return {"success": false, "deleted": 0, "error": "Update sync addon root is invalid for stale cleanup: %s" % addon_root}
+	var deleted := 0
+	var skipped_links := 0
+	for relative_path in UPDATE_SYNC_STALE_ADDON_FILES:
+		var normalized := _normalize_update_sync_relative_path(str(relative_path))
+		if normalized.is_empty() or _should_skip_update_sync_path(normalized):
+			continue
+		var stale_path := addon_root.path_join(normalized).simplify_path()
+		if not _is_update_sync_path_inside_root(addon_root, stale_path):
+			return {"success": false, "deleted": deleted, "error": "Stale update cleanup path escapes the plugin directory: %s" % normalized}
+		if _is_update_sync_link_path(stale_path):
+			skipped_links += 1
+			continue
+		if FileAccess.file_exists(stale_path):
+			var remove_error := DirAccess.remove_absolute(ProjectSettings.globalize_path(stale_path))
+			if remove_error != OK and remove_error != ERR_FILE_NOT_FOUND:
+				return {"success": false, "deleted": deleted, "error": "Failed to remove stale update file %s: %s" % [normalized, remove_error]}
+			if remove_error == OK:
+				deleted += 1
+	if deleted > 0:
+		MCPDebugBuffer.record("info", "plugin", "Removed %s stale update sync addon file(s)" % deleted)
+	return {"success": true, "deleted": deleted, "skipped_links": skipped_links}
+
+
 func _find_update_archive_addon_prefix(files: PackedStringArray) -> String:
 	for file_path in files:
 		var normalized := str(file_path).replace("\\", "/")
@@ -1616,6 +1694,8 @@ func _should_skip_update_sync_path(relative_path: String) -> bool:
 	if normalized == ".git" or normalized.begins_with(".git/"):
 		return true
 	if normalized == "custom_tools" or normalized.begins_with("custom_tools/"):
+		return true
+	if normalized == ".import" or normalized.begins_with(".import/"):
 		return true
 	if normalized == "dotnet_bridge/bin" or normalized.begins_with("dotnet_bridge/bin/"):
 		return true
@@ -1812,8 +1892,7 @@ func _continue_pending_update_sync_after_refs_discovery() -> bool:
 		_state.update_sync_status = ""
 		return false
 	_update_sync_after_refs_discovery_pending = false
-	_on_update_sync_requested()
-	return str(_state.update_sync_state) == "loading"
+	return _request_update_sync(target, "refs_discovery")
 
 
 func _refresh_update_compare_for_current_target() -> void:
@@ -2133,7 +2212,7 @@ func start_plugin_update_sync_from_tools() -> Dictionary:
 			"data": unavailable_data,
 			"message": "Plugin update sync request host is unavailable"
 		})
-	_on_update_sync_requested()
+	_request_update_sync(target, "tool")
 	var data := _build_plugin_update_status_snapshot()
 	data["accepted"] = str(_state.update_sync_state) == "loading"
 	data["action_status"] = _resolve_plugin_update_request_status("sync", bool(data.get("accepted", false)))

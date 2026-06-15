@@ -633,9 +633,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if plugin_source.find("_build_dock_refresh_status_signature(model)") != -1 or plugin_source.find("_build_dock_refresh_status_signature_data_from_model") != -1:
 		return _failure("plugin.gd should derive Dock refresh status signatures from one lightweight source instead of comparing model-derived loader data.")
 
+	var shared_sync_entry_result := _run_shared_update_sync_entry_contract()
+	if not bool(shared_sync_entry_result.get("success", false)):
+		return shared_sync_entry_result
+
 	var mirror_result := _run_update_sync_mirror_contract()
 	if not bool(mirror_result.get("success", false)):
 		return mirror_result
+	var stale_cleanup_result := _run_update_sync_stale_cleanup_contract()
+	if not bool(stale_cleanup_result.get("success", false)):
+		return stale_cleanup_result
 	return {"name": "plugin_update_settings_persistence_contracts", "success": true, "error": ""}
 
 
@@ -663,6 +670,37 @@ func _remove_saved_settings() -> void:
 		DirAccess.remove_absolute(settings_path)
 
 
+func _run_shared_update_sync_entry_contract() -> Dictionary:
+	var probe := SyncStartProbePlugin.new()
+	probe._state.settings["update_source"] = "custom_branch"
+	probe._state.settings["update_custom_branch"] = "feature/sync-entry"
+	probe._on_update_sync_requested()
+	if probe.archive_requests.size() != 1:
+		probe.free()
+		return _failure("Dock update sync should enter the shared archive sync request path.")
+	var dock_request: Dictionary = probe.archive_requests[0]
+	probe._state.update_sync_state = "idle"
+	var tool_response: Dictionary = probe.start_plugin_update_sync_from_tools()
+	if not bool(tool_response.get("success", false)) or not bool(tool_response.get("accepted", false)):
+		probe.free()
+		return _failure("MCP plugin update sync should accept the same available custom branch target.")
+	if probe.archive_requests.size() != 2:
+		probe.free()
+		return _failure("MCP plugin update sync should enter the shared archive sync request path.")
+	var tool_request: Dictionary = probe.archive_requests[1]
+	if str((dock_request.get("target", {}) as Dictionary).get("ref", "")) != "feature/sync-entry":
+		probe.free()
+		return _failure("Dock update sync should pass the resolved custom branch target into the shared sync path.")
+	if (dock_request.get("target", {}) as Dictionary) != (tool_request.get("target", {}) as Dictionary):
+		probe.free()
+		return _failure("Dock and MCP update sync should resolve the same archive target before starting sync.")
+	if int(tool_request.get("serial", 0)) <= int(dock_request.get("serial", 0)):
+		probe.free()
+		return _failure("Shared update sync should allocate a fresh serial for every accepted sync request.")
+	probe.free()
+	return {"success": true}
+
+
 func _run_update_sync_mirror_contract() -> Dictionary:
 	var probe := MirrorSyncProbePlugin.new()
 	var root := probe._get_update_sync_addon_root()
@@ -679,7 +717,9 @@ func _run_update_sync_mirror_contract() -> Dictionary:
 	_write_text(root.path_join("tools/old_domain/orphan.gd"), "legacy")
 	_write_text(root.path_join("custom_tools/user_tool.gd"), "keep")
 	_write_text(root.path_join("dotnet_bridge/bin/bridge.dll"), "keep")
+	_write_text(root.path_join("dotnet_bridge/obj/cache.tmp"), "keep")
 	_write_text(root.path_join("ui/generated.png.import"), "keep")
+	_write_text(root.path_join(".import/local.cache"), "keep")
 	_write_text(external_root.path_join("protected.txt"), "outside")
 	var external_link_path := root.path_join("tools/linked_external")
 	var external_link_created := _create_directory_link(external_link_path, external_root)
@@ -708,7 +748,8 @@ func _run_update_sync_mirror_contract() -> Dictionary:
 		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/plugin.gd": "extends EditorPlugin\n",
 		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/ui/mcp_dock.tscn": "[gd_scene format=3]\n",
 		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/tools/node/executor.gd": "extends RefCounted\n",
-		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/tools/animation/executor.gd": "extends RefCounted\n"
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/tools/animation/executor.gd": "extends RefCounted\n",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/.import/archive.cache": "skip\n"
 	})
 	if archive_error != OK:
 		probe.free()
@@ -753,11 +794,26 @@ func _run_update_sync_mirror_contract() -> Dictionary:
 		_remove_tree(root)
 		_remove_tree(external_root)
 		return _failure("plugin.gd update sync should preserve dotnet_bridge/bin during mirror cleanup.")
+	if not FileAccess.file_exists(root.path_join("dotnet_bridge/obj/cache.tmp")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should preserve dotnet_bridge/obj during mirror cleanup.")
 	if not FileAccess.file_exists(root.path_join("ui/generated.png.import")):
 		probe.free()
 		_remove_tree(root)
 		_remove_tree(external_root)
 		return _failure("plugin.gd update sync should preserve .import sidecar files during mirror cleanup.")
+	if not FileAccess.file_exists(root.path_join(".import/local.cache")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should preserve the .import cache directory during mirror cleanup.")
+	if FileAccess.file_exists(root.path_join(".import/archive.cache")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should not write archive .import cache entries into the addon root.")
 	if int(sync_result.get("deleted_files", 0)) < 3:
 		probe.free()
 		_remove_tree(root)
@@ -777,6 +833,44 @@ func _run_update_sync_mirror_contract() -> Dictionary:
 	probe.free()
 	_remove_tree(root)
 	_remove_tree(external_root)
+	return {"success": true}
+
+
+func _run_update_sync_stale_cleanup_contract() -> Dictionary:
+	var probe := MirrorSyncProbePlugin.new()
+	probe.addon_root = "res://tests_tmp/plugin_update_stale_cleanup_contract/addons/godot_dotnet_mcp"
+	var root := probe._get_update_sync_addon_root()
+	_remove_tree(root)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(root))
+	_write_text(root.path_join("tools/node_tools.gd"), "legacy")
+	_write_text(root.path_join("tools/node_tools.gd.uid"), "legacy")
+	_write_text(root.path_join("tools/animation_tools.gd"), "legacy")
+	_write_text(root.path_join("tools/debug_tools.gd"), "current")
+	_write_text(root.path_join("custom_tools/node_tools.gd"), "user")
+	var cleanup_result: Dictionary = probe._cleanup_stale_update_sync_addon_files()
+	if not bool(cleanup_result.get("success", false)):
+		var error := str(cleanup_result.get("error", ""))
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd stale update cleanup should succeed inside the addon root: %s" % error)
+	if FileAccess.file_exists(root.path_join("tools/node_tools.gd")) or FileAccess.file_exists(root.path_join("tools/node_tools.gd.uid")) or FileAccess.file_exists(root.path_join("tools/animation_tools.gd")):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd stale update cleanup should remove known removed root tool monolith leftovers.")
+	if not FileAccess.file_exists(root.path_join("tools/debug_tools.gd")):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd stale update cleanup should keep current compatibility wrappers.")
+	if not FileAccess.file_exists(root.path_join("custom_tools/node_tools.gd")):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd stale update cleanup should not touch user custom tools.")
+	if int(cleanup_result.get("deleted", 0)) < 3:
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd stale update cleanup should report removed legacy files.")
+	probe.free()
+	_remove_tree(root)
 	return {"success": true}
 
 
