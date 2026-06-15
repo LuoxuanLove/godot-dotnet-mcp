@@ -56,6 +56,12 @@ var _query_service = ToolLoaderQueryServiceScript.new()
 var _tool_activity_registry = null
 var _performance: Dictionary = {}
 var _preload_runtimes_on_initialize := false
+var _catalog_revision := 0
+var _lifecycle_tick_accumulator := 0.0
+
+const IDLE_LIFECYCLE_TICK_INTERVAL_SECONDS := 0.5
+const ACTIVE_LSP_LIFECYCLE_TICK_INTERVAL_SECONDS := 0.05
+const MAX_LIFECYCLE_TICK_DELTA_SECONDS := 2.0
 
 
 func _init() -> void:
@@ -137,7 +143,10 @@ func configure(server_context: Object) -> void:
 
 func initialize(disabled_tools: Array = [], force_reload_scripts: bool = false) -> Dictionary:
 	_ensure_services_ready()
-	return _lifecycle_service.initialize(disabled_tools, force_reload_scripts, _build_lifecycle_context())
+	var summary: Dictionary = _lifecycle_service.initialize(disabled_tools, force_reload_scripts, _build_lifecycle_context())
+	_bump_catalog_revision()
+	summary["catalog_revision"] = _catalog_revision
+	return summary
 
 
 func set_preload_runtimes_on_initialize(enabled: bool) -> void:
@@ -167,11 +176,13 @@ func shutdown() -> void:
 	_execution_observer.set_activity_registry(null)
 	_tool_activity_registry = null
 	_refresh_runtime_context()
+	_bump_catalog_revision()
 
 
 func set_disabled_tools(disabled_tools: Array) -> void:
 	_ensure_services_ready()
 	_lifecycle_service.set_disabled_tools(disabled_tools, _build_lifecycle_context())
+	_bump_catalog_revision()
 
 
 func get_tools_by_category() -> Dictionary:
@@ -272,13 +283,19 @@ func get_reload_status() -> Dictionary:
 
 func get_tool_loader_status() -> Dictionary:
 	_ensure_services_ready()
-	return _query_service.build_tool_loader_status(
+	var status: Dictionary = _query_service.build_tool_loader_status(
 		_status_service,
 		get_tool_definitions(),
 		get_exposed_tool_definitions(),
 		_ordered_categories,
 		_diagnostics_service.get_tool_load_error_count()
 	)
+	status["catalog_revision"] = _catalog_revision
+	return status
+
+
+func get_catalog_revision() -> int:
+	return _catalog_revision
 
 
 func get_performance_summary() -> Dictionary:
@@ -303,7 +320,18 @@ func execute_tool_async(category: String, tool_name: String, args: Dictionary) -
 
 func tick(delta: float) -> void:
 	_ensure_services_ready()
-	_lifecycle_service.tick(delta, _build_lifecycle_context())
+	_lifecycle_tick_accumulator = minf(
+		_lifecycle_tick_accumulator + maxf(delta, 0.0),
+		MAX_LIFECYCLE_TICK_DELTA_SECONDS
+	)
+	var tick_interval := _get_lifecycle_tick_interval_seconds()
+	if _lifecycle_tick_accumulator < tick_interval:
+		return
+	var tick_delta := _lifecycle_tick_accumulator
+	_lifecycle_tick_accumulator = 0.0
+	var started_usec := Time.get_ticks_usec()
+	_lifecycle_service.tick(tick_delta, _build_lifecycle_context())
+	_record_lifecycle_tick_performance(started_usec, tick_interval, tick_delta)
 
 
 func get_gdscript_lsp_diagnostics_service():
@@ -332,17 +360,27 @@ func _refresh_runtime_context() -> void:
 
 func reload_domain(category: String) -> Dictionary:
 	_ensure_services_ready()
-	return _reload_service.reload_domain(category, _build_reload_context())
+	var status: Dictionary = _reload_service.reload_domain(category, _build_reload_context())
+	if not (status.get("reloaded_domains", []) as Array).is_empty():
+		_bump_catalog_revision()
+		status["catalog_revision"] = _catalog_revision
+	return status
 
 
 func reload_all_domains() -> Dictionary:
 	_ensure_services_ready()
-	return _reload_service.reload_all_domains(_build_reload_context())
+	var status: Dictionary = _reload_service.reload_all_domains(_build_reload_context())
+	if not (status.get("reloaded_domains", []) as Array).is_empty():
+		_bump_catalog_revision()
+		status["catalog_revision"] = _catalog_revision
+	return status
 
 
 func request_reload_by_script(script_path: String, reason: String = "manual") -> Dictionary:
 	_ensure_services_ready()
-	return _user_reload_service.request_reload_by_script(script_path, reason, _build_user_reload_context())
+	var status: Dictionary = _user_reload_service.request_reload_by_script(script_path, reason, _build_user_reload_context())
+	status["catalog_revision"] = _catalog_revision
+	return status
 
 
 func get_user_tool_runtime_snapshot() -> Array[Dictionary]:
@@ -489,6 +527,24 @@ func _tick_loaded_runtimes_for_lifecycle(delta: float) -> Dictionary:
 	)
 
 
+func _apply_tick_result(tick_result: Dictionary) -> bool:
+	var refresh_context := false
+	if bool(tick_result.get("user_definitions_changed", false)):
+		_tool_definitions_by_category["user"] = tick_result.get("user_definitions", [])
+		refresh_context = true
+	if bool(tick_result.get("user_should_unload", false)) and _runtime_by_category.has("user"):
+		_runtime_by_category.erase("user")
+		_tool_definitions_by_category.erase("user")
+		refresh_context = true
+	if refresh_context:
+		_bump_catalog_revision()
+	return refresh_context
+
+
+func _bump_catalog_revision() -> void:
+	_catalog_revision += 1
+
+
 func _build_runtime_state_context() -> Dictionary:
 	return _context_service.build_loader_runtime_state_context(self, _execution_context_service)
 
@@ -515,6 +571,25 @@ func _dispose_gdscript_lsp_diagnostics_adapter() -> void:
 
 func _tick_gdscript_lsp_diagnostics(delta: float) -> void:
 	_lsp_diagnostics_service.tick(delta)
+
+
+func _has_active_gdscript_lsp_diagnostics_request() -> bool:
+	return _lsp_diagnostics_service != null \
+		and _lsp_diagnostics_service.has_method("has_active_request") \
+		and _lsp_diagnostics_service.has_active_request()
+
+
+func _get_lifecycle_tick_interval_seconds() -> float:
+	return ACTIVE_LSP_LIFECYCLE_TICK_INTERVAL_SECONDS if _has_active_gdscript_lsp_diagnostics_request() else IDLE_LIFECYCLE_TICK_INTERVAL_SECONDS
+
+
+func _record_lifecycle_tick_performance(started_usec: int, interval_seconds: float, tick_delta: float) -> void:
+	var elapsed_ms := float(Time.get_ticks_usec() - started_usec) / 1000.0
+	_performance["lifecycle_tick_count"] = int(_performance.get("lifecycle_tick_count", 0)) + 1
+	_performance["lifecycle_tick_last_ms"] = elapsed_ms
+	_performance["lifecycle_tick_max_ms"] = maxf(float(_performance.get("lifecycle_tick_max_ms", 0.0)), elapsed_ms)
+	_performance["lifecycle_tick_interval_seconds"] = interval_seconds
+	_performance["lifecycle_tick_delta_seconds"] = tick_delta
 
 
 func _is_exposed_tool_definition(tool_def: Dictionary) -> bool:

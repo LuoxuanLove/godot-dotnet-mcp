@@ -35,6 +35,15 @@ func build_desktop_client_models(
 			"content": _build_desktop_client_config_content(transport, config_service),
 			"writeable": true
 		}, client_install_statuses, localization),
+		_build_client_ui_model("antigravity", {
+			"id": "antigravity",
+			"name_key": "config_client_antigravity",
+			"summary_text": _build_client_summary_text(_get_desktop_summary_key("antigravity", transport), transport, localization),
+			"path": "",
+			"guidance_path": config_service.get_antigravity_config_hint_path(),
+			"content": _build_desktop_client_config_content(transport, config_service),
+			"writeable": false
+		}, client_install_statuses, localization),
 		_build_client_ui_model("codex_desktop", {
 			"id": "codex_desktop",
 			"name_key": "config_client_codex_desktop",
@@ -346,6 +355,8 @@ func _get_desktop_summary_key(client_id: String, transport: Dictionary) -> Strin
 				return "config_client_cursor_stdio_desc"
 			"trae":
 				return "config_client_trae_stdio_desc"
+			"antigravity":
+				return "config_client_antigravity_stdio_desc"
 			"windsurf":
 				return "config_client_windsurf_stdio_desc"
 			"cline":
@@ -384,6 +395,9 @@ func _build_client_ui_model(client_id: String, client: Dictionary, client_instal
 	var config_path = str(detection.get("config_path", "")).strip_edges()
 	if not config_path.is_empty():
 		model["path"] = config_path
+	var guidance_path = str(detection.get("guidance_path", model.get("guidance_path", ""))).strip_edges()
+	if not guidance_path.is_empty():
+		model["guidance_path"] = guidance_path
 
 	var executable_path = str(detection.get("executable_path", "")).strip_edges()
 	var using_manual_path = bool(detection.get("using_manual_path", false))
@@ -411,6 +425,12 @@ func _build_client_ui_model(client_id: String, client: Dictionary, client_instal
 	else:
 		model["explanation_text"] = localization.get_text("config_client_pick_path_explainer")
 
+	if client_id == "antigravity" and not guidance_path.is_empty():
+		model["guidance_text"] = _append_guidance_text(
+			str(model.get("guidance_text", "")),
+			localization.get_text("config_client_antigravity_user_data_dir_hint") % guidance_path
+		)
+
 	if using_manual_path:
 		model["explanation_text"] = localization.get_text("config_client_custom_path_explainer")
 
@@ -420,7 +440,7 @@ func _build_client_ui_model(client_id: String, client: Dictionary, client_instal
 		model["launch_action_label_key"] = "config_client_action_open_project"
 	elif client_id == "claude_code" or client_id == "codex" or client_id == "gemini" or client_id == "opencode" or client_id == "qwen":
 		model["launch_action_label_key"] = "config_client_action_open_terminal"
-	elif client_id == "claude_desktop" or client_id == "codex_desktop" or client_id == "opencode_desktop" or client_id == "cherry_studio":
+	elif client_id == "claude_desktop" or client_id == "antigravity" or client_id == "codex_desktop" or client_id == "opencode_desktop" or client_id == "cherry_studio":
 		model["launch_action_label_key"] = "config_client_action_open_app"
 
 	model["path_pick_supported"] = bool(detection.get("path_pick_supported", false))
@@ -544,7 +564,8 @@ func _build_client_capability_actions(
 			actions.append("auto_add")
 			actions.append("remove_config")
 		"manual_guidance":
-			actions.append("open_config_dir")
+			if config_path_available:
+				actions.append("open_config_dir")
 	if launch_supported:
 		actions.append("open_terminal" if client_id in ["claude_code", "codex", "gemini", "opencode", "qwen"] else "open_app")
 	if path_pick_supported:

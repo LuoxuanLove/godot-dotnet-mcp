@@ -90,12 +90,22 @@ class FakeServerController extends ServerRuntimeController:
 
 class FakeServer extends Node:
 	var project_state_script_path := "res://addons/godot_dotnet_mcp/tools/system/project_state.gd"
+	var catalog_revision := 1
 
 	func get_tool_loader():
 		return self
 
 	func get_tool_loader_status() -> Dictionary:
-		return {"state": "ready", "loaded_tools": 6}
+		return {
+			"initialized": true,
+			"healthy": true,
+			"status": "ready",
+			"tool_count": 6,
+			"exposed_tool_count": 4,
+			"category_count": 9,
+			"tool_load_error_count": 0,
+			"catalog_revision": catalog_revision
+		}
 
 	func get_tool_activity_registry():
 		return FakeActivityRegistry.new()
@@ -341,6 +351,23 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (model.get("mcp_resources", []) as Array).is_empty() or not (model.get("mcp_prompts", []) as Array).is_empty():
 		return _failure("Dock Tools tab should not build the Resources/Prompts protocol projection.")
 
+	var catalog_requests_after_first_tools_model: int = server_controller.all_tools_request_count
+	var cached_tools_model: Dictionary = service.build_model()
+	if server_controller.all_tools_request_count != catalog_requests_after_first_tools_model:
+		return _failure("Dock Tools tab model should reuse cached catalog projection when the loader revision is unchanged.")
+	if cached_tools_model.get("active_tool_presentation", {}) != model.get("active_tool_presentation", {}):
+		return _failure("Dock Tools tab catalog cache should preserve the active presentation model.")
+
+	var changed_script_path := "res://addons/godot_dotnet_mcp/tools/system/project_state_v2.gd"
+	(server_controller._server as FakeServer).project_state_script_path = changed_script_path
+	(server_controller._server as FakeServer).catalog_revision += 1
+	var refreshed_model: Dictionary = service.build_model()
+	var refreshed_presentation: Dictionary = refreshed_model.get("active_tool_presentation", {})
+	var refreshed_metadata_by_name: Dictionary = refreshed_presentation.get("toolMetadataByName", {})
+	var refreshed_project_metadata: Dictionary = refreshed_metadata_by_name.get("system_project_state", {})
+	if str(refreshed_project_metadata.get("scriptPath", "")) != changed_script_path:
+		return _failure("Dock catalog snapshot cache should invalidate when tool metadata changes without a count change.")
+
 	state.current_tools_view = "internal_executors"
 	var internal_model: Dictionary = service.build_model()
 	if not (internal_model.get("internal_executor_presentation", {}) is Dictionary) or (internal_model.get("internal_executor_presentation", {}) as Dictionary).is_empty():
@@ -352,15 +379,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (diagnostics_model.get("tool_diagnostics_presentation", {}) is Dictionary) or (diagnostics_model.get("tool_diagnostics_presentation", {}) as Dictionary).is_empty():
 		return _failure("Dock model should build diagnostics presentation only after the Diagnostics Tools view is selected.")
 	state.current_tools_view = "agent_tools"
-
-	var changed_script_path := "res://addons/godot_dotnet_mcp/tools/system/project_state_v2.gd"
-	(server_controller._server as FakeServer).project_state_script_path = changed_script_path
-	var refreshed_model: Dictionary = service.build_model()
-	var refreshed_presentation: Dictionary = refreshed_model.get("active_tool_presentation", {})
-	var refreshed_metadata_by_name: Dictionary = refreshed_presentation.get("toolMetadataByName", {})
-	var refreshed_project_metadata: Dictionary = refreshed_metadata_by_name.get("system_project_state", {})
-	if str(refreshed_project_metadata.get("scriptPath", "")) != changed_script_path:
-		return _failure("Dock catalog snapshot cache should invalidate when tool metadata changes without a count change.")
 
 	state.current_tab = 2
 	server_controller.heavy_status_request_count = 0

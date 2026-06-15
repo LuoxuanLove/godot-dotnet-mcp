@@ -28,6 +28,8 @@ class FakePathResolver extends RefCounted:
 			executable_path = "C:/Tools/codex.exe"
 		elif client_id == "cursor":
 			executable_path = "C:/Programs/Cursor/Cursor.exe"
+		elif client_id == "antigravity":
+			executable_path = "C:/Programs/Antigravity/Antigravity.exe"
 		return {
 			"path": executable_path,
 			"detected_via": "fake",
@@ -63,9 +65,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var results = registry.detect_all(PackedStringArray())
 	var supported_ids = registry.get_supported_client_ids()
-	if supported_ids.size() != 14:
+	if supported_ids.size() != 15:
 		return _failure("Client detector registry should register the full supported client set.")
-	if not results.has("cursor") or not results.has("codex") or not results.has("opencode") or not results.has("windsurf") or not results.has("qwen") or not results.has("cherry_studio"):
+	if not results.has("cursor") or not results.has("antigravity") or not results.has("codex") or not results.has("opencode") or not results.has("windsurf") or not results.has("qwen") or not results.has("cherry_studio"):
 		return _failure("Client detector registry should expose all client ids through detect_all.")
 	if str(results.get("cursor", {}).get("status", "")) != "ready":
 		return _failure("Client detector registry should delegate config-file clients to the config detector path.")
@@ -73,11 +75,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Client detector registry should delegate CLI-managed clients to the executable detector path.")
 	if not bool(results.get("opencode", {}).get("write_supported", false)):
 		return _failure("Client detector registry should expose config-write support for OpenCode CLI.")
+	if bool(results.get("antigravity", {}).get("write_supported", false)):
+		return _failure("Antigravity registry detection should stay manual guidance until a documented config file contract exists.")
+	if bool(results.get("antigravity", {}).get("auto_add_supported", false)):
+		return _failure("Antigravity registry detection should not expose CLI-style auto add.")
+	if not str(results.get("antigravity", {}).get("config_path", "")).is_empty():
+		return _failure("Antigravity registry detection should not expose a config_path until a documented config file contract exists.")
+	if str(results.get("antigravity", {}).get("guidance_path", "")) != "C:/Users/Test/AppData/Roaming/Antigravity":
+		return _failure("Antigravity registry detection should expose its user-data path only as guidance.")
+	if str(results.get("antigravity", {}).get("config_entry_status", {}).get("status", "")) != "deferred":
+		return _failure("Antigravity registry detection should mark config entry inspection as deferred.")
 	var expected_support_levels := {
 		"claude_desktop": "full_write",
 		"claude_code": "auto_add",
 		"cursor": "full_write",
 		"trae": "full_write",
+		"antigravity": "manual_guidance",
 		"codex_desktop": "launch_path",
 		"codex": "auto_add",
 		"gemini": "auto_add",
@@ -92,7 +105,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var expected_core_actions := {
 		"full_write": ["write_config", "remove_config", "copy_config", "pick_path"],
 		"auto_add": ["auto_add", "remove_config", "copy_config", "open_terminal", "pick_path"],
-		"manual_guidance": ["open_config_dir", "copy_config", "pick_path"],
+		"manual_guidance": ["copy_config", "pick_path"],
 		"launch_path": ["copy_config", "pick_path"]
 	}
 	for client_id in supported_ids:
@@ -107,9 +120,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		var actions: Variant = capability.get("actions", [])
 		if not (actions is Array) or actions.is_empty():
 			return _failure("Client detector registry should expose supported actions for %s." % client_id)
-		for expected_action in expected_core_actions.get(support_level, []):
+		var expected_actions: Array = expected_core_actions.get(support_level, []).duplicate()
+		if support_level == "manual_guidance" and client_id != "antigravity":
+			expected_actions.append("open_config_dir")
+		for expected_action in expected_actions:
 			if not actions.has(expected_action):
 				return _failure("Client detector registry should expose %s for %s." % [expected_action, client_id])
+		if client_id == "antigravity" and (actions.has("open_config_dir") or actions.has("open_config_file")):
+			return _failure("Antigravity registry capability should not expose config-file actions without a documented config file contract.")
 		if actions.has("clear_path"):
 			return _failure("Client detector registry should not expose clear_path before runtime manual-path detection for %s." % client_id)
 		var notes: Variant = capability.get("notes", [])

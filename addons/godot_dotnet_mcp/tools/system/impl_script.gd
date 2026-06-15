@@ -105,7 +105,7 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 
 
 func tick(delta: float) -> void:
-	MCPDebugBuffer.record("info", "system", "executor tick loader=%s" % str(_tool_loader_context != null))
+	pass
 
 
 # --- private helpers ---
