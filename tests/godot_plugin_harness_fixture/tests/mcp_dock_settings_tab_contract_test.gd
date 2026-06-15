@@ -122,6 +122,24 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var server_tab := tab_container.get_tab_control(0)
 	if server_tab == null or server_tab.find_child("SettingsCard", true, false) != null:
 		return _failure("Home tab should not keep persistent SettingsCard controls.")
+	if tab_container.get_tab_control(1).has_method("apply_model") or tab_container.get_tab_control(5).has_method("apply_model"):
+		return _failure("MCP Dock should lazy-load heavy non-Home tabs instead of instantiating them during startup.")
+	tab_container.current_tab = 2
+	await tree.process_frame
+	if tab_container.get_tab_control(2) == null or not tab_container.get_tab_control(2).has_method("apply_model"):
+		return _failure("MCP Dock should instantiate Resources only when the Resources tab becomes visible.")
+	if tab_container.get_tab_control(1).has_method("apply_model") or tab_container.get_tab_control(3).has_method("apply_model"):
+		return _failure("MCP Dock should not instantiate sibling heavy tabs when Resources becomes visible.")
+	tab_container.current_tab = 3
+	await tree.process_frame
+	if tab_container.get_tab_control(3) == null or not tab_container.get_tab_control(3).has_method("apply_model"):
+		return _failure("MCP Dock should instantiate Prompts only when the Prompts tab becomes visible.")
+	tab_container.current_tab = 1
+	await tree.process_frame
+	if tab_container.get_tab_control(1) == null or not tab_container.get_tab_control(1).has_method("apply_model"):
+		return _failure("MCP Dock should instantiate Tools only when the Tools tab becomes visible.")
+	if tab_container.get_tab_control(4).has_method("apply_model") or tab_container.get_tab_control(5).has_method("apply_model"):
+		return _failure("MCP Dock should keep Config and Settings unloaded until those tabs are visible or targeted.")
 
 	var recorder := Recorder.new()
 	_instance.port_changed.connect(Callable(recorder, "on_port_changed"))
@@ -156,6 +174,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("MCP Dock should localize all six tab titles, including Resources and Prompts.")
 	if tab_container.current_tab != 5:
 		return _failure("MCP Dock should apply Settings tab model at tab index 5.")
+	if tab_container.get_tab_control(5) == null or not tab_container.get_tab_control(5).has_method("apply_model"):
+		return _failure("MCP Dock should instantiate the Settings tab when it becomes the active model target.")
 
 	var port_spin := tab_container.get_tab_control(5).find_child("PortSpin", true, false) as SpinBox
 	if port_spin == null or int(port_spin.value) != 3100:
@@ -272,7 +292,7 @@ func _assert_dock_applies_visible_tabs_only() -> String:
 		return "MCP Dock should route model updates through visible-tab application."
 	if source.find("_apply_tab_model(_server_tab, model)") == -1:
 		return "MCP Dock should keep the lightweight Server tab updated during status refreshes."
-	if source.find("var current_tab := _get_tab_for_index(current_index)") == -1 or source.find("_apply_tab_model(current_tab, model)") == -1:
+	if source.find("var current_tab := _get_tab_for_index(current_index, true)") == -1 or source.find("_apply_tab_model(current_tab, model)") == -1:
 		return "MCP Dock should update only the active tab besides the Server tab."
 	if source.find("_apply_all_tab_models(model)") != -1:
 		return "MCP Dock should not apply every model update to all heavy tabs."
