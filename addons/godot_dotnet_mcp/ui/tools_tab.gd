@@ -232,6 +232,8 @@ func _create_presentation_node(parent: TreeItem, model: Dictionary, node: Dictio
 
 func _filter_presentation_node(model: Dictionary, node: Dictionary) -> Dictionary:
 	var query := _get_search_query()
+	if query.is_empty():
+		return node
 	var filtered := node.duplicate(true)
 	var children: Array = []
 	for child in node.get("children", []):
