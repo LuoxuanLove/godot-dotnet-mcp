@@ -136,6 +136,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	router.set_allowed_cors_origins(["http://localhost:5173"])
 	router.set_allowed_hosts(["10.0.0.8"])
 
+	var missing_host_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\"}", {"content-type": "application/json", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(missing_host_response.get("status", 0)) != 403 or str(missing_host_response.get("error", "")) != "HTTP Host is not allowed":
+		return _failure("HTTP request router should reject POST /mcp requests without a Host header.")
+	var blank_host_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\"}", {"host": "   ", "content-type": "application/json", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(blank_host_response.get("status", 0)) != 403 or str(blank_host_response.get("error", "")) != "HTTP Host is not allowed":
+		return _failure("HTTP request router should reject blank Host headers before routing MCP requests.")
+	var invalid_host_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\"}", {"host": "attacker.example", "content-type": "application/json", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(invalid_host_response.get("status", 0)) != 403:
+		return _failure("HTTP request router should reject untrusted Host headers.")
+	var explicit_allowed_host_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\"}", {"host": "10.0.0.8", "content-type": "application/json", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(explicit_allowed_host_response.get("status", 0)) != 406:
+		return _failure("HTTP request router should continue to allow explicitly configured Host headers.")
+
 	var mcp_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\"}", {"host": "localhost:3000", "content-type": "application/json", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
 	if int(mcp_response.get("status", 0)) != 406:
 		return _failure("HTTP request router should require explicit Streamable HTTP Accept headers for POST /mcp after required content/protocol headers pass.")
@@ -258,15 +271,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(get_invalid_session_bad_version_headers.get("Mcp-Session-Id", "")).find("Injected") != -1:
 		return _failure("HTTP request router must not echo unsafe GET session ids on earlier transport guard failures.")
 
-	var health_response: Dictionary = await router.route_request_async("GET", "/health", "")
+	var health_response: Dictionary = await router.route_request_async("GET", "/health", "", {"host": "localhost:3000"})
 	if str(health_response.get("status", "")) != "ok":
 		return _failure("HTTP request router did not route GET /health.")
 
-	var lifecycle_response: Dictionary = await router.route_request_async("GET", "/api/editor/lifecycle", "")
+	var lifecycle_response: Dictionary = await router.route_request_async("GET", "/api/editor/lifecycle", "", {"host": "localhost:3000"})
 	if str(lifecycle_response.get("action", "")) != "status":
 		return _failure("HTTP request router did not route lifecycle status requests.")
 
-	var options_response: Dictionary = await router.route_request_async("OPTIONS", "/mcp", "")
+	var options_response: Dictionary = await router.route_request_async("OPTIONS", "/mcp", "", {"host": "localhost:3000"})
 	var options_headers: Dictionary = options_response.get("_headers", {})
 	if int(options_response.get("status", 0)) != 405 or str(options_headers.get("Allow", "")) != "GET, POST, DELETE":
 		return _failure("HTTP request router did not reject non-CORS OPTIONS requests with the allowed methods.")
@@ -538,7 +551,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(allowed_origin_health_headers.get("Access-Control-Allow-Origin", "")) != "http://localhost:5173":
 		return _failure("HTTP request router did not add CORS headers to allowed actual requests.")
 
-	var not_found_response: Dictionary = await router.route_request_async("GET", "/missing", "")
+	var not_found_response: Dictionary = await router.route_request_async("GET", "/missing", "", {"host": "localhost:3000"})
 	if int(not_found_response.get("status", 0)) != 404:
 		return _failure("HTTP request router did not return 404 for an unknown path.")
 
