@@ -3,6 +3,7 @@ extends RefCounted
 const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const PluginRuntimeStateScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
+const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tree_collapse_state.gd")
 
 const RUNTIME_PROBE_PLUGIN_PATH := "res://tests/plugin_entrypoint_runtime_probe.gd"
 const RUNTIME_BRIDGE_AUTOLOAD_NAME := "MCPRuntimeBridge"
@@ -78,6 +79,18 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _return_failure(tree, "plugin.gd should preserve saved debug_mode=false instead of forcing it back to true.")
 	if _probe_plugin._server_controller == null or bool(_probe_plugin._server_controller._running):
 		return _return_failure(tree, "plugin.gd should not auto-start the server when saved auto_start=false is restored.")
+
+	var save_calls_before_collapse := int(_probe_plugin.save_settings_calls)
+	_probe_plugin._on_tree_collapse_changed("domain", "system", true)
+	_probe_plugin._on_tree_collapse_changed("domain", "user", true)
+	_probe_plugin._on_tree_collapse_changed("category", "scene", false)
+	if int(_probe_plugin.save_settings_calls) != save_calls_before_collapse:
+		return _return_failure(tree, "plugin.gd should defer Tools tree collapse saves instead of writing immediately for each change.")
+	await tree.process_frame
+	if int(_probe_plugin.save_settings_calls) != save_calls_before_collapse + 1:
+		return _return_failure(tree, "plugin.gd should coalesce same-frame Tools tree collapse changes into one settings save.")
+	if not TreeCollapseState.is_node_collapsed(_probe_plugin._state.settings, "domain", "system"):
+		return _return_failure(tree, "plugin.gd should still persist pending collapsed domain state before the deferred save.")
 
 	var runtime_full_reload: Dictionary = _probe_plugin.runtime_full_reload()
 	if not bool(runtime_full_reload.get("success", false)) or not bool(runtime_full_reload.get("deferred", false)):

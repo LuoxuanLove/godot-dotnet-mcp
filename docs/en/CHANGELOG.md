@@ -41,6 +41,7 @@ Target version: 2.0.0.
 
 ### Fixed
 
+- Fixed Tools tree collapse persistence so same-frame expand/collapse bursts coalesce into one settings save.
 - Fixed Streamable HTTP Host validation so missing or blank Host headers are rejected before MCP requests reach the router.
 - Hardened HTTP and stdio JSON-RPC envelope handling, malformed framing, duplicate/conflicting HTTP body headers, response-envelope handling, disabled-tool parity, and session validation so transport errors are deterministic across supported MCP transports.
 - Fixed Prompt and Resource validation so unknown or incorrectly typed prompt arguments are rejected with allowed-argument metadata and binary `.scn` / `.res` files are not read as text resources.
