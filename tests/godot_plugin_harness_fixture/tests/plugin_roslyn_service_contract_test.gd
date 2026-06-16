@@ -224,12 +224,17 @@ func _assert_isolated_runtime_process_has_timeout_guards() -> Dictionary:
 		"--timeout-ms",
 		"--response-json-file",
 		"roslyn_runtime_timeout",
-		"_parse_runtime_process_response"
+		"_parse_runtime_process_response",
+		"_execute_runtime_process_async",
+		"await _await_process_frame()",
+		"roslyn_runtime_process_requires_async"
 	]:
 		if service_source.find(required_text) == -1:
 			return _failure("PluginRoslynService isolated process guard is missing '%s'." % required_text)
 	if service_source.find("OS.execute(\"dotnet\"") != -1:
 		return _failure("PluginRoslynService must not use blocking OS.execute for isolated Roslyn runtime calls.")
+	if service_source.find("OS.delay_usec") != -1:
+		return _failure("PluginRoslynService isolated runtime process must yield frames instead of busy-wait polling.")
 
 	return {"success": true}
 

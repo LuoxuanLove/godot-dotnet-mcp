@@ -10,8 +10,6 @@ const LOAD_MODE_PLACEHOLDER := "gdscript_placeholder"
 const LOAD_MODE_TESTING := "testing_double"
 const CACHE_LIMIT := 32
 const RUNTIME_PROCESS_TIMEOUT_MS := 15000
-const RUNTIME_PROCESS_POLL_DELAY_USEC := 10000
-
 const ERROR_TYPE_INVALID_ARGUMENT := "invalid_argument"
 const ERROR_TYPE_SOURCE_UNAVAILABLE := "source_unavailable"
 const ERROR_TYPE_RUNTIME_UNAVAILABLE := "runtime_unavailable"
@@ -59,21 +57,42 @@ class RuntimeProcessRoslynFacade extends RefCounted:
 		_owner = owner
 
 	func get_capabilities() -> Dictionary:
-		return _owner._execute_runtime_capabilities()
+		return _owner._runtime_process_requires_async_result()
+
+	func get_capabilities_async() -> Dictionary:
+		return await _owner._execute_runtime_capabilities_async()
 
 	func parse_file(script_path: String, source_text: String = "") -> Dictionary:
+		return _owner._build_error_result(
+			script_path,
+			"",
+			ERROR_TYPE_RUNTIME_UNAVAILABLE,
+			"roslyn_runtime_process_requires_async",
+			"Isolated Roslyn runtime process calls require parse_file_async."
+		)
+
+	func parse_file_async(script_path: String, source_text: String = "") -> Dictionary:
 		var request: Dictionary = {
 			"path": script_path
 		}
 		if not source_text.is_empty():
 			request["sourceText"] = source_text
-		var response: Dictionary = _owner._execute_runtime_tool("cs_file_read", request)
+		var response: Dictionary = await _owner._execute_runtime_tool_async("cs_file_read", request)
 		return _owner._convert_bridge_read_response(response, script_path)
 
 	func patch_file(script_path: String, request: Dictionary) -> Dictionary:
+		return _owner._build_error_result(
+			script_path,
+			"",
+			ERROR_TYPE_RUNTIME_UNAVAILABLE,
+			"roslyn_runtime_process_requires_async",
+			"Isolated Roslyn runtime process calls require patch_file_async."
+		)
+
+	func patch_file_async(script_path: String, request: Dictionary) -> Dictionary:
 		var bridge_request: Dictionary = request.duplicate(true)
 		bridge_request["path"] = script_path
-		var response: Dictionary = _owner._execute_runtime_tool("cs_plugin_patch", bridge_request)
+		var response: Dictionary = await _owner._execute_runtime_tool_async("cs_plugin_patch", bridge_request)
 		return _owner._convert_bridge_patch_response(response, script_path)
 
 
@@ -97,6 +116,24 @@ func get_capabilities() -> Dictionary:
 			"PluginRoslynRuntimeFacade is unavailable"
 		)
 	var result = _facade.get_capabilities()
+	return _normalize_capabilities_result(result)
+
+
+func get_capabilities_async() -> Dictionary:
+	await _ensure_facade_async()
+	if _facade == null:
+		return _build_error_result(
+			"",
+			"",
+			ERROR_TYPE_RUNTIME_UNAVAILABLE,
+			"roslyn_runtime_unavailable",
+			"PluginRoslynRuntimeFacade is unavailable"
+		)
+	var result
+	if _facade.has_method("get_capabilities_async"):
+		result = await _facade.get_capabilities_async()
+	else:
+		result = _facade.get_capabilities()
 	return _normalize_capabilities_result(result)
 
 
@@ -133,6 +170,49 @@ func parse_file(script_path: String, source_text: String = "") -> Dictionary:
 		)
 
 	var result = _facade.parse_file(normalized_path, resolved_source_text)
+	var normalized_result := _normalize_parse_result(result, normalized_path, source_hash)
+	if bool(normalized_result.get("success", false)):
+		_store_cache(cache_key, normalized_result)
+	return normalized_result
+
+
+func parse_file_async(script_path: String, source_text: String = "") -> Dictionary:
+	var normalized_path := _normalize_script_path(script_path)
+	var source_resolution := _resolve_source(normalized_path, source_text)
+	if not bool(source_resolution.get("success", false)):
+		return _build_error_result(
+			normalized_path,
+			str(source_resolution.get("source_hash", "")),
+			str(source_resolution.get("error_type", ERROR_TYPE_SOURCE_UNAVAILABLE)),
+			str(source_resolution.get("error_code", "roslyn_source_unavailable")),
+			str(source_resolution.get("error", "Failed to resolve Roslyn source"))
+		)
+
+	var resolved_source_text := str(source_resolution.get("source_text", ""))
+	var source_hash := str(source_resolution.get("source_hash", ""))
+	_last_source_hash = source_hash
+	var cache_key := _make_key(normalized_path, source_hash)
+	var cached_entry: Variant = _cache_by_key.get(cache_key, null)
+	if cached_entry is Dictionary:
+		var cached_result_raw: Variant = (cached_entry as Dictionary).get("result", {})
+		if cached_result_raw is Dictionary:
+			return (cached_result_raw as Dictionary).duplicate(true)
+
+	await _ensure_facade_async()
+	if _facade == null:
+		return _build_error_result(
+			normalized_path,
+			source_hash,
+			ERROR_TYPE_RUNTIME_UNAVAILABLE,
+			"roslyn_runtime_unavailable",
+			"PluginRoslynRuntimeFacade is unavailable"
+		)
+
+	var result
+	if _facade.has_method("parse_file_async"):
+		result = await _facade.parse_file_async(normalized_path, resolved_source_text)
+	else:
+		result = _facade.parse_file(normalized_path, resolved_source_text)
 	var normalized_result := _normalize_parse_result(result, normalized_path, source_hash)
 	if bool(normalized_result.get("success", false)):
 		_store_cache(cache_key, normalized_result)
@@ -183,6 +263,54 @@ func patch_file(script_path: String, request: Dictionary) -> Dictionary:
 	return normalized_result
 
 
+func patch_file_async(script_path: String, request: Dictionary) -> Dictionary:
+	var normalized_path := _normalize_script_path(script_path)
+	if normalized_path.is_empty():
+		return _build_error_result(
+			normalized_path,
+			"",
+			ERROR_TYPE_INVALID_ARGUMENT,
+			"script_path_required",
+			"script_path is required"
+		)
+	if request.is_empty():
+		return _build_error_result(
+			normalized_path,
+			"",
+			ERROR_TYPE_INVALID_ARGUMENT,
+			"patch_request_required",
+			"patch request is required"
+		)
+
+	await _ensure_facade_async()
+	if _facade == null:
+		return _build_error_result(
+			normalized_path,
+			"",
+			ERROR_TYPE_RUNTIME_UNAVAILABLE,
+			"roslyn_runtime_unavailable",
+			"PluginRoslynRuntimeFacade is unavailable"
+		)
+	if not _facade.has_method("patch_file") and not _facade.has_method("patch_file_async"):
+		return _build_error_result(
+			normalized_path,
+			"",
+			ERROR_TYPE_PROTOCOL_ERROR,
+			"roslyn_patch_unavailable",
+			"PluginRoslynRuntimeFacade does not expose patch_file"
+		)
+
+	var result
+	if _facade.has_method("patch_file_async"):
+		result = await _facade.patch_file_async(normalized_path, request.duplicate(true))
+	else:
+		result = _facade.patch_file(normalized_path, request.duplicate(true))
+	var normalized_result := _normalize_patch_result(result, normalized_path)
+	if bool(normalized_result.get("success", false)):
+		_invalidate_cache_for_path(normalized_path)
+	return normalized_result
+
+
 func clear() -> void:
 	_cache_by_key.clear()
 	_cache_order.clear()
@@ -214,6 +342,12 @@ func _ensure_facade() -> void:
 	if _facade != null:
 		return
 	_facade = _instantiate_facade()
+
+
+func _ensure_facade_async() -> void:
+	if _facade != null:
+		return
+	_facade = await _instantiate_facade_async()
 
 
 func _instantiate_facade():
@@ -257,14 +391,20 @@ func _instantiate_runtime_process_facade(reason: String):
 		_load_mode = LOAD_MODE_PLACEHOLDER
 		_load_error = _build_runtime_unavailable_message("%s; isolated runtime bridge is missing at %s" % [reason, RUNTIME_BRIDGE_DLL_PATH])
 		return null
-	var capabilities := _execute_runtime_capabilities()
-	if not bool(capabilities.get("success", false)):
-		_load_mode = LOAD_MODE_PLACEHOLDER
-		_load_error = str(capabilities.get("error", _build_runtime_unavailable_message(reason)))
-		return null
 	_load_mode = LOAD_MODE_RUNTIME_PROCESS
 	_load_error = ""
 	return RuntimeProcessRoslynFacade.new(self)
+
+
+func _instantiate_facade_async():
+	var facade = _instantiate_facade()
+	if facade is RuntimeProcessRoslynFacade:
+		var capabilities: Dictionary = await _execute_runtime_capabilities_async()
+		if not bool(capabilities.get("success", false)):
+			_load_mode = LOAD_MODE_PLACEHOLDER
+			_load_error = str(capabilities.get("error", _build_runtime_unavailable_message("PluginRoslynRuntimeFacade isolated runtime process is unavailable")))
+			return null
+	return facade
 
 
 func _build_runtime_unavailable_message(reason: String) -> String:
@@ -280,6 +420,24 @@ func _build_runtime_unavailable_message(reason: String) -> String:
 
 func _execute_runtime_capabilities() -> Dictionary:
 	var result := _execute_runtime_process(["--capabilities"])
+	if not bool(result.get("success", false)):
+		return result
+	var payload := _coerce_dictionary(result.get("payload", {}))
+	var data := _base_metadata(false)
+	data["component"] = str(payload.get("component", "godot-dotnet-mcp-roslyn-runtime"))
+	data["version"] = str(payload.get("version", ""))
+	data["mode"] = str(payload.get("mode", "syntax"))
+	data["semantic_runtime"] = "Roslyn"
+	data["tools"] = _coerce_array(payload.get("tools", []))
+	return {
+		"success": true,
+		"data": data,
+		"message": "Isolated Roslyn runtime bundle is ready."
+	}
+
+
+func _execute_runtime_capabilities_async() -> Dictionary:
+	var result: Dictionary = await _execute_runtime_process_async(["--capabilities"])
 	if not bool(result.get("success", false)):
 		return result
 	var payload := _coerce_dictionary(result.get("payload", {}))
@@ -312,7 +470,27 @@ func _execute_runtime_tool(tool_name: String, request: Dictionary) -> Dictionary
 	return result
 
 
+func _execute_runtime_tool_async(tool_name: String, request: Dictionary) -> Dictionary:
+	var request_path := _make_runtime_request_path(tool_name)
+	var file := FileAccess.open(request_path, FileAccess.WRITE)
+	if file == null:
+		return {
+			"success": false,
+			"error": "Failed to create Roslyn runtime request file: %s" % request_path
+		}
+	file.store_string(JSON.stringify(request))
+	file.close()
+	var result: Dictionary = await _execute_runtime_process_async(["--call-json-file", tool_name, ProjectSettings.globalize_path(request_path)])
+	if FileAccess.file_exists(request_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(request_path))
+	return result
+
+
 func _execute_runtime_process(args: Array[String]) -> Dictionary:
+	return _runtime_process_requires_async_result()
+
+
+func _execute_runtime_process_async(args: Array[String]) -> Dictionary:
 	var runtime_dll := ProjectSettings.globalize_path(RUNTIME_BRIDGE_DLL_PATH)
 	var response_path := _make_runtime_response_path()
 	var command_args: Array[String] = [runtime_dll]
@@ -341,7 +519,7 @@ func _execute_runtime_process(args: Array[String]) -> Dictionary:
 				"error_code": "roslyn_runtime_timeout",
 				"timeout_ms": RUNTIME_PROCESS_TIMEOUT_MS
 			}
-		OS.delay_usec(RUNTIME_PROCESS_POLL_DELAY_USEC)
+		await _await_process_frame()
 	var exit_code := OS.get_process_exit_code(pid)
 	var stdout := ""
 	if FileAccess.file_exists(response_path):
@@ -351,6 +529,24 @@ func _execute_runtime_process(args: Array[String]) -> Dictionary:
 			response_file.close()
 		_remove_file_if_exists(response_path)
 	return _parse_runtime_process_response(stdout, exit_code)
+
+
+func _runtime_process_requires_async_result() -> Dictionary:
+	return {
+		"success": false,
+		"error": "Isolated Roslyn runtime process calls require the async API.",
+		"exit_code": -1,
+		"stdout": "",
+		"error_code": "roslyn_runtime_process_requires_async"
+	}
+
+
+func _await_process_frame() -> void:
+	var main_loop := Engine.get_main_loop()
+	if main_loop is SceneTree:
+		await (main_loop as SceneTree).process_frame
+	else:
+		await get_tree().process_frame
 
 
 func _parse_runtime_process_response(stdout: String, exit_code: int) -> Dictionary:

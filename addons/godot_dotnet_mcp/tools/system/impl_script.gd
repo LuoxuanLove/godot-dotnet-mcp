@@ -104,6 +104,14 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 		_: return bridge.error("Unknown tool: %s" % tool_name)
 
 
+func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
+	MCPDebugBuffer.record("debug", "system", "tool: %s" % tool_name)
+	match tool_name:
+		"script_analyze": return await _execute_script_analyze_async(args)
+		"script_patch":   return await _execute_script_patch_async(args)
+		_: return execute(tool_name, args)
+
+
 func tick(delta: float) -> void:
 	pass
 
@@ -299,6 +307,112 @@ func _apply_patch_op(op: Dictionary, script_path: String, atomic_tool: String, i
 			return bridge.error("Unknown script patch op: %s" % op_name)
 
 
+func _apply_patch_op_async(op: Dictionary, script_path: String, atomic_tool: String, is_gd: bool) -> Dictionary:
+	var op_name := str(op.get("op", ""))
+	var member_name := str(op.get("name", ""))
+	match op_name:
+		"add_method":
+			if is_gd:
+				return await bridge.call_atomic_async(atomic_tool, {
+					"action": "add_function",
+					"path": script_path,
+					"name": member_name,
+					"params": op.get("params", []),
+					"body": str(op.get("body", "\tpass"))
+				})
+			return await bridge.call_atomic_async(atomic_tool, {
+				"action": "add_method",
+				"path": script_path,
+				"name": member_name,
+				"params": op.get("params", []),
+				"return_type": str(op.get("type", "void")),
+				"body": str(op.get("body", ""))
+			})
+		"add_export":
+			if is_gd:
+				return await bridge.call_atomic_async(atomic_tool, {
+					"action": "add_export",
+					"path": script_path,
+					"name": member_name,
+					"type": str(op.get("type", "Variant")),
+					"default_value": str(op.get("default_value", "")),
+					"hint": str(op.get("hint", ""))
+				})
+			return await bridge.call_atomic_async(atomic_tool, {
+				"action": "add_field",
+				"path": script_path,
+				"name": member_name,
+				"type": str(op.get("type", "Variant")),
+				"export": true
+			})
+		"add_signal":
+			if is_gd:
+				return await bridge.call_atomic_async(atomic_tool, {
+					"action": "add_signal",
+					"path": script_path,
+					"name": member_name,
+					"params": op.get("params", [])
+				})
+			return bridge.error("add_signal is not supported for C# scripts via script_patch")
+		"add_variable":
+			if is_gd:
+				var var_args: Dictionary = {
+					"action": "add_variable",
+					"path": script_path,
+					"name": member_name,
+					"type": str(op.get("type", ""))
+				}
+				if bool(op.get("onready", false)):
+					var_args["onready"] = true
+				if not str(op.get("default_value", "")).is_empty():
+					var_args["default_value"] = str(op.get("default_value", ""))
+				return await bridge.call_atomic_async(atomic_tool, var_args)
+			return await bridge.call_atomic_async(atomic_tool, {
+				"action": "add_field",
+				"path": script_path,
+				"name": member_name,
+				"type": str(op.get("type", "Variant")),
+				"export": false
+			})
+		"replace_method_body":
+			if is_gd:
+				return await bridge.call_atomic_async(atomic_tool, {
+					"action": "replace_function_body",
+					"path": script_path,
+					"name": member_name,
+					"body": str(op.get("body", ""))
+				})
+			return await bridge.call_atomic_async(atomic_tool, {
+				"action": "replace_method_body",
+				"path": script_path,
+				"name": member_name,
+				"body": str(op.get("body", ""))
+			})
+		"delete_member":
+			if is_gd:
+				return await bridge.call_atomic_async(atomic_tool, {
+					"action": "remove_member",
+					"path": script_path,
+					"name": member_name,
+					"member_type": str(op.get("member_type", "auto"))
+				})
+			return await bridge.call_atomic_async(atomic_tool, {
+				"action": "delete_member",
+				"path": script_path,
+				"name": member_name,
+				"member_type": str(op.get("member_type", "auto"))
+			})
+		"rename_member":
+			return await bridge.call_atomic_async(atomic_tool, {
+				"action": "rename_member",
+				"path": script_path,
+				"name": member_name,
+				"new_name": str(op.get("new_name", ""))
+			})
+		_:
+			return bridge.error("Unknown script patch op: %s" % op_name)
+
+
 # --- tool implementations ---
 
 func _execute_bindings_audit(args: Dictionary) -> Dictionary:
@@ -470,6 +584,40 @@ func _execute_script_analyze(args: Dictionary) -> Dictionary:
 	return bridge.success(result_data)
 
 
+func _execute_script_analyze_async(args: Dictionary) -> Dictionary:
+	var script_path := str(args.get("script", "")).strip_edges()
+	var include_diagnostics := bool(args.get("include_diagnostics", false))
+	if script_path.is_empty():
+		return bridge.error("script path is required")
+	if not (script_path.ends_with(".gd") or script_path.ends_with(".cs")):
+		return bridge.error("script must be a .gd or .cs file")
+	if not FileAccess.file_exists(script_path):
+		MCPDebugBuffer.record("warning", "system",
+			"script_analyze: file not found: %s" % script_path)
+		return bridge.error("Script file not found: %s" % script_path)
+	MCPDebugBuffer.record("debug", "system", "script_analyze: %s" % script_path)
+
+	var inspect_data: Dictionary = _helpers().extract_data(await bridge.call_atomic_async("script_inspect", {"path": script_path}))
+	var symbols_data: Dictionary = _helpers().extract_data(await bridge.call_atomic_async("script_symbols", {"path": script_path}))
+	var exports_data: Dictionary = _helpers().extract_data(await bridge.call_atomic_async("script_exports", {"path": script_path}))
+	var refs_data: Dictionary = _helpers().extract_data(bridge.call_atomic("script_references", {
+		"action": "get_scene_refs", "path": script_path
+	}))
+	var base_type_data: Dictionary = _helpers().extract_data(bridge.call_atomic("script_references", {
+		"action": "get_base_type", "path": script_path
+	}))
+
+	return _build_script_analyze_result(
+		script_path,
+		include_diagnostics,
+		inspect_data,
+		symbols_data,
+		exports_data,
+		refs_data,
+		base_type_data
+	)
+
+
 func _execute_script_patch(args: Dictionary) -> Dictionary:
 	var script_path := str(args.get("script", "")).strip_edges()
 	var ops_raw = args.get("ops", [])
@@ -559,6 +707,208 @@ func _execute_script_patch(args: Dictionary) -> Dictionary:
 		"applied_ops": applied_ops,
 		"failed_ops": failed_ops
 	})
+
+
+func _execute_script_patch_async(args: Dictionary) -> Dictionary:
+	var script_path := str(args.get("script", "")).strip_edges()
+	var ops_raw = args.get("ops", [])
+	var dry_run := bool(args.get("dry_run", true))
+
+	if script_path.is_empty():
+		return bridge.error("script is required")
+	if not (script_path.ends_with(".gd") or script_path.ends_with(".cs")):
+		return bridge.error("script must be a .gd or .cs file")
+	if not FileAccess.file_exists(script_path):
+		MCPDebugBuffer.record("warning", "system",
+			"script_patch: file not found: %s" % script_path)
+		return bridge.error("Script file not found: %s" % script_path)
+	MCPDebugBuffer.record("debug", "system",
+		"script_patch: %s, dry_run=%s, ops=%d" % [script_path, str(dry_run), (ops_raw as Array).size() if ops_raw is Array else 0])
+	if not (ops_raw is Array) or (ops_raw as Array).is_empty():
+		return bridge.error("ops must be a non-empty array")
+
+	var is_gd := script_path.ends_with(".gd")
+	var atomic_tool := "script_edit_gd" if is_gd else "script_edit_cs"
+
+	var inspect_data: Dictionary = _helpers().extract_data(await bridge.call_atomic_async("script_inspect", {"path": script_path}))
+	if inspect_data.is_empty():
+		return bridge.error("Failed to inspect script: %s" % script_path)
+
+	var ops: Array = []
+	for raw_op in ops_raw:
+		if raw_op is Dictionary:
+			ops.append((raw_op as Dictionary).duplicate(true))
+
+	var op_previews: Array = []
+	var op_errors: Array = []
+	for op_item in ops:
+		if not (op_item is Dictionary):
+			op_errors.append("Invalid op: not a dictionary")
+			continue
+		var op_name := str((op_item as Dictionary).get("op", ""))
+		var member_name := str((op_item as Dictionary).get("name", ""))
+		if op_name.is_empty():
+			op_errors.append("Op name is required")
+			op_previews.append({"op": op_name, "valid": false, "error": "op is required"})
+			continue
+		if member_name.is_empty():
+			op_errors.append("Op '%s': name is required" % op_name)
+			op_previews.append({"op": op_name, "valid": false, "error": "name is required"})
+			continue
+		if op_name == "rename_member":
+			var new_name := str((op_item as Dictionary).get("new_name", "")).strip_edges()
+			if new_name.is_empty():
+				op_errors.append("Op 'rename_member': new_name is required")
+				op_previews.append({"op": op_name, "valid": false, "name": member_name, "error": "new_name is required"})
+				continue
+		op_previews.append({"op": op_name, "valid": true, "name": member_name,
+			"description": "Add %s '%s' to %s" % [op_name.replace("add_", ""), member_name, script_path.get_file()]})
+
+	if dry_run:
+		return bridge.success({
+			"script": script_path,
+			"language": str(inspect_data.get("language", "unknown")),
+			"dry_run": true,
+			"op_count": ops.size(),
+			"op_previews": op_previews,
+			"would_apply": op_errors.is_empty(),
+			"errors": op_errors
+		})
+
+	if not op_errors.is_empty():
+		return bridge.error("Cannot apply patch: %s" % "; ".join(op_errors), {"op_errors": op_errors})
+
+	var applied_ops: Array = []
+	var failed_ops: Array = []
+	for op_item in ops:
+		if not (op_item is Dictionary):
+			continue
+		var op_name := str((op_item as Dictionary).get("op", ""))
+		var apply_result: Dictionary = await _apply_patch_op_async(op_item as Dictionary, script_path, atomic_tool, is_gd)
+		if bool(apply_result.get("success", false)):
+			applied_ops.append({"op": op_name, "name": str((op_item as Dictionary).get("name", ""))})
+		else:
+			failed_ops.append({"op": op_name, "name": str((op_item as Dictionary).get("name", "")), "error": str(apply_result.get("error", ""))})
+
+	return bridge.success({
+		"script": script_path,
+		"dry_run": false,
+		"applied_count": applied_ops.size(),
+		"failed_count": failed_ops.size(),
+		"applied_ops": applied_ops,
+		"failed_ops": failed_ops
+	})
+
+
+func _build_script_analyze_result(
+		script_path: String,
+		include_diagnostics: bool,
+		inspect_data: Dictionary,
+		symbols_data: Dictionary,
+		exports_data: Dictionary,
+		refs_data: Dictionary,
+		base_type_data: Dictionary
+	) -> Dictionary:
+	var methods: Array = []
+	var variables: Array = []
+	var constants: Array = []
+	var signals: Array = []
+	for sym in symbols_data.get("symbols", []):
+		if not (sym is Dictionary):
+			continue
+		var kind := str((sym as Dictionary).get("kind", ""))
+		match kind:
+			"method", "function":
+				methods.append((sym as Dictionary).duplicate(true))
+			"variable", "member":
+				variables.append((sym as Dictionary).duplicate(true))
+			"constant":
+				constants.append((sym as Dictionary).duplicate(true))
+			"signal":
+				signals.append((sym as Dictionary).duplicate(true))
+
+	var scene_refs: Array = []
+	for sp in refs_data.get("scenes", []):
+		scene_refs.append(str(sp))
+
+	var issues: Array = []
+	if scene_refs.is_empty():
+		issues.append(_helpers().build_issue("info", "no_scene_reference",
+			"Script is not referenced by any discovered scene.", {"script": script_path}))
+
+	var result_data: Dictionary = {
+		"script": script_path,
+		"language": str(inspect_data.get("language", "unknown")),
+		"class_name": str(inspect_data.get("class_name", "")),
+		"base_type": str(base_type_data.get("base_type", inspect_data.get("base_type", ""))),
+		"namespace": str(inspect_data.get("namespace", "")),
+		"method_count": methods.size(),
+		"export_count": exports_data.get("count", (exports_data.get("exports", []) as Array).size()),
+		"signal_count": signals.size(),
+		"variable_count": variables.size(),
+		"scene_ref_count": scene_refs.size(),
+		"methods": methods,
+		"exports": exports_data.get("exports", []),
+		"signals": signals,
+		"variables": variables,
+		"scene_refs": scene_refs,
+		"issue_count": issues.size(),
+		"issues": issues
+	}
+	if inspect_data.has("engine"):
+		result_data["engine"] = str(inspect_data.get("engine", ""))
+	if inspect_data.has("mode"):
+		result_data["mode"] = str(inspect_data.get("mode", ""))
+	if inspect_data.has("source_hash"):
+		result_data["source_hash"] = str(inspect_data.get("source_hash", ""))
+	if inspect_data.has("degraded"):
+		result_data["degraded"] = bool(inspect_data.get("degraded", false))
+	if inspect_data.has("transport"):
+		result_data["transport"] = str(inspect_data.get("transport", ""))
+	if inspect_data.has("entrypoint"):
+		result_data["entrypoint"] = str(inspect_data.get("entrypoint", ""))
+
+	if include_diagnostics and script_path.ends_with(".gd"):
+		MCPDebugBuffer.record("info", "system",
+			"script_analyze diagnostics branch entered: %s" % script_path)
+		var diagnostics_source := FileAccess.get_file_as_string(script_path)
+		var diagnostics_service = _get_gdscript_lsp_diagnostics_service()
+		MCPDebugBuffer.record("info", "system",
+			"script_analyze diagnostics loader=%s service=%s" % [
+				str(bridge != null and bridge.has_method("get_tool_loader") and bridge.get_tool_loader() != null),
+				str(diagnostics_service != null)
+			])
+		var diagnostics_result: Dictionary = {}
+		if diagnostics_service != null and diagnostics_service.has_method("request_diagnostics"):
+			var diagnostics_result_raw = diagnostics_service.request_diagnostics(
+				script_path,
+				diagnostics_source
+			)
+			if diagnostics_result_raw is Dictionary:
+				diagnostics_result = (diagnostics_result_raw as Dictionary).duplicate(true)
+		if diagnostics_result.is_empty():
+			diagnostics_result = {
+				"available": false,
+				"pending": true,
+				"finished": false,
+				"state": "queued",
+				"script": script_path,
+				"source_hash": str(diagnostics_source.hash()),
+				"parse_errors": [],
+				"error_count": 0,
+				"warning_count": 0,
+				"note": "Diagnostics are being resolved in the background from saved file content on disk."
+			}
+		MCPDebugBuffer.record("info", "system",
+			"script_analyze diagnostics state=%s pending=%s available=%s" % [
+				str(diagnostics_result.get("state", "unknown")),
+				str(bool(diagnostics_result.get("pending", false))),
+				str(bool(diagnostics_result.get("available", false)))
+			])
+		result_data["diagnostics"] = diagnostics_result
+		result_data["diagnostics_status"] = _build_diagnostics_status_summary(diagnostics_result)
+
+	return bridge.success(result_data)
 
 
 func _get_gdscript_lsp_diagnostics_service():
