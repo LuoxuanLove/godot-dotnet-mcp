@@ -36,6 +36,16 @@ func execute(tool_name: String, args: Dictionary) -> Dictionary:
 			return _gdscript_edit_service._error("Unknown tool: %s" % tool_name)
 
 
+func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
+	match tool_name:
+		"inspect", "symbols", "exports":
+			return await _inspect_service.execute_async(tool_name, args)
+		"edit_cs":
+			return await _csharp_edit_service.execute_async(tool_name, args)
+		_:
+			return execute(tool_name, args)
+
+
 func clear() -> void:
 	if _read_service != null and _read_service.has_method("clear"):
 		_read_service.clear()

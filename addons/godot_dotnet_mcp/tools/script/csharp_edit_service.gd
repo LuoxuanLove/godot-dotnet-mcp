@@ -24,6 +24,20 @@ func execute(_tool_name: String, args: Dictionary) -> Dictionary:
 			return _error("Unknown action: %s. edit_cs is read-only in plugin; use host cs_file_patch for C# mutations." % action)
 
 
+func execute_async(tool_name: String, args: Dictionary) -> Dictionary:
+	var action = str(args.get("action", ""))
+	match action:
+		"add_field", "upsert_field", "add_method", "upsert_method", "replace_method_body", "delete_member", "rename_member":
+			var path = _normalize_res_path(str(args.get("path", "")))
+			if path.is_empty():
+				return _error("Path is required")
+			if not path.ends_with(".cs"):
+				return _error("script_edit_cs only supports .cs files")
+			return await _execute_roslyn_patch_async(path, args)
+		_:
+			return execute(tool_name, args)
+
+
 func _mutation_disabled_error(action: String) -> Dictionary:
 	return _error("edit_cs action '%s' is disabled in plugin. Use host cs_file_patch for C# mutations." % action)
 
@@ -34,6 +48,15 @@ func _execute_roslyn_patch(path: String, request: Dictionary) -> Dictionary:
 		return _error("Plugin Roslyn service is unavailable")
 	var result = service.patch_file(path, request)
 	return result
+
+
+func _execute_roslyn_patch_async(path: String, request: Dictionary) -> Dictionary:
+	var service = _get_plugin_roslyn_service()
+	if service == null:
+		return _error("Plugin Roslyn service is unavailable")
+	if service.has_method("patch_file_async"):
+		return await service.patch_file_async(path, request)
+	return service.patch_file(path, request)
 
 
 func _get_plugin_roslyn_service():

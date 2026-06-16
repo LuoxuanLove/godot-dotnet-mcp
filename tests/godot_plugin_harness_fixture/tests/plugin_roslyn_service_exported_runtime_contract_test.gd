@@ -22,7 +22,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	_temp_paths.append(temp_dir)
 	_write_text(script_path, "using Godot;\npublic partial class ExportedRuntimeProbe : Node { [Export] public int Speed = 3; public void Run() { } }")
 
-	var result: Dictionary = _service.parse_file(script_path)
+	var result: Dictionary = await _service.parse_file_async(script_path)
 	if not bool(result.get("success", false)):
 		return _failure("Exported PluginRoslynService should parse C# through isolated runtime process: %s" % str(result.get("error", "")))
 
@@ -37,6 +37,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var exports: Array = data.get("exports", [])
 	if exports.is_empty() or str((exports[0] as Dictionary).get("name", "")) != "Speed":
 		return _failure("Exported PluginRoslynService should return exported property metadata from cs_file_read.")
+
+	var patch_result: Dictionary = await _service.patch_file_async(script_path, {
+		"action": "replace_method_body",
+		"type_name": "ExportedRuntimeProbe",
+		"member_name": "Run",
+		"body": "GD.Print(\"patched\");"
+	})
+	if not bool(patch_result.get("success", false)):
+		return _failure("Exported PluginRoslynService should patch C# through isolated runtime process: %s" % str(patch_result.get("error", "")))
+	if FileAccess.get_file_as_string(script_path).find("patched") == -1:
+		return _failure("Exported PluginRoslynService patch_file_async should write the patched body to disk.")
 
 	var snapshot_after: Dictionary = _service.get_debug_snapshot()
 	var load_mode := str(snapshot_after.get("load_mode", ""))
@@ -55,7 +66,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"facade_source_present": facade_source_present,
 			"load_mode": load_mode,
 			"type_count": types.size(),
-			"export_count": exports.size()
+			"export_count": exports.size(),
+			"patched": true
 		}
 	}
 
