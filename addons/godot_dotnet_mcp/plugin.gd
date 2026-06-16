@@ -138,6 +138,7 @@ var _update_ref_version_requests_in_flight := {}
 var _update_sync_request_serial := 0
 var _last_dock_refresh_status_signature := ""
 var _cached_lifecycle_context: Dictionary = {}
+var _tree_collapse_save_pending := false
 const USER_TOOL_WATCH_TICK_INTERVAL := 0.25
 
 
@@ -158,6 +159,7 @@ func _enter_tree() -> void:
 
 
 func _exit_tree() -> void:
+	_flush_tree_collapse_save_if_pending()
 	if _plugin_lifecycle_service == null:
 		_plugin_lifecycle_service = PluginLifecycleServiceScript.new()
 	_plugin_lifecycle_service.exit_tree(_build_plugin_lifecycle_context())
@@ -426,6 +428,20 @@ func _save_settings() -> void:
 	if _settings_store == null:
 		_settings_store = SettingsStoreScript.new()
 	_settings_store.save_plugin_settings(PluginRuntimeStateScript.SETTINGS_PATH, _state.settings)
+
+
+func _defer_tree_collapse_save() -> void:
+	if _tree_collapse_save_pending:
+		return
+	_tree_collapse_save_pending = true
+	call_deferred("_flush_tree_collapse_save_if_pending")
+
+
+func _flush_tree_collapse_save_if_pending() -> void:
+	if not _tree_collapse_save_pending:
+		return
+	_tree_collapse_save_pending = false
+	_save_settings()
 
 
 func _ensure_runtime_bridge_autoload() -> void:
@@ -2622,7 +2638,7 @@ func _on_domain_toggled(domain_key: String, enabled: bool) -> void:
 
 func _on_tree_collapse_changed(kind: String, key: String, collapsed: bool) -> void:
 	TreeCollapseState.set_node_collapsed(_state.settings, kind, key, collapsed)
-	_save_settings()
+	_defer_tree_collapse_save()
 
 
 func _on_cli_scope_changed(scope: String) -> void:

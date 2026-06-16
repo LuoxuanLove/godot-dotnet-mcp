@@ -83,6 +83,7 @@ var dock_add_calls: Array[Dictionary] = []
 var dock_remove_calls: Array[Control] = []
 var scheduled_runtime_reloads: Array[Dictionary] = []
 var plugin_reenable_schedule_count := 0
+var save_settings_calls := 0
 
 
 func _init(base_control_in: Control) -> void:
@@ -109,6 +110,11 @@ func _restore_pending_focus_snapshot_if_needed() -> void:
 @warning_ignore("native_method_override")
 func _schedule_runtime_reload(method_name: String, bound_args: Array = []) -> void:
 	scheduled_runtime_reloads.append({"method_name": method_name, "bound_args": bound_args.duplicate(true)})
+
+
+func _save_settings() -> void:
+	save_settings_calls += 1
+	super._save_settings()
 
 
 @warning_ignore("native_method_override")
