@@ -21,7 +21,7 @@ const MAX_RECENT_REQUESTS_PER_CLIENT := 5
 
 func add_client(client: StreamPeerTCP) -> void:
 	_clients.append(client)
-	_pending_data[client] = ""
+	_pending_data[client] = PackedByteArray()
 	_total_connections += 1
 	var now := _now_unix()
 	_client_states[client] = {
@@ -66,11 +66,43 @@ func clear_processing(client: StreamPeerTCP) -> void:
 
 
 func get_pending_data(client: StreamPeerTCP) -> String:
-	return str(_pending_data.get(client, ""))
+	var pending = _pending_data.get(client, PackedByteArray())
+	if pending is PackedByteArray:
+		return (pending as PackedByteArray).get_string_from_utf8()
+	return str(pending)
 
 
 func set_pending_data(client: StreamPeerTCP, data: String) -> void:
-	_pending_data[client] = data
+	_pending_data[client] = data.to_utf8_buffer()
+
+
+func get_pending_bytes(client: StreamPeerTCP) -> PackedByteArray:
+	var pending = _pending_data.get(client, PackedByteArray())
+	if pending is PackedByteArray:
+		return (pending as PackedByteArray).duplicate()
+	return str(pending).to_utf8_buffer()
+
+
+func set_pending_bytes(client: StreamPeerTCP, data: PackedByteArray) -> void:
+	_pending_data[client] = data.duplicate()
+
+
+func append_pending_bytes(client: StreamPeerTCP, data: PackedByteArray) -> int:
+	var pending := get_pending_bytes(client)
+	pending.append_array(data)
+	_pending_data[client] = pending
+	return pending.size()
+
+
+func is_pending_empty(client: StreamPeerTCP) -> bool:
+	return get_pending_byte_size(client) == 0
+
+
+func get_pending_byte_size(client: StreamPeerTCP) -> int:
+	var pending = _pending_data.get(client, PackedByteArray())
+	if pending is PackedByteArray:
+		return (pending as PackedByteArray).size()
+	return str(pending).to_utf8_buffer().size()
 
 
 func clear_pending_data(client: StreamPeerTCP) -> void:
