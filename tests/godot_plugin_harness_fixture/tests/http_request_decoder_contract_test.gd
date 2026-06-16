@@ -32,6 +32,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Decoded Content-Length request did not preserve the request body.")
 	if str(decoded_content_length.get("remaining_data", "")) != "NEXT":
 		return _failure("Decoded Content-Length request did not preserve trailing data.")
+	var multibyte_body := "{\"text\":\"雪\"}"
+	var multibyte_request := (
+		"POST /mcp HTTP/1.1\r\n"
+		+ "Content-Length: %d\r\n\r\n%sNEXT"
+	) % [multibyte_body.to_utf8_buffer().size(), multibyte_body]
+	var decoded_multibyte: Dictionary = decoder.decode_pending_request_bytes(multibyte_request.to_utf8_buffer())
+	if not bool(decoded_multibyte.get("ready", false)):
+		return _failure("Byte decoder should decode a complete multibyte Content-Length request.")
+	if str(decoded_multibyte.get("request_body", "")) != multibyte_body:
+		return _failure("Byte decoder did not preserve the multibyte request body.")
+	if not decoded_multibyte.get("remaining_bytes", PackedByteArray()) is PackedByteArray:
+		return _failure("Byte decoder should expose trailing bytes without forcing String buffering.")
+	if (decoded_multibyte.get("remaining_bytes", PackedByteArray()) as PackedByteArray).get_string_from_utf8() != "NEXT":
+		return _failure("Byte decoder did not preserve trailing bytes.")
 
 	var incomplete_headers: Dictionary = decoder.decode_pending_request("POST /mcp HTTP/1.1\r\nContent-Length: 4\r\n")
 	if bool(incomplete_headers.get("ready", false)) or str(incomplete_headers.get("waiting_for", "")) != "headers":
@@ -104,6 +118,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Decoder should return a ready result when headers are syntactically complete but empty.")
 	if not (invalid_headers.get("headers", {}) as Dictionary).is_empty():
 		return _failure("Decoder should report empty headers for an invalid header section.")
+
+	var transport_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_transport_service.gd")
+	if transport_source.contains("pending_data.to_utf8_buffer()"):
+		return _failure("HTTP transport should not convert the full pending buffer back to UTF-8 bytes on every receive.")
 
 	return {
 		"name": "http_request_decoder_contracts",

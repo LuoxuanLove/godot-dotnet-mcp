@@ -6,14 +6,18 @@ const MAX_CONTENT_LENGTH := 1024 * 1024
 
 
 func decode_pending_request(data: String) -> Dictionary:
+	return decode_pending_request_bytes(data.to_utf8_buffer())
+
+
+func decode_pending_request_bytes(data: PackedByteArray) -> Dictionary:
 	if data.is_empty():
 		return _pending_result("empty")
 
-	var header_end = data.find("\r\n\r\n")
+	var header_end = _find_double_crlf_bytes(data, 0)
 	if header_end == -1:
 		return _pending_result("headers")
 
-	var header_section = data.substr(0, header_end)
+	var header_section = data.slice(0, max(header_end - 4, 0)).get_string_from_utf8()
 	var headers = _parse_http_headers(header_section)
 	if headers.is_empty():
 		return {
@@ -21,6 +25,8 @@ func decode_pending_request(data: String) -> Dictionary:
 			"headers": {},
 			"request_body": "",
 			"remaining_data": "",
+			"request_body_bytes": PackedByteArray(),
+			"remaining_bytes": PackedByteArray(),
 			"content_length": 0,
 			"body_byte_size": 0,
 			"is_chunked": false
@@ -53,9 +59,8 @@ func decode_pending_request(data: String) -> Dictionary:
 	elif headers.has("transfer-encoding") and str(headers["transfer-encoding"]).to_lower().contains("chunked"):
 		is_chunked = true
 
-	var body_start = header_end + 4
-	var body = data.substr(body_start)
-	var body_bytes = body.to_utf8_buffer()
+	var body_start = header_end
+	var body_bytes = data.slice(body_start, data.size())
 	var body_byte_size = body_bytes.size()
 
 	if is_chunked:
@@ -78,6 +83,8 @@ func decode_pending_request(data: String) -> Dictionary:
 			"headers": headers,
 			"request_body": request_bytes.get_string_from_utf8(),
 			"remaining_data": remaining_bytes.get_string_from_utf8(),
+			"request_body_bytes": request_bytes,
+			"remaining_bytes": remaining_bytes,
 			"content_length": content_length,
 			"body_byte_size": body_byte_size,
 			"is_chunked": true
@@ -87,15 +94,17 @@ func decode_pending_request(data: String) -> Dictionary:
 		return _pending_result("body", headers, content_length, body_byte_size, false)
 
 	var request_bytes = body_bytes.slice(0, content_length)
-	var remaining_data := ""
+	var remaining_bytes := PackedByteArray()
 	if body_byte_size > content_length:
-		remaining_data = body_bytes.slice(content_length).get_string_from_utf8()
+		remaining_bytes = body_bytes.slice(content_length, body_bytes.size())
 
 	return {
 		"ready": true,
 		"headers": headers,
 		"request_body": request_bytes.get_string_from_utf8(),
-		"remaining_data": remaining_data,
+		"remaining_data": remaining_bytes.get_string_from_utf8(),
+		"request_body_bytes": request_bytes,
+		"remaining_bytes": remaining_bytes,
 		"content_length": content_length,
 		"body_byte_size": body_byte_size,
 		"is_chunked": false
@@ -123,6 +132,8 @@ func _framing_error_result(error_type: String, message: String, headers: Diction
 		"headers": headers,
 		"request_body": "",
 		"remaining_data": "",
+		"request_body_bytes": PackedByteArray(),
+		"remaining_bytes": PackedByteArray(),
 		"content_length": content_length,
 		"body_byte_size": body_byte_size,
 		"is_chunked": is_chunked
@@ -136,6 +147,8 @@ func _pending_result(waiting_for: String, headers: Dictionary = {}, content_leng
 		"headers": headers,
 		"request_body": "",
 		"remaining_data": "",
+		"request_body_bytes": PackedByteArray(),
+		"remaining_bytes": PackedByteArray(),
 		"content_length": content_length,
 		"body_byte_size": body_byte_size,
 		"is_chunked": is_chunked

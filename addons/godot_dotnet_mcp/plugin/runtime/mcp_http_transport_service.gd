@@ -99,20 +99,18 @@ func _process_client(client: StreamPeerTCP) -> bool:
 			if data[0] != OK:
 				_log("Error receiving data: %s" % data[0], "warning")
 				return false
-			var request_str = data[1].get_string_from_utf8()
-			var pending_data = _connection_state.get_pending_data(client) + request_str
-			var pending_byte_size: int = pending_data.to_utf8_buffer().size()
+			var incoming_bytes: PackedByteArray = data[1]
+			var pending_byte_size: int = _connection_state.append_pending_bytes(client, incoming_bytes)
 			if pending_byte_size > _max_pending_request_bytes:
-				if _try_handle_pending_framing_error(client, pending_data):
+				if _try_handle_pending_framing_error(client, _connection_state.get_pending_bytes(client)):
 					return true
 				_log("Closing client with oversized pending HTTP request buffer: %d bytes" % pending_byte_size, "warning")
 				if _connection_state.has_method("record_rejected_request"):
 					_connection_state.record_rejected_request()
 				client.disconnect_from_host()
 				return true
-			_connection_state.set_pending_data(client, pending_data)
-			_log("Received %d bytes, total pending: %d" % [available, pending_data.length()], "debug")
-		if not _connection_state.get_pending_data(client).is_empty():
+			_log("Received %d bytes, total pending: %d bytes" % [available, pending_byte_size], "debug")
+		if not _connection_state.is_pending_empty(client):
 			_process_http_request_async(client)
 		return false
 
@@ -123,10 +121,10 @@ func _process_client(client: StreamPeerTCP) -> bool:
 	return false
 
 
-func _try_handle_pending_framing_error(client: StreamPeerTCP, pending_data: String) -> bool:
+func _try_handle_pending_framing_error(client: StreamPeerTCP, pending_data: PackedByteArray) -> bool:
 	if _request_decoder == null:
 		return false
-	var decoded_request: Dictionary = _request_decoder.decode_pending_request(pending_data)
+	var decoded_request: Dictionary = _request_decoder.decode_pending_request_bytes(pending_data)
 	if not bool(decoded_request.get("ready", false)):
 		return false
 	if not bool(decoded_request.get("framing_error", false)):
@@ -143,21 +141,22 @@ func _process_http_request_async(client: StreamPeerTCP) -> void:
 
 	var drained_count := 0
 	while _connection_state != null and _connection_state.has_client(client):
-		var data = _connection_state.get_pending_data(client)
+		var data: PackedByteArray = _connection_state.get_pending_bytes(client)
 		if data.is_empty():
 			return
-		var decoded_request: Dictionary = _request_decoder.decode_pending_request(data)
+		var decoded_request: Dictionary = _request_decoder.decode_pending_request_bytes(data)
 		if not bool(decoded_request.get("ready", false)):
-			_log_pending_request_wait(decoded_request, data)
+			_log_pending_request_wait(decoded_request, data.size())
 			return
 		if bool(decoded_request.get("framing_error", false)):
 			_handle_framing_error(client, decoded_request)
 			return
 
 		var headers: Dictionary = decoded_request.get("headers", {})
-		_connection_state.set_pending_data(client, str(decoded_request.get("remaining_data", "")))
+		var remaining_bytes: PackedByteArray = decoded_request.get("remaining_bytes", PackedByteArray())
+		_connection_state.set_pending_bytes(client, remaining_bytes)
 		if headers.is_empty():
-			if _connection_state.get_pending_data(client).is_empty():
+			if _connection_state.is_pending_empty(client):
 				return
 			continue
 
@@ -219,7 +218,7 @@ func _process_http_request_async(client: StreamPeerTCP) -> void:
 		_connection_state.clear_processing(client)
 
 		drained_count += 1
-		if drained_count >= MAX_REQUESTS_PER_DRAIN and not _connection_state.get_pending_data(client).is_empty():
+		if drained_count >= MAX_REQUESTS_PER_DRAIN and not _connection_state.is_pending_empty(client):
 			call_deferred("_process_http_request_async", client)
 			return
 
@@ -346,10 +345,10 @@ func _format_sse_events(events: Array) -> String:
 	return body
 
 
-func _log_pending_request_wait(decoded_request: Dictionary, data: String) -> void:
+func _log_pending_request_wait(decoded_request: Dictionary, pending_byte_size: int) -> void:
 	var waiting_for := str(decoded_request.get("waiting_for", ""))
-	if waiting_for == "headers" and data.length() > 0:
-		_log("Waiting for headers... current data length: %d" % data.length(), "debug")
+	if waiting_for == "headers" and pending_byte_size > 0:
+		_log("Waiting for headers... current data length: %d bytes" % pending_byte_size, "debug")
 	elif waiting_for == "chunked_body":
 		_log("Waiting for chunked body...", "debug")
 	elif waiting_for == "body":
