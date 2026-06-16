@@ -687,9 +687,11 @@ func _is_origin_allowed(origin: String) -> bool:
 
 
 func _is_host_allowed(host_header: String) -> bool:
+	if host_header.strip_edges().is_empty():
+		return false
 	var hostname := _normalize_host_name(host_header)
 	if hostname.is_empty():
-		return true
+		return false
 	if hostname == "127.0.0.1" or hostname == "localhost" or hostname == "::1":
 		return true
 	return _allowed_hosts.has(hostname)
