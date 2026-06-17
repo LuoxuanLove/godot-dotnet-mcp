@@ -148,6 +148,34 @@ class FakeBridge extends RefCounted:
 									"reason": "project_settings_file"
 								})
 						return success({"ok": true})
+					"import_status":
+						var items: Array[Dictionary] = []
+						for path in args.get("paths", []):
+							var path_text := str(path)
+							var reason := ""
+							var status := "imported"
+							var importable := true
+							if path_text == "res://project.godot":
+								reason = "project_settings_file"
+								status = "not_importable"
+								importable = false
+							elif path_text.ends_with(".txt"):
+								reason = "text_file"
+								status = "not_importable"
+								importable = false
+							items.append({
+								"path": path_text,
+								"normalized_path": path_text,
+								"exists": true,
+								"sidecar_exists": importable,
+								"extension": path_text.get_extension(),
+								"importable": importable,
+								"status": status,
+								"reason": reason,
+								"error_code": "not_importable_resource" if not importable else "",
+								"source": "editor_filesystem.import_status"
+							})
+						return success({"count": items.size(), "items": items})
 					_:
 						return error("Unsupported editor_filesystem action")
 			_:
@@ -410,6 +438,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("System project implementation should expose userdata_maintenance for manual cache cleanup.")
 	if not _has_tool(tool_defs, "project_files"):
 		return _failure("System project implementation should expose project_files for high-level FileSystem tree changes.")
+	var project_files_tool := _find_tool(tool_defs, "project_files")
+	var project_files_actions: Array = project_files_tool.get("inputSchema", {}).get("properties", {}).get("action", {}).get("enum", [])
+	if not project_files_actions.has("import_status"):
+		return _failure("project_files should expose import_status in its public schema.")
 	if not _has_tool(tool_defs, "resource_reference_audit"):
 		return _failure("System project implementation should expose resource_reference_audit for project-level resource consistency checks.")
 	var project_lifecycle_tool := _find_tool(tool_defs, "project_lifecycle")
@@ -709,6 +741,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("project_files reimport should expose not_importable_resource errors from the editor filesystem tool.")
 	if str(project_settings_reimport.get("data", {}).get("error_code", "")) != "not_importable_resource":
 		return _failure("project_files reimport should preserve not_importable_resource error data.")
+	var project_files_import_status: Dictionary = executor.execute("project_files", {"action": "import_status", "paths": ["res://project.godot", "res://notes.txt"]})
+	if not bool(project_files_import_status.get("success", false)):
+		return _failure("project_files import_status should delegate to the editor filesystem tool.")
+	var import_status_items: Array = project_files_import_status.get("data", {}).get("items", [])
+	if import_status_items.size() != 2 or int(project_files_import_status.get("data", {}).get("count", 0)) != 2:
+		return _failure("project_files import_status should preserve batch count and items.")
+	if str(import_status_items[0].get("reason", "")) != "project_settings_file" or bool(import_status_items[0].get("importable", true)):
+		return _failure("project_files import_status should preserve project.godot not-importable status.")
+	if str(import_status_items[1].get("reason", "")) != "text_file" or str(import_status_items[1].get("status", "")) != "not_importable":
+		return _failure("project_files import_status should preserve per-path not-importable reasons.")
 
 	var missing_lifecycle_action: Dictionary = executor.execute("project_lifecycle", {})
 	if bool(missing_lifecycle_action.get("success", false)):

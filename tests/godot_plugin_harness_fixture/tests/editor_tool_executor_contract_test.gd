@@ -1595,6 +1595,18 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if str(selected_property_result.get("data", {}).get("selected_path", "")) != "speed":
 		return _failure("Editor inspector get_selected_property returned an unexpected value.")
 
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://art"))
+	var importable_fixture := FileAccess.open("res://art/icon.png", FileAccess.WRITE)
+	if importable_fixture == null:
+		return _failure("Editor filesystem fixture should create an importable source file.")
+	importable_fixture.store_string("png")
+	importable_fixture.close()
+	var notes_fixture := FileAccess.open("res://notes.txt", FileAccess.WRITE)
+	if notes_fixture == null:
+		return _failure("Editor filesystem fixture should create a text source file.")
+	notes_fixture.store_string("notes")
+	notes_fixture.close()
+
 	var select_file_result: Dictionary = executor.execute("filesystem", {
 		"action": "select_file",
 		"path": "res://scenes/main.tscn"
@@ -1645,6 +1657,23 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor filesystem reimport should preserve outside_project for non-res schemes.")
 	if editor_interface.get_resource_filesystem().last_reimport_paths.size() != reimport_call_count:
 		return _failure("Editor filesystem reimport should not call EditorFileSystem for paths outside res://.")
+	var import_status_result: Dictionary = executor.execute("filesystem", {
+		"action": "import_status",
+		"paths": ["res://art/icon.png", "notes.txt", "res://missing/missing.png"]
+	})
+	if not bool(import_status_result.get("success", false)):
+		return _failure("Editor filesystem import_status should inspect paths without reimporting.")
+	var import_status_items: Array = import_status_result.get("data", {}).get("items", [])
+	if import_status_items.size() != 3:
+		return _failure("Editor filesystem import_status should return one item per requested path.")
+	if str(import_status_items[0].get("status", "")) != "importable_unimported" or not bool(import_status_items[0].get("importable", false)):
+		return _failure("Editor filesystem import_status should report existing importable resources without sidecars as importable_unimported.")
+	if str(import_status_items[1].get("reason", "")) != "text_file" or bool(import_status_items[1].get("importable", true)):
+		return _failure("Editor filesystem import_status should report text files as not importable.")
+	if str(import_status_items[2].get("status", "")) != "missing_source" or str(import_status_items[2].get("reason", "")) != "missing_source":
+		return _failure("Editor filesystem import_status should report missing importable resources as missing_source.")
+	if editor_interface.get_resource_filesystem().last_reimport_paths.size() != reimport_call_count:
+		return _failure("Editor filesystem import_status should not call EditorFileSystem reimport.")
 
 	var screenshot_result: Dictionary = executor.execute("screenshot", {
 		"action": "capture",

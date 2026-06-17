@@ -55,6 +55,8 @@ func execute(ei, args: Dictionary) -> Dictionary:
 			return _scan_filesystem(ei)
 		"reimport":
 			return _reimport_files(ei, args.get("paths", []))
+		"import_status":
+			return _import_status(args.get("paths", []))
 		_:
 			return _error("Unknown action: %s" % action)
 
@@ -124,6 +126,48 @@ func _reimport_files(ei, paths: Array) -> Dictionary:
 	}, "Reimport triggered")
 
 
+func _import_status(paths: Array) -> Dictionary:
+	if paths.is_empty():
+		return _error("Paths are required")
+	var items: Array[Dictionary] = []
+	for p in paths:
+		items.append(_build_import_status_item(str(p)))
+	return _success({
+		"count": items.size(),
+		"items": items
+	}, "Import status inspected")
+
+
+func _build_import_status_item(raw_path: String) -> Dictionary:
+	var path := _normalize_project_path(raw_path)
+	var source_exists := path.begins_with("res://") and FileAccess.file_exists(path)
+	var sidecar_exists := path.begins_with("res://") and FileAccess.file_exists(path + ".import")
+	var extension := path.get_extension().to_lower()
+	var not_importable := _not_importable_resource_context(path, true)
+	var status := "not_importable"
+	var importable := false
+	var reason := str(not_importable.get("reason", ""))
+	if not_importable.is_empty():
+		importable = true
+		status = "imported" if sidecar_exists else "importable_unimported"
+	elif reason == "missing_source":
+		status = "missing_source"
+	var item := {
+		"path": raw_path,
+		"normalized_path": path,
+		"exists": source_exists,
+		"sidecar_exists": sidecar_exists,
+		"extension": extension,
+		"importable": importable,
+		"status": status,
+		"reason": reason,
+		"source": "editor_filesystem.import_status"
+	}
+	if not importable:
+		item["error_code"] = "not_importable_resource"
+	return item
+
+
 func _normalize_project_path(path: String) -> String:
 	var normalized := path.strip_edges().replace("\\", "/")
 	if normalized.is_empty():
@@ -135,7 +179,7 @@ func _normalize_project_path(path: String) -> String:
 	return normalized
 
 
-func _not_importable_resource_context(path: String) -> Dictionary:
+func _not_importable_resource_context(path: String, require_source_exists: bool = false) -> Dictionary:
 	if path.is_empty():
 		return _not_importable_resource_data(path, "empty_path")
 	if not path.begins_with("res://"):
@@ -150,6 +194,8 @@ func _not_importable_resource_context(path: String) -> Dictionary:
 		return _not_importable_resource_data(path, "missing_extension")
 	if NOT_IMPORTABLE_RESOURCE_EXTENSIONS.has(extension):
 		return _not_importable_resource_data(path, str(NOT_IMPORTABLE_RESOURCE_EXTENSIONS[extension]))
+	if require_source_exists and not FileAccess.file_exists(path):
+		return _not_importable_resource_data(path, "missing_source")
 	if FileAccess.file_exists(path + ".import"):
 		return {}
 	if IMPORTABLE_RESOURCE_EXTENSIONS.has(extension):
