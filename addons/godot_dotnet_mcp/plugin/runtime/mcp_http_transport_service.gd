@@ -340,9 +340,15 @@ func _format_sse_events(events: Array) -> String:
 			str((event as Dictionary).get("id", "")),
 			int((event as Dictionary).get("retry", 1000)),
 			str((event as Dictionary).get("event", "message")),
-			JSON.stringify((event as Dictionary).get("data", {}))
+			_format_sse_event_data((event as Dictionary).get("data", {}))
 		]
 	return body
+
+
+func _format_sse_event_data(data: Variant) -> String:
+	if data is String:
+		return str(data)
+	return JSON.stringify(data)
 
 
 func _log_pending_request_wait(decoded_request: Dictionary, pending_byte_size: int) -> void:

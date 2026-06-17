@@ -25,7 +25,7 @@ func dispose() -> void:
 	_session_access_order.clear()
 
 
-func append_event(session_id: String, event_name: String, payload: Dictionary, id_prefix: String = "streamable-http") -> Dictionary:
+func append_event(session_id: String, event_name: String, payload: Variant, id_prefix: String = "streamable-http") -> Dictionary:
 	var normalized_session := _normalize_session_id(session_id)
 	_touch_session(normalized_session)
 	_issued_sessions[normalized_session] = true
@@ -36,7 +36,7 @@ func append_event(session_id: String, event_name: String, payload: Dictionary, i
 		"id": event_id,
 		"event": event_name if not event_name.strip_edges().is_empty() else "message",
 		"retry": SSE_RETRY_MS,
-		"data": payload.duplicate(true)
+		"data": _duplicate_event_payload(payload)
 	}
 	var log := _log_for_session(normalized_session)
 	log.append(event)
@@ -180,9 +180,21 @@ func format_events(events: Array) -> String:
 			str((event as Dictionary).get("id", "")),
 			int((event as Dictionary).get("retry", SSE_RETRY_MS)),
 			str((event as Dictionary).get("event", "message")),
-			JSON.stringify((event as Dictionary).get("data", {}))
+			_format_event_data((event as Dictionary).get("data", {}))
 		]
 	return body
+
+
+func _format_event_data(data: Variant) -> String:
+	if data is String:
+		return str(data)
+	return JSON.stringify(data)
+
+
+func _duplicate_event_payload(payload: Variant) -> Variant:
+	if payload is Dictionary or payload is Array:
+		return payload.duplicate(true)
+	return payload
 
 
 func _log_for_session(session_id: String) -> Array:

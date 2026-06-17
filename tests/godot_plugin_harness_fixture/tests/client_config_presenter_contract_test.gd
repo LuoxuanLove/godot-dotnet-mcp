@@ -88,6 +88,9 @@ class FakeConfigService extends RefCounted:
 	func get_antigravity_config_hint_path() -> String:
 		return "C:/Users/Test/AppData/Roaming/Antigravity"
 
+	func get_antigravity_mcp_config_path() -> String:
+		return "C:/Users/Test/.gemini/config/mcp_config.json"
+
 	func get_windsurf_config_path() -> String:
 		return "C:/Users/Test/.codeium/windsurf/mcp_config.json"
 
@@ -185,18 +188,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			},
 			"antigravity": {
 				"status": "ready",
+				"config_path": "C:/Users/Test/.gemini/config/mcp_config.json",
 				"guidance_path": "C:/Users/Test/AppData/Roaming/Antigravity",
-				"config_entry_status": {"status": "deferred"},
-				"write_supported": false,
+				"config_entry_status": {"status": "missing_server"},
+				"write_supported": true,
 				"launch_supported": true,
 				"path_pick_supported": true,
 				"path_clear_supported": false,
 				"runtime_status": {"status": "not_running"},
 				"executable_path": "C:/Apps/Antigravity/Antigravity.exe",
 				"capability": {
-					"support_level": "manual_guidance",
-					"actions": ["copy_config", "pick_path", "open_app"],
-					"notes": ["config_client_capability_manual_guidance"]
+					"support_level": "full_write",
+					"actions": ["copy_config", "write_config", "remove_config", "open_config_dir", "open_config_file", "pick_path", "open_app"],
+					"notes": ["config_client_capability_full_write"]
 				}
 			},
 			"cherry_studio": {
@@ -235,18 +239,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var antigravity_model: Dictionary = desktop_models[3]
 	if str(antigravity_model.get("name_key", "")) != "config_client_antigravity":
 		return _failure("Presenter should include Antigravity in the desktop client list.")
-	if not str(antigravity_model.get("path", "")).is_empty():
-		return _failure("Presenter should not treat Antigravity user-data guidance as a config file path.")
+	if str(antigravity_model.get("path", "")) != "C:/Users/Test/.gemini/config/mcp_config.json":
+		return _failure("Presenter should expose Antigravity's MCP config file path.")
 	if str(antigravity_model.get("guidance_path", "")) != "C:/Users/Test/AppData/Roaming/Antigravity":
-		return _failure("Presenter should surface the Antigravity user-data path only as guidance.")
-	if bool(antigravity_model.get("open_config_dir_supported", false)) or bool(antigravity_model.get("open_config_file_supported", false)):
-		return _failure("Antigravity should not expose config file buttons until a documented config file contract exists.")
-	if antigravity_model.get("capability", {}).get("actions", []).has("open_config_dir") or antigravity_model.get("capability", {}).get("actions", []).has("open_config_file"):
-		return _failure("Antigravity capability should not expose config-file actions until a documented config file contract exists.")
+		return _failure("Presenter should still surface the Antigravity user-data path as supplemental guidance.")
+	if not bool(antigravity_model.get("writeable", false)) or not bool(antigravity_model.get("remove_supported", false)):
+		return _failure("Antigravity should expose one-click write/remove config actions.")
+	if not bool(antigravity_model.get("open_config_dir_supported", false)) or not bool(antigravity_model.get("open_config_file_supported", false)):
+		return _failure("Antigravity should expose config file buttons once its MCP config path is known.")
+	if not antigravity_model.get("capability", {}).get("actions", []).has("write_config") or not antigravity_model.get("capability", {}).get("actions", []).has("open_config_file"):
+		return _failure("Antigravity capability should expose config-file write/open actions.")
 	if str(antigravity_model.get("guidance_text", "")).find("C:/Users/Test/AppData/Roaming/Antigravity") == -1:
 		return _failure("Presenter should include Antigravity user-data guidance in visible guidance text.")
-	if str(antigravity_model.get("capability", {}).get("kind", "")) != "manual_guidance":
-		return _failure("Antigravity should expose manual guidance until a documented config file contract exists.")
+	if str(antigravity_model.get("capability", {}).get("kind", "")) != "full_write":
+		return _failure("Antigravity should expose full-write config support.")
 	if str(antigravity_model.get("launch_action_label_key", "")) != "config_client_action_open_app":
 		return _failure("Antigravity should launch as an agent app rather than an IDE project-open flow.")
 	var codex_desktop_model: Dictionary = desktop_models[4]

@@ -25,7 +25,7 @@ const SUPPORT_LEVEL_BY_CLIENT := {
 	"claude_code": "auto_add",
 	"cursor": "full_write",
 	"trae": "full_write",
-	"antigravity": "manual_guidance",
+	"antigravity": "full_write",
 	"codex_desktop": "launch_path",
 	"codex": "auto_add",
 	"gemini": "auto_add",

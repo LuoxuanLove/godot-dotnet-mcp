@@ -183,8 +183,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(get_mcp_headers.get("Cache-Control", "")) != "no-cache, no-transform":
 		return _failure("HTTP request router should disable caching for GET /mcp SSE responses.")
 	var get_mcp_body := str(get_mcp_response.get("_raw_body", ""))
-	if get_mcp_body.find("event: message") == -1 or get_mcp_body.find("\"jsonrpc\":\"2.0\"") != -1 or get_mcp_body.find("\"method\":\"notifications/message\"") != -1 or get_mcp_body.find("\"transport\":\"streamable_http\"") == -1:
-		return _failure("HTTP request router should return an observable non-JSON-RPC Streamable HTTP SSE transport event for GET /mcp.")
+	if get_mcp_body.find("event: message") != -1 or get_mcp_body.find("event: open") == -1 or get_mcp_body.find("\"jsonrpc\":\"2.0\"") != -1 or get_mcp_body.find("\"method\":\"notifications/message\"") != -1 or get_mcp_body.find("\"transport\":\"streamable_http\"") == -1:
+		return _failure("HTTP request router should return observable non-message Streamable HTTP SSE metadata for GET /mcp.")
 	if get_mcp_body.find("id: streamable-http-get-") == -1:
 		return _failure("HTTP request router should attach a stream-specific SSE event id.")
 	if get_mcp_body.find("retry: 1000") == -1:
@@ -200,6 +200,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var first_sse_event_id := _extract_first_sse_event_id(get_mcp_body)
 	if first_sse_event_id.is_empty():
 		return _failure("HTTP request router should expose an SSE event id that clients can resume from.")
+	var legacy_sse_session_id := await _initialize_session(router, 900)
+	var initial_get_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": legacy_sse_session_id})
+	var initial_get_body := str(initial_get_response.get("_raw_body", ""))
+	if initial_get_body.find("event: endpoint") == -1 or initial_get_body.find("data: http://localhost:3000/mcp") == -1:
+		return _failure("HTTP request router should prepend a legacy-compatible endpoint event on fresh GET /mcp SSE streams.")
+	if initial_get_body.find("data: \"http://localhost:3000/mcp\"") != -1:
+		return _failure("HTTP request router should serialize endpoint event URL data as plain SSE text, not a JSON string.")
+	if initial_get_body.find("event: open") == -1 or initial_get_body.find("event: message") != -1:
+		return _failure("HTTP request router should classify connection metadata as open events instead of JSON-RPC message events.")
 	var resumed_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": sse_session_id, "last-event-id": first_sse_event_id})
 	if int(resumed_mcp_response.get("status", 0)) != 200:
 		return _failure("HTTP request router should accept Last-Event-ID cursors for SSE replay probes.")
@@ -247,7 +256,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if bounded_session_id.is_empty():
 		return _failure("HTTP request router should issue a bounded-window session through initialize.")
 	var bounded_first_response: Dictionary = await bounded_router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": bounded_session_id})
-	var bounded_first_event_id := _extract_first_sse_event_id(str(bounded_first_response.get("_raw_body", "")))
+	var bounded_first_event_id := _extract_first_sse_event_id_with_prefix(str(bounded_first_response.get("_raw_body", "")), "streamable-http-get-")
 	for index in range(33):
 		await bounded_router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": bounded_session_id})
 	var stale_cursor_response: Dictionary = await bounded_router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": bounded_session_id, "last-event-id": bounded_first_event_id})
@@ -509,7 +518,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"",
 		{"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": initialized_post_sse_session_id}
 	)
-	var seed_get_event_id := _extract_first_sse_event_id(str(seed_get_after_post_sse.get("_raw_body", "")))
+	var seed_get_body := str(seed_get_after_post_sse.get("_raw_body", ""))
+	if seed_get_body.find("event: endpoint") == -1 or seed_get_body.find("event: open") == -1:
+		return _failure("HTTP request router should expose endpoint and open metadata on fresh GET SSE streams.")
+	var seed_get_event_id := _extract_first_sse_event_id_with_prefix(seed_get_body, "streamable-http-get-")
 	if seed_get_event_id.is_empty() or seed_get_event_id.find("streamable-http-get-") == -1:
 		return _failure("HTTP request router should expose a GET SSE cursor before replaying queued POST events.")
 	var queued_post_sse: Dictionary = await response_post_router.route_request_async(
@@ -598,6 +610,16 @@ func _extract_first_sse_event_id(body: String) -> String:
 		var normalized := str(line).strip_edges()
 		if normalized.begins_with("id: "):
 			return normalized.substr(4).strip_edges()
+	return ""
+
+
+func _extract_first_sse_event_id_with_prefix(body: String, prefix: String) -> String:
+	for line in body.split("\n", false):
+		var normalized := str(line).strip_edges()
+		if normalized.begins_with("id: "):
+			var event_id := normalized.substr(4).strip_edges()
+			if event_id.begins_with(prefix):
+				return event_id
 	return ""
 
 
