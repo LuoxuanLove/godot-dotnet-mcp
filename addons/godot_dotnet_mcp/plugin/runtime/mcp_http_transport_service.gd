@@ -20,6 +20,7 @@ const MAX_ACCEPTS_PER_FRAME := 8
 const MAX_REQUEST_HEADER_BYTES := 64 * 1024
 const DEFAULT_MAX_PENDING_REQUEST_BYTES := (1024 * 1024) + MAX_REQUEST_HEADER_BYTES
 const SSE_HEARTBEAT_INTERVAL_SECONDS := 15
+const HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS := 30
 
 
 func configure(connection_state, request_decoder, context = null) -> void:
@@ -112,6 +113,11 @@ func _process_client(client: StreamPeerTCP) -> bool:
 			_log("Received %d bytes, total pending: %d bytes" % [available, pending_byte_size], "debug")
 		if not _connection_state.is_pending_empty(client):
 			_process_http_request_async(client)
+			return false
+		if _should_disconnect_idle_http_client(client):
+			_log("Closing idle HTTP client after %d seconds without activity" % HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS, "debug")
+			client.disconnect_from_host()
+			return true
 		return false
 
 	if status == StreamPeerTCP.STATUS_ERROR or status == StreamPeerTCP.STATUS_NONE:
@@ -119,6 +125,20 @@ func _process_client(client: StreamPeerTCP) -> bool:
 		return true
 
 	return false
+
+
+func _should_disconnect_idle_http_client(client: StreamPeerTCP) -> bool:
+	if _connection_state == null:
+		return false
+	if _connection_state.has_method("is_pending_empty") and not bool(_connection_state.is_pending_empty(client)):
+		return false
+	if not _connection_state.has_method("get_last_seen_at_unix"):
+		return false
+	var last_seen_at_unix := int(_connection_state.get_last_seen_at_unix(client))
+	if last_seen_at_unix <= 0:
+		return false
+	var now := int(Time.get_unix_time_from_system())
+	return now - last_seen_at_unix >= HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS
 
 
 func _try_handle_pending_framing_error(client: StreamPeerTCP, pending_data: PackedByteArray) -> bool:

@@ -181,6 +181,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if not bool(finite_post_sse_check.get("success", false)):
 		return finite_post_sse_check
 
+	var idle_timeout_check: Dictionary = await _run_idle_http_connection_timeout_contract(tree)
+	if not bool(idle_timeout_check.get("success", false)):
+		return idle_timeout_check
+
 	var sse_bounded_cursor_check: Dictionary = _run_sse_event_queue_bounded_cursor_contract()
 	if not bool(sse_bounded_cursor_check.get("success", false)):
 		return sse_bounded_cursor_check
@@ -376,6 +380,109 @@ func _run_pending_limit_oversized_content_length_contract(tree: SceneTree) -> Di
 		return _failure("Pending-limit oversized HTTP Content-Length should close and remove the client.")
 	if connection_state.get_connection_count() != 0:
 		return _failure("Pending-limit oversized HTTP Content-Length should remove the disconnected client from connection state.")
+	return {"success": true, "error": ""}
+
+
+func _run_idle_http_connection_timeout_contract(tree: SceneTree) -> Dictionary:
+	_reset_state()
+	var port := _pick_free_port(26430)
+	if port < 0:
+		return _failure("Could not reserve a TCP port for the idle-timeout HTTP transport contract server.")
+
+	var tcp_server := TCPServer.new()
+	if tcp_server.listen(port, "127.0.0.1") != OK:
+		return _failure("Failed to start the idle-timeout HTTP transport contract server.")
+
+	var idle_client := StreamPeerTCP.new()
+	idle_client.connect_to_host("127.0.0.1", port)
+
+	var connection_state = HttpConnectionStateScript.new()
+	var decoder = HttpRequestDecoderScript.new()
+	var transport = HttpTransportServiceScript.new()
+	var context = HttpTransportContextScript.new()
+	context.log = Callable(self, "_log")
+	context.emit_client_connected = Callable(self, "_on_connected")
+	context.emit_client_disconnected = Callable(self, "_on_disconnected")
+	context.route_request_async = Callable(self, "_route_request_async")
+	context.write_http_response = Callable(self, "_write_response")
+	context.write_sse_stream_open = Callable(self, "_write_sse_stream_open")
+	context.write_sse_heartbeat = Callable(self, "_write_sse_heartbeat")
+	context.write_sse_events = Callable(self, "_write_sse_events")
+	context.get_sse_events_since_index = Callable(self, "_get_sse_events_since_index")
+	context.tick_loader = Callable(self, "_tick_loader")
+	transport.configure(connection_state, decoder, context)
+
+	for _i in range(20):
+		idle_client.poll()
+		transport.process_frame(tcp_server, true, 0.016)
+		if connection_state.get_connection_count() == 1:
+			break
+		await tree.process_frame
+
+	if connection_state.get_connection_count() != 1:
+		tcp_server.stop()
+		return _failure("Idle-timeout transport contract should accept the idle client before timeout checks.")
+
+	var active_socket_frame := (
+		"POST /mcp HTTP/1.1\r\n"
+		+ "Host: localhost\r\n"
+		+ "Origin: http://localhost:5173\r\n"
+		+ "User-Agent: ContractClient/1.0\r\n"
+		+ "Content-Type: application/json; charset=utf-8\r\n"
+		+ "MCP-Protocol-Version: 2025-11-25\r\n"
+		+ "Content-Length: 40\r\n\r\n"
+		+ "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"ping\"}"
+	)
+
+	var idle_snapshot = connection_state.get_connection_stats().get("client_sessions", [])
+	if not (idle_snapshot is Array) or (idle_snapshot as Array).is_empty():
+		tcp_server.stop()
+		return _failure("Idle-timeout transport contract should expose the active idle client session.")
+	var idle_session: Dictionary = (idle_snapshot as Array)[0]
+	if str(idle_session.get("transport_mode", "")) != "http":
+		tcp_server.stop()
+		return _failure("Idle-timeout transport contract should only test non-SSE HTTP connections.")
+	var idle_client_key = connection_state.get_clients_snapshot()[0]
+	if connection_state.has_method("get_last_seen_at_unix"):
+		var stale_unix := int(Time.get_unix_time_from_system()) - 31
+		if connection_state._client_states.has(idle_client_key):
+			var idle_state: Dictionary = connection_state._client_states.get(idle_client_key, {})
+			idle_state["last_seen_at_unix"] = stale_unix
+			connection_state._client_states[idle_client_key] = idle_state
+	idle_client.put_data(active_socket_frame.to_utf8_buffer())
+	for _i in range(20):
+		idle_client.poll()
+		transport.process_frame(tcp_server, true, 0.016)
+		if _write_count >= 1:
+			break
+		await tree.process_frame
+	if connection_state.get_connection_count() != 1:
+		tcp_server.stop()
+		return _failure("Idle-timeout transport contract should not reap sockets that already have readable request bytes.")
+	if _write_count != 1:
+		tcp_server.stop()
+		return _failure("Idle-timeout transport contract should continue routing stale-but-active HTTP clients.")
+	if connection_state.has_method("get_last_seen_at_unix") and connection_state._client_states.has(idle_client_key):
+		var stale_after_activity := int(Time.get_unix_time_from_system()) - 31
+		var active_state: Dictionary = connection_state._client_states.get(idle_client_key, {})
+		active_state["last_seen_at_unix"] = stale_after_activity
+		connection_state._client_states[idle_client_key] = active_state
+
+	transport.process_frame(tcp_server, true, 0.016)
+	idle_client.poll()
+	if connection_state.get_connection_count() != 0:
+		tcp_server.stop()
+		return _failure("Idle-timeout transport contract should disconnect idle HTTP clients after the timeout window.")
+	if _disconnected_count != 1:
+		tcp_server.stop()
+		return _failure("Idle-timeout transport contract should emit one disconnect event for the reaped idle HTTP client.")
+
+	var recent_sessions = connection_state.get_connection_stats().get("recent_client_sessions", [])
+	if not (recent_sessions is Array) or (recent_sessions as Array).is_empty():
+		tcp_server.stop()
+		return _failure("Idle-timeout transport contract should archive the reaped idle HTTP client session.")
+
+	tcp_server.stop()
 	return {"success": true, "error": ""}
 
 

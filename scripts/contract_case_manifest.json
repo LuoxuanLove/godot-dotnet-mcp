@@ -20,6 +20,7 @@
   {"name":"stdio_tool_error_parity_contracts","layer":"transport","domain":"stdio","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v2_0_disposition":"keep"},
   {"name":"stdio_tool_activity_contracts","layer":"transport","domain":"stdio","behavior":"migration","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v2_0_disposition":"rewrite"},
   {"name":"runtime_command_service_contracts","layer":"runtime","domain":"runtime","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v2_0_disposition":"keep"},
+  {"name":"editor_debugger_session_registry_service_contracts","layer":"runtime","domain":"debugger_bridge","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v2_0_disposition":"keep"},
   {"name":"dap_debugger_contracts","layer":"runtime","domain":"dap","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"pure","v2_0_disposition":"keep"},
   {"name":"editor_tool_executor_contracts","layer":"tool","domain":"editor","behavior":"current","mcp_version":"2025-11-25","conformance":"required","speed":"headless","isolation":"stage_root","v2_0_disposition":"keep"},
   {"name":"filesystem_tool_executor_contracts","layer":"tool","domain":"filesystem","behavior":"removal_guard","mcp_version":"legacy","conformance":"compat","speed":"headless","isolation":"stage_root","v2_0_disposition":"keep"},
