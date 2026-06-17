@@ -39,10 +39,10 @@ func build_desktop_client_models(
 			"id": "antigravity",
 			"name_key": "config_client_antigravity",
 			"summary_text": _build_client_summary_text(_get_desktop_summary_key("antigravity", transport), transport, localization),
-			"path": "",
+			"path": config_service.get_antigravity_mcp_config_path(),
 			"guidance_path": config_service.get_antigravity_config_hint_path(),
 			"content": _build_desktop_client_config_content(transport, config_service),
-			"writeable": false
+			"writeable": true
 		}, client_install_statuses, localization),
 		_build_client_ui_model("codex_desktop", {
 			"id": "codex_desktop",
@@ -457,7 +457,7 @@ func _build_client_ui_model(client_id: String, client: Dictionary, client_instal
 		model["open_config_file_enabled"] = FileAccess.file_exists(config_path)
 
 	match client_id:
-		"claude_desktop", "cursor", "trae", "opencode", "windsurf", "cline", "roo_code":
+		"claude_desktop", "cursor", "trae", "antigravity", "opencode", "windsurf", "cline", "roo_code":
 			model["writeable"] = bool(detection.get("write_supported", false))
 			model["remove_supported"] = bool(detection.get("write_supported", false))
 			model["remove_enabled"] = entry_status == "present"

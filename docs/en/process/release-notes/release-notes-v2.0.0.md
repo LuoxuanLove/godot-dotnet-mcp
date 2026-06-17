@@ -62,4 +62,4 @@ Compatibility is deliberately explicit: older discovery calls and legacy transpo
 - HTTP clients should send `MCP-Protocol-Version: 2025-11-25`, handle `Mcp-Session-Id`, and advertise `Accept: application/json, text/event-stream`.
 - Stdio launchers should use newline-delimited JSON-RPC unless they intentionally opt into the legacy `Content-Length` compatibility mode.
 - C# semantic workflows should rely on the bundled isolated Roslyn runtime instead of compiling plugin Roslyn source inside the host project.
-- Antigravity users can use the Config tab to detect and open the app, copy the Godot MCP configuration, and follow manual setup directory guidance. The plugin does not assume a writable Antigravity config file until that contract is documented.
+- Antigravity users can use the Config tab to detect and open the app, copy the Godot MCP configuration, and write or remove the `godot-mcp` entry in `.gemini/config/mcp_config.json`.

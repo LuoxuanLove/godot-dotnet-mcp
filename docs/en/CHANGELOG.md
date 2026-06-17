@@ -17,7 +17,7 @@ Target version: 2.0.0.
 - Added mouse move and click support to `runtime_step(action=input)` with viewport coordinate fields in the tool schema.
 - Added structured User-tool recovery diagnostics with diagnostic codes, recommended actions, and follow-up tool hints.
 - Added idle-process and User-tool watch diagnostics so self diagnostics can report frame budgets, scan slices, and watcher progress without forcing heavy runtime queries on every Dock refresh.
-- Added Antigravity client guidance in the Config tab, including app detection, app launch, copied MCP configuration, and manual setup directory hints without assuming a documented writable config file contract.
+- Added Antigravity client support in the Config tab, including app detection, app launch, one-click `godot-mcp` write/remove actions for `.gemini/config/mcp_config.json`, copied MCP configuration, and supplemental setup-directory hints.
 - Added lightweight Godot `Performance` custom monitors for plugin process time, slow-frame counts, and one-second engine samples so editor stalls can be inspected from the Debugger Monitor and self diagnostics.
 
 ### Changed
@@ -25,6 +25,7 @@ Target version: 2.0.0.
 - Changed the default MCP protocol baseline to `2025-11-25`, including initialize metadata, tool-name validation, schema dialect policy, and explicit optional-capability boundaries.
 - Changed the default stdio transport to newline-delimited JSON-RPC, with legacy `Content-Length` framing retained only as an explicit compatibility mode.
 - Changed the default HTTP endpoint at `127.0.0.1:3000/mcp` toward MCP Streamable HTTP semantics, including protocol/session headers, JSON and SSE `Accept` negotiation, Origin/CORS checks, GET SSE streams, resumable event history, finite POST SSE responses, heartbeat events, queued server-to-client delivery, and `DELETE /mcp` session termination.
+- Changed GET `/mcp` SSE metadata to include a legacy-compatible `endpoint` event and to publish connection metadata as `open` events instead of JSON-RPC `message` events, improving compatibility with strict SSE MCP clients.
 - Changed public discovery to be resource-first and prompt-first: passive help, activity, catalog, editor-log, plugin maintenance, and scene validation discovery now use Resources, Prompts, or canonical action tools instead of legacy public discovery tools.
 - Changed `tools/list` to return a flat callable tool list with schema, annotation, and output metadata while tree/group presentation data moves to catalog resources and shared Dock presentation snapshots.
 - Changed catalog snapshots, catalog resources, `/api/tools`, Dock model metadata, and Tools tab preview/search/schema-copy paths to use `ToolCatalogManifest` and `ToolCatalogSnapshotService` as the shared catalog fact path.

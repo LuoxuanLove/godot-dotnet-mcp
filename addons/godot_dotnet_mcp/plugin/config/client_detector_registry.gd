@@ -27,7 +27,7 @@ func detect_all(running_processes: PackedStringArray) -> Dictionary:
 		"claude_code": _detect_executable_client("claude_code", running_processes, true),
 		"cursor": _detect_config_client("cursor", "res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd", running_processes, true),
 		"trae": _detect_config_client("trae", "res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd", running_processes, false),
-		"antigravity": _detect_manual_guidance_client("antigravity", running_processes, true),
+		"antigravity": _detect_config_client("antigravity", "res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd", running_processes, true),
 		"codex_desktop": _detect_executable_client("codex_desktop", running_processes, false),
 		"codex": _detect_executable_client("codex", running_processes, true),
 		"gemini": _detect_executable_client("gemini", running_processes, true),
@@ -125,7 +125,7 @@ func _resolve_config_path(client_id: String) -> String:
 		"trae":
 			return "C:/Users/Test/Trae/config.json"
 		"antigravity":
-			return "C:/Users/Test/AppData/Roaming/Antigravity"
+			return "C:/Users/Test/.gemini/config/mcp_config.json"
 		"codex_desktop":
 			return "C:/Users/Test/Codex/config.json"
 		"gemini":

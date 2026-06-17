@@ -356,11 +356,14 @@ func _build_mcp_sse_stream_response(headers: Dictionary) -> Dictionary:
 	var events := _sse_events_after_cursor(session_id, last_event_id)
 	if events.is_empty():
 		events = [event]
+	var response_events := events.duplicate(true)
+	if last_event_id.is_empty():
+		response_events.push_front(_build_sse_endpoint_event(headers))
 	var next_event_index := _sse_event_count(session_id)
 	return {
 		"status": 200,
 		"_stream_mode": "sse",
-		"_raw_body": _format_sse_events(events),
+		"_raw_body": _format_sse_events(response_events),
 		"_content_type": "text/event-stream; charset=utf-8",
 		"_mcp_session_id": session_id,
 		"_sse_session_id": session_id,
@@ -423,13 +426,33 @@ func _append_sse_open_event(session_id: String, last_event_id: String) -> Dictio
 		"resume_start_index": int(resume_status.get("start_index", 0)),
 		"resume_base_index": int(resume_status.get("base_index", 0)),
 		"resume_next_index": int(resume_status.get("next_index", 0))
-	}, "streamable-http-get")
+	}, "streamable-http-get", "open")
 
 
-func _append_sse_event(session_id: String, payload: Dictionary, id_prefix: String) -> Dictionary:
+func _append_sse_event(session_id: String, payload: Variant, id_prefix: String, event_name: String = "message") -> Dictionary:
 	if _sse_event_queue != null and _sse_event_queue.has_method("append_event"):
-		return _sse_event_queue.append_event(session_id, "message", payload, id_prefix)
+		return _sse_event_queue.append_event(session_id, event_name, payload, id_prefix)
 	return {}
+
+
+func _build_sse_endpoint_event(headers: Dictionary) -> Dictionary:
+	return {
+		"id": "streamable-http-endpoint-%s" % str(Time.get_ticks_usec()),
+		"event": "endpoint",
+		"retry": MCPHttpSseEventQueueScript.SSE_RETRY_MS,
+		"data": _build_mcp_absolute_url(headers)
+	}
+
+
+func _build_mcp_absolute_url(headers: Dictionary) -> String:
+	var host := str(headers.get("host", "")).strip_edges()
+	if host.is_empty():
+		host = "127.0.0.1:3000"
+	var scheme := "http"
+	var forwarded_proto := str(headers.get("x-forwarded-proto", "")).strip_edges().to_lower()
+	if forwarded_proto == "http" or forwarded_proto == "https":
+		scheme = forwarded_proto
+	return "%s://%s/mcp" % [scheme, host]
 
 
 func _build_one_shot_sse_event(json_rpc_response: Dictionary) -> Dictionary:

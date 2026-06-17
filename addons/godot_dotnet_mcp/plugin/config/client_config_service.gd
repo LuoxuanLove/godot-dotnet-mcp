@@ -23,6 +23,10 @@ func get_antigravity_config_hint_path() -> String:
 	return ConfigPathsScript.get_antigravity_config_hint_path()
 
 
+func get_antigravity_mcp_config_path() -> String:
+	return ConfigPathsScript.get_antigravity_mcp_config_path()
+
+
 func get_gemini_config_path(scope: String = "user") -> String:
 	if scope == "project":
 		return ConfigPathsScript.get_gemini_project_config_path(ProjectSettings.globalize_path("res://").replace("\\", "/").trim_suffix("/"))

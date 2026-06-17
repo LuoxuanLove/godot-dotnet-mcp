@@ -52,6 +52,10 @@ static func get_antigravity_config_hint_path() -> String:
 			return _normalize_path(home + "/.config/Antigravity")
 
 
+static func get_antigravity_mcp_config_path() -> String:
+	return _normalize_path(_get_home_dir() + "/.gemini/config/mcp_config.json")
+
+
 static func get_gemini_config_path() -> String:
 	return _normalize_path(_get_home_dir() + "/.gemini/settings.json")
 
