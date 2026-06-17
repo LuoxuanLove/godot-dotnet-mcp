@@ -112,7 +112,25 @@ class FakeBridge extends RefCounted:
 					"focus_control":
 						return success({"target_path": str(args.get("target_path", ""))})
 					"activate_control":
-						return success({"target_path": str(args.get("target_path", ""))})
+						return success({
+							"target_path": str(args.get("target_path", "")),
+							"target_observation": {
+								"button_like": true,
+								"activation_supported": true,
+								"activation_observed": true,
+								"state_before": {"button_pressed": false},
+								"state_after": {"button_pressed": true},
+								"state_changed": true,
+								"signal_observation": {
+									"supported": true,
+									"observed": true,
+									"activation_observed": true,
+									"input_observed": false,
+									"signals": {"pressed": 1}
+								},
+								"hints": []
+							}
+						})
 					"click_control", "right_click_control", "hover_control", "leave_control":
 						return success({
 							"target_path": str(args.get("target_path", "")),

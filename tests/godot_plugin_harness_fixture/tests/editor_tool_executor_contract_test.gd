@@ -1079,6 +1079,23 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Editor ui_control activate_control failed through the split service path.")
 	if not bool(refresh_button.button_pressed):
 		return _failure("Editor ui_control activate_control should activate the target control.")
+	var activate_observation: Dictionary = activate_control_result.get("data", {}).get("target_observation", {})
+	if not bool(activate_observation.get("button_like", false)):
+		return _failure("Editor ui_control activate_control should mark Button targets as button_like.")
+	if not bool(activate_observation.get("activation_supported", false)):
+		return _failure("Editor ui_control activate_control should report activation support for Button targets.")
+	if not bool(activate_observation.get("activation_observed", false)):
+		return _failure("Editor ui_control activate_control should report activation evidence when press state changes.")
+	if not activate_observation.has("state_before") or not activate_observation.has("state_after"):
+		return _failure("Editor ui_control activate_control should include before/after target state observations.")
+	if not activate_observation.has("signal_observation"):
+		return _failure("Editor ui_control activate_control should include signal observation metadata.")
+	if bool(activate_observation.get("state_before", {}).get("button_pressed", true)):
+		return _failure("Editor ui_control activate_control should capture button_pressed=false before activation.")
+	if not bool(activate_observation.get("state_after", {}).get("button_pressed", false)):
+		return _failure("Editor ui_control activate_control should capture button_pressed=true after activation.")
+	if not (activate_observation.get("hints", []) as Array).is_empty():
+		return _failure("Editor ui_control activate_control should not add no-activation hints when activation is observed.")
 
 	var capture_control_result: Dictionary = executor.execute("ui_control", {
 		"action": "capture_control",
