@@ -136,6 +136,13 @@ func get_sse_last_heartbeat_at_unix(client: StreamPeerTCP) -> int:
 	return int(state.get("sse_last_heartbeat_at_unix", 0))
 
 
+func get_last_seen_at_unix(client: StreamPeerTCP) -> int:
+	if not _client_states.has(client):
+		return 0
+	var state: Dictionary = _client_states.get(client, {})
+	return int(state.get("last_seen_at_unix", 0))
+
+
 func get_sse_session_id(client: StreamPeerTCP) -> String:
 	if not _client_states.has(client):
 		return ""

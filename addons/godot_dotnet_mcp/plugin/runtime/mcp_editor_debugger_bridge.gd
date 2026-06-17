@@ -7,6 +7,7 @@ signal session_state_changed(session_id: int, state: String, metadata: Dictionar
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
+const EditorDebuggerSessionRegistryServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/editor_debugger_session_registry_service.gd")
 
 const MESSAGE_PREFIX := "godot_mcp/"
 const EVENT_CHANNEL := "godot_mcp/runtime_event"
@@ -16,6 +17,7 @@ const COMMAND_MESSAGE := "godot_mcp/runtime_command:call"
 
 var _wired_sessions: Dictionary = {}
 var _last_active_session_id := -1
+var _session_registry_service = EditorDebuggerSessionRegistryServiceScript.new()
 
 
 func _has_capture(message: String) -> bool:
@@ -76,7 +78,7 @@ func _setup_session(session_id: int) -> void:
 
 
 func _wire_session(session_id: int) -> void:
-	var session := get_session(session_id)
+	var session: EditorDebuggerSession = _resolve_session(session_id)
 	if session == null or not is_instance_valid(session):
 		return
 	var is_new_session := not _wired_sessions.has(session_id)
@@ -92,26 +94,26 @@ func _wire_session(session_id: int) -> void:
 
 
 func _on_session_started(session_id: int) -> void:
-	var session := get_session(session_id)
+	var session: EditorDebuggerSession = _resolve_session(session_id)
 	_record_session_state(session_id, session, "started", {})
 	_record_runtime_session_event(session_id, "session_started")
 
 
 func _on_session_stopped(session_id: int) -> void:
-	var session := get_session(session_id)
+	var session: EditorDebuggerSession = _resolve_session(session_id)
 	_record_session_state(session_id, session, "stopped", {})
 	_record_runtime_session_event(session_id, "session_stopped")
 
 
 func _on_session_breaked(can_debug: bool, session_id: int) -> void:
-	var session := get_session(session_id)
+	var session: EditorDebuggerSession = _resolve_session(session_id)
 	_record_session_state(session_id, session, "breaked", {
 		"can_debug": can_debug
 	})
 
 
 func _on_session_continued(session_id: int) -> void:
-	var session := get_session(session_id)
+	var session: EditorDebuggerSession = _resolve_session(session_id)
 	_record_session_state(session_id, session, "continued", {})
 
 
@@ -198,14 +200,16 @@ func get_runtime_session_snapshot() -> Dictionary:
 
 
 func _sync_available_sessions() -> void:
-	for session_id in _collect_known_session_ids(false):
+	var live_session_ids := _collect_known_session_ids(false)
+	_prune_stale_wired_sessions(live_session_ids)
+	for session_id in live_session_ids:
 		_wire_session(session_id)
 
 
 func _collect_known_session_ids(include_wired: bool = true) -> Array[int]:
 	var ids: Array[int] = []
 	var seen: Dictionary = {}
-	var live_sessions = get_sessions()
+	var live_sessions = _resolve_sessions_list()
 	if live_sessions is Array:
 		for raw_session_id in live_sessions:
 			var session_id := _normalize_session_id(raw_session_id)
@@ -235,6 +239,14 @@ func _normalize_session_id(raw_session_id) -> int:
 	return -1
 
 
+func _prune_stale_wired_sessions(live_session_ids: Array[int]) -> void:
+	if _session_registry_service == null:
+		_session_registry_service = EditorDebuggerSessionRegistryServiceScript.new()
+	var result: Dictionary = _session_registry_service.prune_stale_wired_sessions(_wired_sessions, live_session_ids, _last_active_session_id)
+	_wired_sessions = result.get("wired_sessions", {}).duplicate(true)
+	_last_active_session_id = int(result.get("last_active_session_id", -1))
+
+
 func _build_session_snapshot(session_id: int, session: EditorDebuggerSession) -> Dictionary:
 	var available := session != null and is_instance_valid(session)
 	var active := available and session.is_active()
@@ -252,7 +264,7 @@ func _build_session_snapshot(session_id: int, session: EditorDebuggerSession) ->
 func _is_session_commandable_internal(session_id: int) -> bool:
 	if session_id < 0:
 		return false
-	var session := get_session(session_id)
+	var session: EditorDebuggerSession = _resolve_session(session_id)
 	if session == null or not is_instance_valid(session):
 		return false
 	return session.is_active()
@@ -265,12 +277,20 @@ func send_runtime_command(session_id: int, payload: Dictionary) -> Dictionary:
 			"error": "runtime_session_lost",
 			"message": "The target runtime debugger session is unavailable."
 		}
-	var session := get_session(session_id)
+	var session: EditorDebuggerSession = _resolve_session(session_id)
 	session.send_message(COMMAND_MESSAGE, [payload.duplicate(true)])
 	return {
 		"success": true,
 		"session_id": session_id
 	}
+
+
+func _resolve_sessions_list():
+	return get_sessions()
+
+
+func _resolve_session(session_id: int):
+	return get_session(session_id)
 
 
 func _update_last_active_session_id(session_id: int, session: EditorDebuggerSession, state: String) -> void:

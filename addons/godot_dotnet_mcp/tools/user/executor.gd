@@ -14,6 +14,7 @@ var _tool_index: Dictionary = {}
 var _requested_missing_scripts: Dictionary = {}
 var _pending_refresh := false
 var _last_scan_msec := 0
+var _definitions_revision := 0
 
 
 func _init() -> void:
@@ -49,6 +50,10 @@ func get_tools() -> Array[Dictionary]:
 			tool_copy["last_refresh_reason"] = str(slot.get("last_refresh_reason", ""))
 			tools.append(tool_copy)
 	return tools
+
+
+func get_definitions_revision() -> int:
+	return _definitions_revision
 
 
 func execute(tool_name: String, args: Dictionary) -> Dictionary:
@@ -105,6 +110,7 @@ func before_unload(reason: String) -> void:
 		slot["instance"] = null
 		_slots_by_script[script_path] = slot
 	_tool_index.clear()
+	_bump_definitions_revision()
 
 
 func get_runtime_state_snapshot() -> Array[Dictionary]:
@@ -152,6 +158,7 @@ func request_reload_by_script(script_path: String, reason: String = "manual") ->
 	slot["discovery_source"] = _get_discovery_source(reason)
 	slot["state"] = "reload_pending"
 	_slots_by_script[normalized_path] = slot
+	_bump_definitions_revision()
 
 
 func request_reload_all(reason: String = "manual") -> void:
@@ -185,13 +192,15 @@ func _reconcile_script_inventory(reason: String) -> void:
 			_requested_missing_scripts.erase(script_path)
 			var created = _create_slot(script_path, modified_unix, slot_reason)
 			_slots_by_script[script_path] = created
+			_bump_definitions_revision()
 			MCPDebugBuffer.record("info", "user", "Created runtime slot for %s" % script_path)
 			continue
-		if slot.get("instance", null) == null or (slot.get("tool_defs", []) as Array).is_empty():
+		if (slot.get("instance", null) == null or (slot.get("tool_defs", []) as Array).is_empty()) and not _is_slot_pending_empty_reload(slot):
 			slot["pending_reload"] = true
 			slot["pending_reason"] = "recover_empty_slot"
 			slot["state"] = "reload_pending"
 			_slots_by_script[script_path] = slot
+			_bump_definitions_revision()
 			MCPDebugBuffer.record("info", "user", "Marked empty user tool slot for reload: %s" % script_path)
 		if int(slot.get("last_seen_modified_unix", 0)) != modified_unix:
 			slot["last_seen_modified_unix"] = modified_unix
@@ -202,15 +211,19 @@ func _reconcile_script_inventory(reason: String) -> void:
 			slot["discovery_source"] = _get_discovery_source(str(slot.get("pending_reason", "file_changed")))
 			slot["state"] = "reload_pending"
 			_slots_by_script[script_path] = slot
+			_bump_definitions_revision()
 
 	for script_path in _slots_by_script.keys():
 		if discovered.has(script_path):
 			continue
 		var slot: Dictionary = _slots_by_script.get(script_path, {})
 		if int(slot.get("active_calls", 0)) > 0:
+			if _as_bool(slot.get("removed_pending", false)) and str(slot.get("state", "")) == "waiting_quiesce":
+				continue
 			slot["removed_pending"] = true
 			slot["state"] = "waiting_quiesce"
 			_slots_by_script[script_path] = slot
+			_bump_definitions_revision()
 			continue
 		_unload_slot(script_path, "script_removed")
 
@@ -287,6 +300,7 @@ func _reload_slot(script_path: String, reason: String) -> void:
 		slot["instance"] = null
 		slot["tool_defs"] = []
 		_slots_by_script[script_path] = slot
+		_bump_definitions_revision()
 		MCPDebugBuffer.record("warning", "user", "Reload failed for %s: %s" % [script_path, slot["last_error"]])
 		return
 
@@ -308,6 +322,7 @@ func _reload_slot(script_path: String, reason: String) -> void:
 	slot["last_refresh_reason"] = reason
 	slot["discovery_source"] = _get_discovery_source(reason)
 	_slots_by_script[script_path] = slot
+	_bump_definitions_revision()
 	MCPDebugBuffer.record("info", "user", "Reloaded user tool runtime: %s v%d" % [script_path, int(slot.get("version", 0))])
 
 
@@ -381,6 +396,7 @@ func _rebuild_tool_index() -> void:
 				conflict_slot["state"] = "reload_failed"
 				conflict_slot["tool_defs"] = []
 				_slots_by_script[script_path] = conflict_slot
+				_bump_definitions_revision()
 				continue
 			_tool_index[logical_name] = script_path
 
@@ -390,6 +406,7 @@ func _unload_all(reason: String) -> void:
 		_unload_slot(script_path, reason)
 	_slots_by_script.clear()
 	_tool_index.clear()
+	_bump_definitions_revision()
 
 
 func _unload_slot(script_path: String, reason: String) -> void:
@@ -400,6 +417,7 @@ func _unload_slot(script_path: String, reason: String) -> void:
 	if instance != null and instance.has_method("before_unload"):
 		instance.before_unload(reason)
 	_slots_by_script.erase(script_path)
+	_bump_definitions_revision()
 
 
 func _scan_custom_tool_scripts() -> Array[String]:
@@ -505,3 +523,14 @@ func _as_bool(value) -> bool:
 
 func _get_discovery_source(reason: String) -> String:
 	return "external_watch" if reason.begins_with("watcher_") else "plugin_flow"
+
+
+func _bump_definitions_revision() -> void:
+	_definitions_revision += 1
+
+
+func _is_slot_pending_empty_reload(slot: Dictionary) -> bool:
+	return (
+		_as_bool(slot.get("pending_reload", false))
+		and str(slot.get("pending_reason", "")) == "recover_empty_slot"
+	)

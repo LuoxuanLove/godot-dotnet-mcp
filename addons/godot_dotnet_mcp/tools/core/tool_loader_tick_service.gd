@@ -2,6 +2,9 @@
 extends RefCounted
 class_name ToolLoaderTickService
 
+var _last_user_definitions_revision := -1
+var _last_user_executor = null
+
 
 func tick_loaded_runtimes(runtime_by_category: Dictionary, tool_definitions_by_category: Dictionary, delta: float, extract_tool_definitions: Callable) -> Dictionary:
 	var ticked_categories: Array[String] = []
@@ -37,18 +40,26 @@ func tick_loaded_runtimes(runtime_by_category: Dictionary, tool_definitions_by_c
 func _evaluate_user_runtime(executor, tool_definitions_by_category: Dictionary, extract_tool_definitions: Callable) -> Dictionary:
 	var previous_defs: Array = tool_definitions_by_category.get("user", [])
 	if executor == null:
+		_last_user_definitions_revision = -1
+		_last_user_executor = null
 		return {
 			"definitions_changed": false,
 			"should_unload": previous_defs.is_empty(),
 			"definitions": previous_defs.duplicate(true)
 		}
 
+	var current_revision := _get_user_definitions_revision(executor)
+	var executor_changed: bool = executor != _last_user_executor
+	var should_refresh_definitions: bool = executor_changed or current_revision < 0 or current_revision != _last_user_definitions_revision
 	var next_defs: Array = previous_defs.duplicate(true)
-	if executor.has_method("get_tools") and extract_tool_definitions.is_valid():
+	if should_refresh_definitions and executor.has_method("get_tools") and extract_tool_definitions.is_valid():
 		var extracted = extract_tool_definitions.call("user", executor)
 		if extracted is Array:
 			next_defs = (extracted as Array).duplicate(true)
-	var definitions_changed := not _tool_definitions_match(previous_defs, next_defs)
+	var definitions_changed: bool = should_refresh_definitions and not _tool_definitions_match(previous_defs, next_defs)
+	_last_user_executor = executor
+	if current_revision >= 0:
+		_last_user_definitions_revision = current_revision
 	var should_unload := false
 	if executor.has_method("should_unload_runtime"):
 		should_unload = _as_bool(executor.should_unload_runtime())
@@ -88,6 +99,16 @@ func _tool_definition_signature(tool) -> String:
 		tool_def.get("presentation", {}),
 		tool_def.get("icons", [])
 	])
+
+
+func _get_user_definitions_revision(executor) -> int:
+	if executor != null and executor.has_method("get_definitions_revision"):
+		var revision = executor.get_definitions_revision()
+		if revision is int:
+			return int(revision)
+		if revision is float:
+			return int(revision)
+	return -1
 
 
 func _as_bool(value) -> bool:
