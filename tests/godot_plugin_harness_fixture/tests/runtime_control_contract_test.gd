@@ -62,6 +62,10 @@ func _assert_debugger_bridge_clears_stopped_sessions() -> String:
 		return "Editor debugger bridge should record stopped sessions before cleanup."
 	if stopped_body.find("_wired_sessions.erase(session_id)") == -1:
 		return "Editor debugger bridge should immediately clear stopped sessions from the wired map."
+	if source.find("func _is_live_session_for_sync(session_id: int) -> bool:") == -1:
+		return "Editor debugger bridge should filter inactive sessions before rewiring live sessions."
+	if source.find("not include_wired and not _is_live_session_for_sync(session_id)") == -1:
+		return "Editor debugger bridge sync should not rewire inactive stopped sessions after cleanup."
 	return ""
 
 
