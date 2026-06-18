@@ -91,6 +91,10 @@ func append_pending_bytes(client: StreamPeerTCP, data: PackedByteArray) -> int:
 	var pending := get_pending_bytes(client)
 	pending.append_array(data)
 	_pending_data[client] = pending
+	if _client_states.has(client):
+		var state: Dictionary = _client_states.get(client, {})
+		state["last_seen_at_unix"] = _now_unix()
+		_client_states[client] = state
 	return pending.size()
 
 

@@ -4,6 +4,10 @@ const RuntimeControlServiceScript = preload("res://addons/godot_dotnet_mcp/plugi
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	var bridge_guard := _assert_debugger_bridge_clears_stopped_sessions()
+	if not bridge_guard.is_empty():
+		return _failure(bridge_guard)
+
 	var service = RuntimeControlServiceScript.new()
 
 	var status: Dictionary = service.get_status()
@@ -39,6 +43,26 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"disable_message": str(disable_result.get("message", ""))
 		}
 	}
+
+
+func _assert_debugger_bridge_clears_stopped_sessions() -> String:
+	var source_path := "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_debugger_bridge.gd"
+	if not FileAccess.file_exists(source_path):
+		return "Editor debugger bridge source should exist for stopped-session cleanup guard."
+	var source := FileAccess.get_file_as_string(source_path)
+	var marker := "func _on_session_stopped(session_id: int) -> void:"
+	var start := source.find(marker)
+	if start == -1:
+		return "Editor debugger bridge should keep the stopped-session callback."
+	var next_callback := source.find("\nfunc _on_session_breaked", start)
+	var stopped_body := source.substr(start, source.length() - start)
+	if next_callback > start:
+		stopped_body = source.substr(start, next_callback - start)
+	if stopped_body.find("_record_session_state") == -1 or stopped_body.find("_record_runtime_session_event") == -1:
+		return "Editor debugger bridge should record stopped sessions before cleanup."
+	if stopped_body.find("_wired_sessions.erase(session_id)") == -1:
+		return "Editor debugger bridge should immediately clear stopped sessions from the wired map."
+	return ""
 
 
 func _is_invalid_argument(result: Dictionary, action: String) -> bool:

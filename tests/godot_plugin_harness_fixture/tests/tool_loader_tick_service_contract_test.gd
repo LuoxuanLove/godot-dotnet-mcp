@@ -85,6 +85,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(idle_result.get("user_should_unload", false)):
 		return _failure("Tick service should report user runtime unload requests.")
 
+	service.invalidate_user_definitions()
+	_extract_call_count = 0
+	var invalidated_result: Dictionary = service.tick_loaded_runtimes(
+		{"user": {"instance": user_executor}},
+		{"user": [{"name": "user_probe", "description": "User probe", "parameters": {}}]},
+		0.5,
+		Callable(self, "_extract_definitions")
+	)
+	if _extract_call_count != 1:
+		return _failure("Tick service should re-extract user definitions after explicit invalidation.")
+	if bool(invalidated_result.get("user_definitions_changed", true)):
+		return _failure("Tick service should treat equivalent invalidated definitions as unchanged.")
+
 	user_executor.definitions_revision += 1
 	_extract_call_count = 0
 	var revised_result: Dictionary = service.tick_loaded_runtimes(

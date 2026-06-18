@@ -103,6 +103,7 @@ func _on_session_stopped(session_id: int) -> void:
 	var session: EditorDebuggerSession = _resolve_session(session_id)
 	_record_session_state(session_id, session, "stopped", {})
 	_record_runtime_session_event(session_id, "session_stopped")
+	_wired_sessions.erase(session_id)
 
 
 func _on_session_breaked(can_debug: bool, session_id: int) -> void:

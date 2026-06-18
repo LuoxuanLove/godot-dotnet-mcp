@@ -433,6 +433,7 @@ func _run_idle_http_connection_timeout_contract(tree: SceneTree) -> Dictionary:
 		+ "Content-Length: 40\r\n\r\n"
 		+ "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"ping\"}"
 	)
+	var partial_socket_frame := "POST /mcp HTTP/1.1\r\nHost: localhost\r\nContent-Length: 40\r\n"
 
 	var idle_snapshot = connection_state.get_connection_stats().get("client_sessions", [])
 	if not (idle_snapshot is Array) or (idle_snapshot as Array).is_empty():
@@ -481,6 +482,45 @@ func _run_idle_http_connection_timeout_contract(tree: SceneTree) -> Dictionary:
 	if not (recent_sessions is Array) or (recent_sessions as Array).is_empty():
 		tcp_server.stop()
 		return _failure("Idle-timeout transport contract should archive the reaped idle HTTP client session.")
+
+	var partial_client := StreamPeerTCP.new()
+	partial_client.connect_to_host("127.0.0.1", port)
+	for _i in range(40):
+		partial_client.poll()
+		if partial_client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+			partial_client.put_data(partial_socket_frame.to_utf8_buffer())
+			break
+		transport.process_frame(tcp_server, true, 0.016)
+		await tree.process_frame
+	for _i in range(20):
+		partial_client.poll()
+		transport.process_frame(tcp_server, true, 0.016)
+		if connection_state.get_connection_count() == 1 and not connection_state.is_pending_empty(connection_state.get_clients_snapshot()[0]):
+			break
+		await tree.process_frame
+	if connection_state.get_connection_count() != 1:
+		tcp_server.stop()
+		return _failure("Idle-timeout transport contract should keep a partial pending HTTP client before timeout.")
+	var partial_client_key = connection_state.get_clients_snapshot()[0]
+	if connection_state.is_pending_empty(partial_client_key):
+		tcp_server.stop()
+		return _failure("Idle-timeout transport contract should retain partial pending bytes for the malformed client.")
+	var partial_last_seen := int(connection_state.get_last_seen_at_unix(partial_client_key))
+	if partial_last_seen <= 0:
+		tcp_server.stop()
+		return _failure("Idle-timeout transport contract should stamp activity when partial bytes arrive.")
+	if connection_state._client_states.has(partial_client_key):
+		var partial_state: Dictionary = connection_state._client_states.get(partial_client_key, {})
+		partial_state["last_seen_at_unix"] = int(Time.get_unix_time_from_system()) - 31
+		connection_state._client_states[partial_client_key] = partial_state
+	transport.process_frame(tcp_server, true, 0.016)
+	partial_client.poll()
+	if connection_state.get_connection_count() != 0:
+		tcp_server.stop()
+		return _failure("Idle-timeout transport contract should disconnect stale partial HTTP clients even with pending bytes.")
+	if _disconnected_count != 2:
+		tcp_server.stop()
+		return _failure("Idle-timeout transport contract should emit disconnection for stale partial pending clients.")
 
 	tcp_server.stop()
 	return {"success": true, "error": ""}
