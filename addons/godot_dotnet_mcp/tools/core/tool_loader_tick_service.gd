@@ -4,6 +4,11 @@ class_name ToolLoaderTickService
 
 var _last_user_definitions_revision := -1
 var _last_user_executor = null
+var _user_definitions_dirty := true
+
+
+func invalidate_user_definitions() -> void:
+	_user_definitions_dirty = true
 
 
 func tick_loaded_runtimes(runtime_by_category: Dictionary, tool_definitions_by_category: Dictionary, delta: float, extract_tool_definitions: Callable) -> Dictionary:
@@ -42,6 +47,7 @@ func _evaluate_user_runtime(executor, tool_definitions_by_category: Dictionary, 
 	if executor == null:
 		_last_user_definitions_revision = -1
 		_last_user_executor = null
+		_user_definitions_dirty = true
 		return {
 			"definitions_changed": false,
 			"should_unload": previous_defs.is_empty(),
@@ -50,7 +56,7 @@ func _evaluate_user_runtime(executor, tool_definitions_by_category: Dictionary, 
 
 	var current_revision := _get_user_definitions_revision(executor)
 	var executor_changed: bool = executor != _last_user_executor
-	var should_refresh_definitions: bool = executor_changed or current_revision < 0 or current_revision != _last_user_definitions_revision
+	var should_refresh_definitions: bool = _user_definitions_dirty or executor_changed or current_revision != _last_user_definitions_revision
 	var next_defs: Array = previous_defs.duplicate(true)
 	if should_refresh_definitions and executor.has_method("get_tools") and extract_tool_definitions.is_valid():
 		var extracted = extract_tool_definitions.call("user", executor)
@@ -60,6 +66,8 @@ func _evaluate_user_runtime(executor, tool_definitions_by_category: Dictionary, 
 	_last_user_executor = executor
 	if current_revision >= 0:
 		_last_user_definitions_revision = current_revision
+	if should_refresh_definitions:
+		_user_definitions_dirty = false
 	var should_unload := false
 	if executor.has_method("should_unload_runtime"):
 		should_unload = _as_bool(executor.should_unload_runtime())

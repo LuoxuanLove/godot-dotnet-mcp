@@ -26,6 +26,8 @@ Stdio now defaults to newline-delimited JSON-RPC for current MCP clients. Legacy
 
 Transport validation is stricter as well. HTTP and stdio now share deterministic JSON-RPC envelope behavior for malformed requests, response envelopes, disabled tools, duplicate or conflicting HTTP body headers, and session validation.
 
+Long-running editor sessions also get tighter cleanup: idle partial HTTP requests close after the timeout window, User-tool definition refreshes run only after explicit invalidation, and stopped debugger sessions are removed from the live bridge map immediately.
+
 ### 🧭 Resource and Prompt UI
 
 The Dock gains first-class Resources and Prompts tabs. Users can inspect protocol catalog counts, copy resource or prompt IDs, preview resources, fill prompt arguments, preview generated prompt messages, and see bounded icon rendering before a client consumes the same entries.

@@ -103,6 +103,7 @@ func _on_session_stopped(session_id: int) -> void:
 	var session: EditorDebuggerSession = _resolve_session(session_id)
 	_record_session_state(session_id, session, "stopped", {})
 	_record_runtime_session_event(session_id, "session_stopped")
+	_wired_sessions.erase(session_id)
 
 
 func _on_session_breaked(can_debug: bool, session_id: int) -> void:
@@ -215,6 +216,8 @@ func _collect_known_session_ids(include_wired: bool = true) -> Array[int]:
 			var session_id := _normalize_session_id(raw_session_id)
 			if session_id < 0 or seen.has(session_id):
 				continue
+			if not include_wired and not _is_live_session_for_sync(session_id):
+				continue
 			seen[session_id] = true
 			ids.append(session_id)
 	if include_wired:
@@ -226,6 +229,11 @@ func _collect_known_session_ids(include_wired: bool = true) -> Array[int]:
 			ids.append(session_id)
 	ids.sort()
 	return ids
+
+
+func _is_live_session_for_sync(session_id: int) -> bool:
+	var session: EditorDebuggerSession = _resolve_session(session_id)
+	return session != null and is_instance_valid(session) and session.is_active()
 
 
 func _normalize_session_id(raw_session_id) -> int:

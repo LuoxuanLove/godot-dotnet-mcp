@@ -95,12 +95,14 @@ func _process_client(client: StreamPeerTCP) -> bool:
 		if _connection_state.has_method("is_sse_streaming") and bool(_connection_state.is_sse_streaming(client)):
 			return _process_sse_streaming_client(client)
 		var available = client.get_available_bytes()
+		var received_bytes_this_frame := false
 		if available > 0:
 			var data = client.get_data(available)
 			if data[0] != OK:
 				_log("Error receiving data: %s" % data[0], "warning")
 				return false
 			var incoming_bytes: PackedByteArray = data[1]
+			received_bytes_this_frame = not incoming_bytes.is_empty()
 			var pending_byte_size: int = _connection_state.append_pending_bytes(client, incoming_bytes)
 			if pending_byte_size > _max_pending_request_bytes:
 				if _try_handle_pending_framing_error(client, _connection_state.get_pending_bytes(client)):
@@ -111,13 +113,13 @@ func _process_client(client: StreamPeerTCP) -> bool:
 				client.disconnect_from_host()
 				return true
 			_log("Received %d bytes, total pending: %d bytes" % [available, pending_byte_size], "debug")
-		if not _connection_state.is_pending_empty(client):
-			_process_http_request_async(client)
-			return false
-		if _should_disconnect_idle_http_client(client):
+		if not received_bytes_this_frame and _should_disconnect_idle_http_client(client):
 			_log("Closing idle HTTP client after %d seconds without activity" % HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS, "debug")
 			client.disconnect_from_host()
 			return true
+		if not _connection_state.is_pending_empty(client):
+			_process_http_request_async(client)
+			return false
 		return false
 
 	if status == StreamPeerTCP.STATUS_ERROR or status == StreamPeerTCP.STATUS_NONE:
@@ -129,8 +131,6 @@ func _process_client(client: StreamPeerTCP) -> bool:
 
 func _should_disconnect_idle_http_client(client: StreamPeerTCP) -> bool:
 	if _connection_state == null:
-		return false
-	if _connection_state.has_method("is_pending_empty") and not bool(_connection_state.is_pending_empty(client)):
 		return false
 	if not _connection_state.has_method("get_last_seen_at_unix"):
 		return false

@@ -143,6 +143,7 @@ func configure(server_context: Object) -> void:
 
 func initialize(disabled_tools: Array = [], force_reload_scripts: bool = false) -> Dictionary:
 	_ensure_services_ready()
+	_tick_service.invalidate_user_definitions()
 	var summary: Dictionary = _lifecycle_service.initialize(disabled_tools, force_reload_scripts, _build_lifecycle_context())
 	_bump_catalog_revision()
 	summary["catalog_revision"] = _catalog_revision
@@ -360,6 +361,7 @@ func _refresh_runtime_context() -> void:
 
 func reload_domain(category: String) -> Dictionary:
 	_ensure_services_ready()
+	_tick_service.invalidate_user_definitions()
 	var status: Dictionary = _reload_service.reload_domain(category, _build_reload_context())
 	if not (status.get("reloaded_domains", []) as Array).is_empty():
 		_bump_catalog_revision()
@@ -369,6 +371,7 @@ func reload_domain(category: String) -> Dictionary:
 
 func reload_all_domains() -> Dictionary:
 	_ensure_services_ready()
+	_tick_service.invalidate_user_definitions()
 	var status: Dictionary = _reload_service.reload_all_domains(_build_reload_context())
 	if not (status.get("reloaded_domains", []) as Array).is_empty():
 		_bump_catalog_revision()
@@ -378,6 +381,7 @@ func reload_all_domains() -> Dictionary:
 
 func request_reload_by_script(script_path: String, reason: String = "manual") -> Dictionary:
 	_ensure_services_ready()
+	_tick_service.invalidate_user_definitions()
 	var status: Dictionary = _user_reload_service.request_reload_by_script(script_path, reason, _build_user_reload_context())
 	status["catalog_revision"] = _catalog_revision
 	return status
