@@ -21,6 +21,20 @@ class CountingSupervisor:
 		return {}
 
 
+class FakeActivityRegistry:
+	extends RefCounted
+
+	var sweep_calls := 0
+
+	func sweep_stale(max_age_seconds: int = 300, now_unix: int = 0) -> Dictionary:
+		sweep_calls += 1
+		return {
+			"swept_count": 0,
+			"max_age_seconds": max_age_seconds,
+			"now_unix": now_unix
+		}
+
+
 func run_case(_tree: SceneTree) -> Dictionary:
 	var supervisor = CountingSupervisor.new()
 	supervisor.set("_tool_loader_initialized", true)
@@ -45,6 +59,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var init_call: Dictionary = fresh_supervisor.register_calls[0]
 	if str(init_call.get("reason", "")) != "lazy_initialize" or bool(init_call.get("force_reload_scripts", false)):
 		return _failure("Tool loader supervisor lazy initialization should not force reload scripts.")
+
+	var activity_registry := FakeActivityRegistry.new()
+	supervisor.set("_tool_activity_registry", activity_registry)
+	supervisor.tick(0.016)
+	if activity_registry.sweep_calls != 1:
+		return _failure("Tool loader supervisor tick should sweep stale tool activity records.")
 
 	return {
 		"name": "tool_loader_supervisor_contracts",

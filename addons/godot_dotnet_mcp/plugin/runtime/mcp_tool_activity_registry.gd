@@ -3,6 +3,7 @@ extends RefCounted
 class_name MCPToolActivityRegistry
 
 const MAX_RECENT := 100
+const MAX_RUNNING_AGE_SECONDS := 300
 const CONTEXT_TEXT_LIMIT := 160
 const DEFAULT_SLOW_THRESHOLD_MS := 0.0
 const CONTEXT_KEYS := [
@@ -62,7 +63,7 @@ func finish_call(call_id: String, success: bool, error_message: String = "") -> 
 		return {}
 	var record: Dictionary = _running.get(call_id, {}).duplicate(true)
 	_running.erase(call_id)
-	_order.erase(call_id)
+	_remove_ordered_call_id(call_id)
 	record["state"] = "completed" if success else "failed"
 	record["finished_at_unix"] = int(Time.get_unix_time_from_system())
 	record["duration_ms"] = _elapsed_ms(int(record.get("_started_usec", Time.get_ticks_usec())))
@@ -71,6 +72,38 @@ func finish_call(call_id: String, success: bool, error_message: String = "") -> 
 	while _recent.size() > MAX_RECENT:
 		_recent.pop_back()
 	return _public_record(record)
+
+
+func sweep_stale(max_age_seconds: int = MAX_RUNNING_AGE_SECONDS, now_unix: int = 0) -> Dictionary:
+	var safe_max_age := max(max_age_seconds, 1)
+	var effective_now := now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
+	var swept: Array[Dictionary] = []
+	for call_id in _order.duplicate():
+		if not _running.has(call_id):
+			_remove_ordered_call_id(call_id)
+			continue
+		var record: Dictionary = _running.get(call_id, {})
+		var started_at := int(record.get("started_at_unix", effective_now))
+		if effective_now - started_at < safe_max_age:
+			continue
+		var stale_record: Dictionary = _running.get(call_id, {}).duplicate(true)
+		_running.erase(call_id)
+		_remove_ordered_call_id(call_id)
+		stale_record["state"] = "stale"
+		stale_record["finished_at_unix"] = effective_now
+		stale_record["duration_ms"] = maxf(float(effective_now - started_at) * 1000.0, _elapsed_ms(int(stale_record.get("_started_usec", Time.get_ticks_usec()))))
+		stale_record["error"] = "Tool activity exceeded the running activity TTL and was swept."
+		_recent.push_front(stale_record)
+		swept.append(_public_record(stale_record))
+	while _recent.size() > MAX_RECENT:
+		_recent.pop_back()
+	return {
+		"swept_count": swept.size(),
+		"swept": swept,
+		"running_count": _running.size(),
+		"recent_count": _recent.size(),
+		"max_age_seconds": safe_max_age
+	}
 
 
 func get_status(options: Dictionary = {}) -> Dictionary:
@@ -177,6 +210,13 @@ func _build_execution_order() -> Array[Dictionary]:
 			"state": str(record.get("state", "running"))
 		})
 	return out
+
+
+func _remove_ordered_call_id(call_id: String) -> void:
+	var index := _order.find(call_id)
+	if index < 0:
+		return
+	_order.remove_at(index)
 
 
 func _public_record(record: Dictionary) -> Dictionary:
