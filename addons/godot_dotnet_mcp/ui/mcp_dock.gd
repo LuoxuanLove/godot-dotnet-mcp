@@ -347,11 +347,11 @@ func _connect_tools_tab() -> void:
 	if _tools_tab == null:
 		return
 	if _tools_tab.has_signal("delete_user_tool_requested"):
-		_tools_tab.connect("delete_user_tool_requested", _on_tools_tab_delete_user_tool_requested)
-	_tools_tab.tool_toggled.connect(_on_tools_tab_tool_toggled)
-	_tools_tab.category_toggled.connect(_on_tools_tab_category_toggled)
-	_tools_tab.domain_toggled.connect(_on_tools_tab_domain_toggled)
-	_tools_tab.tree_collapse_changed.connect(_on_tools_tab_tree_collapse_changed)
+		_connect_signal_once(_tools_tab, "delete_user_tool_requested", _on_tools_tab_delete_user_tool_requested)
+	_connect_signal_once(_tools_tab, "tool_toggled", _on_tools_tab_tool_toggled)
+	_connect_signal_once(_tools_tab, "category_toggled", _on_tools_tab_category_toggled)
+	_connect_signal_once(_tools_tab, "domain_toggled", _on_tools_tab_domain_toggled)
+	_connect_signal_once(_tools_tab, "tree_collapse_changed", _on_tools_tab_tree_collapse_changed)
 	if _tools_tab.has_signal("tool_view_changed") and not _tools_tab.tool_view_changed.is_connected(_on_tools_tab_view_changed):
 		_tools_tab.tool_view_changed.connect(_on_tools_tab_view_changed)
 
@@ -368,29 +368,37 @@ func _connect_mcp_catalog_tab(tab: Control) -> void:
 func _connect_config_tab() -> void:
 	if _config_tab == null:
 		return
-	_config_tab.cli_scope_changed.connect(_on_config_tab_cli_scope_changed)
-	_config_tab.config_platform_changed.connect(_on_config_tab_platform_changed)
-	_config_tab.config_client_action_requested.connect(_on_config_tab_client_action_requested)
-	_config_tab.config_client_launch_requested.connect(_on_config_tab_client_launch_requested)
-	_config_tab.config_client_path_pick_requested.connect(_on_config_tab_client_path_pick_requested)
-	_config_tab.config_client_path_clear_requested.connect(_on_config_tab_client_path_clear_requested)
-	_config_tab.config_client_open_config_dir_requested.connect(_on_config_tab_client_open_config_dir_requested)
-	_config_tab.config_client_open_config_file_requested.connect(_on_config_tab_client_open_config_file_requested)
-	_config_tab.config_write_requested.connect(_on_config_tab_config_write_requested)
-	_config_tab.config_remove_requested.connect(_on_config_tab_config_remove_requested)
-	_config_tab.copy_requested.connect(_on_config_tab_copy_requested)
+	_connect_signal_once(_config_tab, "cli_scope_changed", _on_config_tab_cli_scope_changed)
+	_connect_signal_once(_config_tab, "config_platform_changed", _on_config_tab_platform_changed)
+	_connect_signal_once(_config_tab, "config_client_action_requested", _on_config_tab_client_action_requested)
+	_connect_signal_once(_config_tab, "config_client_launch_requested", _on_config_tab_client_launch_requested)
+	_connect_signal_once(_config_tab, "config_client_path_pick_requested", _on_config_tab_client_path_pick_requested)
+	_connect_signal_once(_config_tab, "config_client_path_clear_requested", _on_config_tab_client_path_clear_requested)
+	_connect_signal_once(_config_tab, "config_client_open_config_dir_requested", _on_config_tab_client_open_config_dir_requested)
+	_connect_signal_once(_config_tab, "config_client_open_config_file_requested", _on_config_tab_client_open_config_file_requested)
+	_connect_signal_once(_config_tab, "config_write_requested", _on_config_tab_config_write_requested)
+	_connect_signal_once(_config_tab, "config_remove_requested", _on_config_tab_config_remove_requested)
+	_connect_signal_once(_config_tab, "copy_requested", _on_config_tab_copy_requested)
 
 
 func _connect_settings_tab() -> void:
 	if _settings_tab == null:
 		return
-	_settings_tab.port_changed.connect(_on_settings_tab_port_changed)
-	_settings_tab.log_level_changed.connect(_on_settings_tab_log_level_changed)
-	_settings_tab.language_changed.connect(_on_settings_tab_language_changed)
-	_settings_tab.update_source_changed.connect(_on_settings_tab_update_source_changed)
-	_settings_tab.update_custom_branch_changed.connect(_on_settings_tab_update_custom_branch_changed)
-	_settings_tab.update_check_requested.connect(_on_settings_tab_update_check_requested)
-	_settings_tab.update_apply_requested.connect(_on_settings_tab_update_apply_requested)
+	_connect_signal_once(_settings_tab, "port_changed", _on_settings_tab_port_changed)
+	_connect_signal_once(_settings_tab, "log_level_changed", _on_settings_tab_log_level_changed)
+	_connect_signal_once(_settings_tab, "language_changed", _on_settings_tab_language_changed)
+	_connect_signal_once(_settings_tab, "update_source_changed", _on_settings_tab_update_source_changed)
+	_connect_signal_once(_settings_tab, "update_custom_branch_changed", _on_settings_tab_update_custom_branch_changed)
+	_connect_signal_once(_settings_tab, "update_check_requested", _on_settings_tab_update_check_requested)
+	_connect_signal_once(_settings_tab, "update_apply_requested", _on_settings_tab_update_apply_requested)
+
+
+func _connect_signal_once(source: Object, signal_name: StringName, callback: Callable) -> void:
+	if source == null or not source.has_signal(signal_name):
+		return
+	var signal_ref := Signal(source, signal_name)
+	if not signal_ref.is_connected(callback):
+		signal_ref.connect(callback)
 
 
 func _get_tab_scene_path(index: int) -> String:
