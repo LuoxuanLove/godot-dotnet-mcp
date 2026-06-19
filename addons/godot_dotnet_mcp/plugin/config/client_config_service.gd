@@ -5,6 +5,8 @@ class_name ClientConfigService
 const ConfigPathsScript = preload("res://addons/godot_dotnet_mcp/plugin/config/config_paths.gd")
 const MCP_SERVER_KEY := "godot-mcp"
 const CLI_COMMAND_OUTPUT_DIR := "user://godot_dotnet_mcp/client_cli"
+const CLI_COMMAND_TIMEOUT_MSEC := 30000
+const CLI_COMMAND_OUTPUT_LIMIT_BYTES := 64 * 1024
 
 
 func get_claude_config_path() -> String:
@@ -657,16 +659,27 @@ func _execute_windows_cli_command_async(invocation: Dictionary) -> Dictionary:
 			"output": [],
 			"message": "Failed to start CLI command process."
 		}
-	var exit_code := await _wait_for_process_exit_async(pid)
+	var wait_result := await _wait_for_process_exit_async(pid)
+	var exit_code := int(wait_result.get("exit_code", -1))
 	var output_text := ""
 	if FileAccess.file_exists(output_absolute_path):
 		var read_result := _read_text_file(output_absolute_path)
 		if bool(read_result.get("success", false)):
-			output_text = str(read_result.get("text", ""))
+			output_text = _limit_cli_output(str(read_result.get("text", "")))
 		DirAccess.remove_absolute(output_absolute_path)
 	var output := []
 	if not output_text.is_empty():
 		output.append(output_text.strip_edges())
+	if bool(wait_result.get("timed_out", false)):
+		var timeout_message := "CLI command timed out after %d ms." % CLI_COMMAND_TIMEOUT_MSEC
+		output.append(timeout_message)
+		return {
+			"success": false,
+			"exit_code": exit_code,
+			"timed_out": true,
+			"output": output,
+			"message": "\n".join(output)
+		}
 	return {
 		"success": exit_code == 0,
 		"exit_code": exit_code,
@@ -688,23 +701,46 @@ func _execute_process_cli_command_async(invocation: Dictionary) -> Dictionary:
 			"output": [],
 			"message": "Failed to start CLI command process."
 		}
-	var exit_code := await _wait_for_process_exit_async(pid)
+	var wait_result := await _wait_for_process_exit_async(pid)
+	var exit_code := int(wait_result.get("exit_code", -1))
 	return {
-		"success": exit_code == 0,
+		"success": exit_code == 0 and not bool(wait_result.get("timed_out", false)),
 		"exit_code": exit_code,
+		"timed_out": bool(wait_result.get("timed_out", false)),
 		"output": [],
-		"message": "CLI command exited with code %d." % exit_code
+		"message": "CLI command timed out after %d ms." % CLI_COMMAND_TIMEOUT_MSEC if bool(wait_result.get("timed_out", false)) else "CLI command exited with code %d." % exit_code
 	}
 
 
-func _wait_for_process_exit_async(pid: int) -> int:
+func _wait_for_process_exit_async(pid: int, timeout_msec: int = CLI_COMMAND_TIMEOUT_MSEC) -> Dictionary:
 	var tree := Engine.get_main_loop() as SceneTree
+	var started_usec := Time.get_ticks_usec()
 	while OS.is_process_running(pid):
+		var elapsed_msec := int((Time.get_ticks_usec() - started_usec) / 1000)
+		if elapsed_msec >= max(timeout_msec, 1):
+			OS.kill(pid)
+			return {
+				"exit_code": -1,
+				"timed_out": true,
+				"elapsed_msec": elapsed_msec
+			}
 		if tree != null:
 			await tree.process_frame
 		else:
 			OS.delay_msec(50)
-	return OS.get_process_exit_code(pid)
+	return {
+		"exit_code": OS.get_process_exit_code(pid),
+		"timed_out": false,
+		"elapsed_msec": int((Time.get_ticks_usec() - started_usec) / 1000)
+	}
+
+
+func _limit_cli_output(output_text: String) -> String:
+	var output_bytes := output_text.to_utf8_buffer()
+	if output_bytes.size() <= CLI_COMMAND_OUTPUT_LIMIT_BYTES:
+		return output_text
+	var limited := output_bytes.slice(0, CLI_COMMAND_OUTPUT_LIMIT_BYTES).get_string_from_utf8()
+	return "%s\n... output truncated after %d bytes ..." % [limited, CLI_COMMAND_OUTPUT_LIMIT_BYTES]
 
 
 func _launch_powershell_background(script: String) -> Dictionary:
