@@ -21,7 +21,7 @@ internal static class CsprojReader
 {
     public static CsprojReadModel Read(string path)
     {
-        var document = XDocument.Load(path);
+        var document = SafeXmlDocumentLoader.Load(path);
         var root = document.Root ?? throw new InvalidDataException("Project file has no root element.");
         var sdk = root.Attribute("Sdk")?.Value;
         var isSdkStyle = !string.IsNullOrWhiteSpace(sdk);

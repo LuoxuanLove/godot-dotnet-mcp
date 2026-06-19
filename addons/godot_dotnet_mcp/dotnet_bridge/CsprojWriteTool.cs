@@ -19,7 +19,7 @@ internal static class CsprojWriteTool
             }
 
             var dryRun = !TryGetBoolean(arguments, "dryRun", out var dryRunValue) || dryRunValue;
-            var document = XDocument.Load(path, LoadOptions.PreserveWhitespace);
+            var document = SafeXmlDocumentLoader.Load(path, LoadOptions.PreserveWhitespace);
             var root = document.Root ?? throw new BridgeToolException("Project file has no root element.");
             var ns = root.Name.Namespace;
 
