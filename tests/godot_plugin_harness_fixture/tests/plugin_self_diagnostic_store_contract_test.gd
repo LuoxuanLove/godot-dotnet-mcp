@@ -48,6 +48,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if copy_text.find("Incident phase timings:") == -1 or copy_text.find("- http_server.tcp_listen (3.0ms)") == -1:
 		return _failure("Self diagnostics copy text should include incident phase timing details.")
 
+	var source_guard := _assert_self_diagnostic_store_source()
+	if not source_guard.is_empty():
+		return _failure(source_guard)
+
+	PluginSelfDiagnosticStore.clear()
+	for index in range(250):
+		PluginSelfDiagnosticStore.record_incident("warning", "category", "code_%03d" % index, "message", "component")
+	var incidents: Array = PluginSelfDiagnosticStore.get_incidents("", "", 0)
+	if incidents.size() != 200:
+		return _failure("Self diagnostics should trim incidents to the bounded history size.")
+	var duplicate = PluginSelfDiagnosticStore.record_incident("warning", "category", "code_249", "message", "component")
+	if int(duplicate.get("occurrence_count", 0)) != 2:
+		return _failure("Self diagnostics should dedupe repeated incidents after trim/index rebuild.")
+
 	PluginSelfDiagnosticStore.clear()
 	return {
 		"name": "plugin_self_diagnostic_store_contracts",
@@ -58,6 +72,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"phase_count": (phase_timings as Array).size()
 		}
 	}
+
+
+func _assert_self_diagnostic_store_source() -> String:
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
+	for required in [
+		"_incident_index_by_dedupe_key",
+		"func _find_incident_index",
+		"func _rebuild_incident_index",
+		"_incident_index_by_dedupe_key.clear()"
+	]:
+		if source.find(required) == -1:
+			return "Self diagnostic store should keep a bounded dedupe index: %s" % required
+	if source.find("for index in range(_incidents.size() - 1, -1, -1)") != -1:
+		return "Self diagnostic store should not linearly scan incidents on every dedupe lookup."
+	return ""
 
 
 func _failure(message: String) -> Dictionary:

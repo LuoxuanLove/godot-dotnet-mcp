@@ -4,6 +4,7 @@ class_name PluginPerformanceMonitor
 
 const SAMPLE_INTERVAL_SECONDS := 1.0
 const PROCESS_SLOW_FRAME_THRESHOLD_MS := 8.0
+const PROCESS_WINDOW_SIZE := 240
 
 const CUSTOM_MONITOR_PROCESS_LAST := "Godot .NET MCP/Process Last"
 const CUSTOM_MONITOR_PROCESS_AVERAGE := "Godot .NET MCP/Process Average"
@@ -41,12 +42,13 @@ const _CUSTOM_MONITOR_ENTRIES := [
 
 var _process_perf := {
 	"frame_count": 0,
-	"total_ms": 0.0,
-	"max_ms": 0.0,
+	"window_total_ms": 0.0,
+	"window_max_ms": 0.0,
 	"last_ms": 0.0,
 	"slow_frame_count": 0,
 	"last_slow_frame_ms": 0.0
 }
+var _process_window_ms: Array[float] = []
 var _sample_elapsed_seconds := 0.0
 var _sample_count := 0
 var _last_godot_monitor_sample := {}
@@ -85,9 +87,8 @@ func record_process_frame(started_usec: int, delta: float) -> void:
 func record_process_elapsed_ms(elapsed_ms: float, delta: float) -> void:
 	var safe_elapsed_ms := maxf(elapsed_ms, 0.0)
 	_process_perf["frame_count"] = int(_process_perf.get("frame_count", 0)) + 1
-	_process_perf["total_ms"] = float(_process_perf.get("total_ms", 0.0)) + safe_elapsed_ms
 	_process_perf["last_ms"] = safe_elapsed_ms
-	_process_perf["max_ms"] = maxf(float(_process_perf.get("max_ms", 0.0)), safe_elapsed_ms)
+	_record_process_window_sample(safe_elapsed_ms)
 	if safe_elapsed_ms > PROCESS_SLOW_FRAME_THRESHOLD_MS:
 		_process_perf["slow_frame_count"] = int(_process_perf.get("slow_frame_count", 0)) + 1
 		_process_perf["last_slow_frame_ms"] = safe_elapsed_ms
@@ -96,12 +97,15 @@ func record_process_elapsed_ms(elapsed_ms: float, delta: float) -> void:
 
 func get_status() -> Dictionary:
 	var frame_count := int(_process_perf.get("frame_count", 0))
-	var total_ms := float(_process_perf.get("total_ms", 0.0))
+	var window_count := _process_window_ms.size()
+	var window_total_ms := float(_process_perf.get("window_total_ms", 0.0))
 	return {
 		"frame_count": frame_count,
+		"window_frame_count": window_count,
+		"window_size": PROCESS_WINDOW_SIZE,
 		"last_ms": float(_process_perf.get("last_ms", 0.0)),
-		"max_ms": float(_process_perf.get("max_ms", 0.0)),
-		"average_ms": total_ms / float(frame_count) if frame_count > 0 else 0.0,
+		"max_ms": float(_process_perf.get("window_max_ms", 0.0)),
+		"average_ms": window_total_ms / float(window_count) if window_count > 0 else 0.0,
 		"slow_frame_count": int(_process_perf.get("slow_frame_count", 0)),
 		"last_slow_frame_ms": float(_process_perf.get("last_slow_frame_ms", 0.0)),
 		"slow_frame_threshold_ms": PROCESS_SLOW_FRAME_THRESHOLD_MS,
@@ -144,17 +148,36 @@ func _get_custom_monitor_value(metric: String) -> float:
 		"process_last_seconds":
 			return float(_process_perf.get("last_ms", 0.0)) / 1000.0
 		"process_average_seconds":
-			var frame_count := int(_process_perf.get("frame_count", 0))
-			if frame_count <= 0:
+			var window_count := _process_window_ms.size()
+			if window_count <= 0:
 				return 0.0
-			return (float(_process_perf.get("total_ms", 0.0)) / float(frame_count)) / 1000.0
+			return (float(_process_perf.get("window_total_ms", 0.0)) / float(window_count)) / 1000.0
 		"process_max_seconds":
-			return float(_process_perf.get("max_ms", 0.0)) / 1000.0
+			return float(_process_perf.get("window_max_ms", 0.0)) / 1000.0
 		"slow_frame_count":
 			return float(_process_perf.get("slow_frame_count", 0))
 		"sample_count":
 			return float(_sample_count)
 	return 0.0
+
+
+func _record_process_window_sample(elapsed_ms: float) -> void:
+	_process_window_ms.append(elapsed_ms)
+	_process_perf["window_total_ms"] = float(_process_perf.get("window_total_ms", 0.0)) + elapsed_ms
+	if elapsed_ms >= float(_process_perf.get("window_max_ms", 0.0)):
+		_process_perf["window_max_ms"] = elapsed_ms
+	while _process_window_ms.size() > PROCESS_WINDOW_SIZE:
+		var removed := _process_window_ms.pop_front()
+		_process_perf["window_total_ms"] = maxf(float(_process_perf.get("window_total_ms", 0.0)) - removed, 0.0)
+		if is_equal_approx(removed, float(_process_perf.get("window_max_ms", 0.0))) or removed > float(_process_perf.get("window_max_ms", 0.0)):
+			_process_perf["window_max_ms"] = _resolve_process_window_max()
+
+
+func _resolve_process_window_max() -> float:
+	var max_ms := 0.0
+	for sample in _process_window_ms:
+		max_ms = maxf(max_ms, sample)
+	return max_ms
 
 
 func _get_custom_monitor_ids() -> Array[String]:

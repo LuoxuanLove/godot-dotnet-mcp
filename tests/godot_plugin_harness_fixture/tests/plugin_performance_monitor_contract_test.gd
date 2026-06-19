@@ -43,6 +43,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Performance monitor should resample Godot monitors after the one-second interval.")
 	if not is_equal_approx(float(third_status.get("average_ms", 0.0)), 17.0 / 3.0):
 		return _failure("Performance monitor should keep average elapsed time across sampled frames.")
+	if int(third_status.get("window_frame_count", 0)) != 3:
+		return _failure("Performance monitor should expose the rolling window frame count.")
+
+	monitor.record_process_elapsed_ms(100.0, 0.0)
+	for _index in range(int(third_status.get("window_size", 240))):
+		monitor.record_process_elapsed_ms(1.0, 0.0)
+	var rolled_status: Dictionary = monitor.get_status()
+	if int(rolled_status.get("frame_count", 0)) <= int(rolled_status.get("window_frame_count", 0)):
+		return _failure("Performance monitor should retain total frame count separately from rolling window count.")
+	if float(rolled_status.get("max_ms", 0.0)) > 1.01:
+		return _failure("Performance monitor max_ms should roll out old slow startup samples.")
+	if not is_equal_approx(float(rolled_status.get("average_ms", 0.0)), 1.0):
+		return _failure("Performance monitor average_ms should use the recent rolling window.")
 
 	var custom_ids: Array = third_status.get("custom_monitors", [])
 	for expected_id in [
@@ -55,9 +68,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		if not custom_ids.has(expected_id):
 			return _failure("Performance monitor should expose the custom monitor id: %s" % expected_id)
 
-	if not is_equal_approx(monitor._get_custom_monitor_value("process_last_seconds"), 0.003):
+	if not is_equal_approx(monitor._get_custom_monitor_value("process_last_seconds"), 0.001):
 		return _failure("Custom process-last monitor should return seconds for Godot time monitors.")
-	if not is_equal_approx(monitor._get_custom_monitor_value("slow_frame_count"), 1.0):
+	if not is_equal_approx(monitor._get_custom_monitor_value("slow_frame_count"), 2.0):
 		return _failure("Custom slow-frame monitor should report the cumulative slow-frame count.")
 	if not is_equal_approx(monitor._get_custom_monitor_value("sample_count"), 2.0):
 		return _failure("Custom sample-count monitor should report cached sample count.")
@@ -90,12 +103,15 @@ func _assert_plugin_performance_monitor_source() -> String:
 	for required in [
 		"const SAMPLE_INTERVAL_SECONDS := 1.0",
 		"const PROCESS_SLOW_FRAME_THRESHOLD_MS := 8.0",
+		"const PROCESS_WINDOW_SIZE := 240",
 		"Performance.add_custom_monitor(",
 		"Performance.remove_custom_monitor(",
 		"Performance.get_monitor(Performance.TIME_FPS)",
 		"Performance.get_monitor(Performance.TIME_PROCESS)",
 		"func record_process_elapsed_ms(elapsed_ms: float, delta: float)",
-		"func get_status() -> Dictionary"
+		"func get_status() -> Dictionary",
+		"func _record_process_window_sample",
+		"func _resolve_process_window_max"
 	]:
 		if source.find(required) == -1:
 			return "Plugin performance monitor should retain the monitoring contract: %s" % required
