@@ -88,7 +88,11 @@ func set_pending_bytes(client: StreamPeerTCP, data: PackedByteArray) -> void:
 
 
 func append_pending_bytes(client: StreamPeerTCP, data: PackedByteArray) -> int:
-	var pending := get_pending_bytes(client)
+	var pending = _pending_data.get(client, PackedByteArray())
+	if pending is PackedByteArray:
+		pending = pending as PackedByteArray
+	else:
+		pending = str(pending).to_utf8_buffer()
 	pending.append_array(data)
 	_pending_data[client] = pending
 	if _client_states.has(client):

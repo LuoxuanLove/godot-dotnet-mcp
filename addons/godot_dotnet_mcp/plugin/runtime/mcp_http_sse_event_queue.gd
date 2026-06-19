@@ -38,7 +38,7 @@ func append_event(session_id: String, event_name: String, payload: Variant, id_p
 		"retry": SSE_RETRY_MS,
 		"data": _duplicate_event_payload(payload)
 	}
-	var log := _log_for_session(normalized_session)
+	var log := _log_ref_for_session(normalized_session)
 	log.append(event)
 	var base_index := int(_event_base_indices.get(normalized_session, 0))
 	while log.size() > MAX_EVENTS_PER_SESSION:
@@ -88,7 +88,7 @@ func has_session(session_id: String) -> bool:
 
 
 func events_after_cursor(session_id: String, last_event_id: String) -> Array:
-	var log := _log_for_session(_normalize_session_id(session_id))
+	var log := _log_ref_for_session(_normalize_session_id(session_id), false)
 	var cursor := last_event_id.strip_edges()
 	if cursor.is_empty():
 		return []
@@ -105,7 +105,7 @@ func events_since_index(session_id: String, start_index: int) -> Array:
 
 func events_since_index_with_cursor(session_id: String, start_index: int) -> Dictionary:
 	var normalized_session := _normalize_session_id(session_id)
-	var log := _log_for_session(normalized_session)
+	var log := _log_ref_for_session(normalized_session, false)
 	var base_index := int(_event_base_indices.get(normalized_session, 0))
 	var end_index := base_index + log.size()
 	var bounded_start: int = clamp(start_index, base_index, end_index)
@@ -119,7 +119,7 @@ func events_since_index_with_cursor(session_id: String, start_index: int) -> Dic
 
 func event_count(session_id: String) -> int:
 	var normalized_session := _normalize_session_id(session_id)
-	return int(_event_base_indices.get(normalized_session, 0)) + _log_for_session(normalized_session).size()
+	return int(_event_base_indices.get(normalized_session, 0)) + _log_ref_for_session(normalized_session, false).size()
 
 
 func resume_status(session_id: String, last_event_id: String) -> Dictionary:
@@ -127,7 +127,7 @@ func resume_status(session_id: String, last_event_id: String) -> Dictionary:
 	var cursor := last_event_id.strip_edges()
 	if cursor.is_empty():
 		var current_base := int(_event_base_indices.get(normalized_session, 0))
-		var current_end := current_base + _log_for_session(normalized_session).size()
+		var current_end := current_base + _log_ref_for_session(normalized_session, false).size()
 		return {
 			"found": false,
 			"status": "no_cursor",
@@ -137,7 +137,7 @@ func resume_status(session_id: String, last_event_id: String) -> Dictionary:
 			"next_index": current_end
 		}
 	var has_session := _issued_sessions.has(normalized_session) or _event_logs.has(normalized_session)
-	var log := _log_for_session(normalized_session)
+	var log := _log_ref_for_session(normalized_session, false)
 	var base_index := int(_event_base_indices.get(normalized_session, 0))
 	var end_index := base_index + log.size()
 	for index in range(log.size()):
@@ -197,9 +197,14 @@ func _duplicate_event_payload(payload: Variant) -> Variant:
 	return payload
 
 
-func _log_for_session(session_id: String) -> Array:
-	if _event_logs.get(session_id, []) is Array:
-		return (_event_logs.get(session_id, []) as Array).duplicate(true)
+func _log_ref_for_session(session_id: String, create_if_missing: bool = true) -> Array:
+	var existing = _event_logs.get(session_id, null)
+	if existing is Array:
+		return existing as Array
+	if create_if_missing:
+		var log: Array = []
+		_event_logs[session_id] = log
+		return log
 	return []
 
 
