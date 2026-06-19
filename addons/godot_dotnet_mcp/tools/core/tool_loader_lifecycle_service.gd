@@ -49,7 +49,9 @@ func shutdown(context: Dictionary) -> void:
 
 
 func set_disabled_tools(disabled_tools: Array, context: Dictionary) -> void:
-	_call_void(context.get("set_disabled_tools", Callable()), [disabled_tools])
+	var changed := _call_bool(context.get("set_disabled_tools", Callable()), [disabled_tools], true)
+	if not changed:
+		return
 	for category in _ordered_categories(context):
 		var category_name := str(category)
 		if _call_bool(context.get("category_has_enabled_tools", Callable()), [category_name], false):

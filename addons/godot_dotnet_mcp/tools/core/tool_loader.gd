@@ -417,8 +417,8 @@ func _refresh_entries() -> void:
 	_state_store.refresh_entries(_registry, _entry_service, _diagnostics_service, Callable(self, "_sync_load_error_incidents"))
 
 
-func _set_disabled_tools(disabled_tools: Array) -> void:
-	_enablement_service.configure_disabled_tools(disabled_tools)
+func _set_disabled_tools(disabled_tools: Array) -> bool:
+	return _enablement_service.configure_disabled_tools(disabled_tools)
 
 
 func _ensure_tool_definitions(category: String) -> Array:
