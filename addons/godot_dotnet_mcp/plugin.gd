@@ -30,6 +30,7 @@ const PluginPerformanceMonitorScript = preload("res://addons/godot_dotnet_mcp/pl
 const PluginUpdateToolFacadeServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_tool_facade_service.gd")
 const PluginUpdateSyncMirrorServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_sync_mirror_service.gd")
 const PluginUsageGuideServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_usage_guide_service.gd")
+const PluginSelfDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostics_service.gd")
 const MCP_DOCK_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.tscn"
 const MCP_DOCK_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.gd"
 const PLUGIN_ID := "godot_dotnet_mcp"
@@ -77,6 +78,7 @@ var _runtime_reload_request_service := PluginRuntimeReloadRequestServiceScript.n
 var _plugin_update_tool_facade := PluginUpdateToolFacadeServiceScript.new()
 var _plugin_update_sync_mirror_service := PluginUpdateSyncMirrorServiceScript.new()
 var _plugin_usage_guide_service := PluginUsageGuideServiceScript.new()
+var _plugin_self_diagnostics_service := PluginSelfDiagnosticsServiceScript.new()
 var _client_install_detection_service = null
 var _user_tool_service = null
 var _user_tool_watch_service = null
@@ -269,6 +271,7 @@ func _dispose_lifecycle_services() -> void:
 	_plugin_update_tool_facade = null
 	_plugin_update_sync_mirror_service = null
 	_plugin_usage_guide_service = null
+	_plugin_self_diagnostics_service = null
 	_client_install_detection_service = null
 	_tool_catalog = null
 	_settings_store = null
@@ -2711,38 +2714,21 @@ func _sync_current_tab_from_dock() -> void:
 
 
 func get_self_diagnostic_health_from_tools() -> Dictionary:
-	return {
-		"success": true,
-		"data": _build_self_diagnostic_health_snapshot()
-	}
+	return _ensure_plugin_self_diagnostics_service().build_health_response(_build_self_diagnostics_context())
 
 
 func get_self_diagnostic_errors_from_tools(severity: String = "", category: String = "", limit: int = 20) -> Dictionary:
-	var incidents = PluginSelfDiagnosticStore.get_incidents(severity, category, limit)
-	return {
-		"success": true,
-		"data": {
-			"count": incidents.size(),
-			"incidents": incidents
-		}
-	}
+	return _ensure_plugin_self_diagnostics_service().build_errors_response(severity, category, limit)
 
 
 func get_self_diagnostic_timeline_from_tools(limit: int = 20) -> Dictionary:
-	var timeline = PluginSelfDiagnosticStore.get_timeline(limit)
-	return {
-		"success": true,
-		"data": {
-			"count": timeline.size(),
-			"timeline": timeline
-		}
-	}
+	return _ensure_plugin_self_diagnostics_service().build_timeline_response(limit)
 
 
 func clear_self_diagnostics_from_tools() -> Dictionary:
-	PluginSelfDiagnosticStore.clear()
+	var response = _ensure_plugin_self_diagnostics_service().build_clear_response()
 	_refresh_dock()
-	return {"success": true, "message": "Plugin self diagnostics cleared"}
+	return response
 
 
 func set_tool_enabled_from_tools(tool_name: String, enabled: bool) -> Dictionary:
@@ -2955,36 +2941,25 @@ func _get_editor_scale() -> float:
 
 
 func _build_self_diagnostic_health_snapshot() -> Dictionary:
-	var bridge_status = MCPRuntimeDebugStore.get_bridge_status()
-	var dock_count = _count_dock_instances()
-	var tool_load_errors = _server_controller.get_tool_load_errors()
-	return PluginSelfDiagnosticStore.get_health_snapshot({
-		"freshness": PluginInstanceFreshness.get_freshness_snapshot(),
-		"autoload": {
-			"installed": bool(bridge_status.get("installed", false)),
-			"autoload_name": str(bridge_status.get("autoload_name", RUNTIME_BRIDGE_AUTOLOAD_NAME)),
-			"autoload_path": str(bridge_status.get("autoload_path", "")),
-			"message": str(bridge_status.get("message", "")),
-			"root_instance_present": _has_runtime_bridge_root_instance()
-		},
-		"server": {
-			"running": _server_controller.is_running(),
-			"connection_stats": _server_controller.get_connection_stats()
-		},
-		"dock": {
-			"present": _dock != null and is_instance_valid(_dock),
-			"dock_count": dock_count,
-			"stale_dock_count": maxi(dock_count - 1, 0)
-		},
-		"idle_process": _get_process_performance_status(),
-		"user_tool_watch": _get_user_tool_watch_status(),
-		"tool_loader": {
-			"tool_load_error_count": tool_load_errors.size(),
-			"tool_load_errors": tool_load_errors,
-			"reload_status": _server_controller.get_reload_status(),
-			"performance": _server_controller.get_performance_summary()
-		}
-	})
+	return _ensure_plugin_self_diagnostics_service().build_health_snapshot(_build_self_diagnostics_context())
+
+
+func _build_self_diagnostics_context() -> Dictionary:
+	return {
+		"server_controller": _server_controller,
+		"runtime_bridge_autoload_name": RUNTIME_BRIDGE_AUTOLOAD_NAME,
+		"runtime_bridge_root_instance_present": _has_runtime_bridge_root_instance(),
+		"dock_present": _dock != null and is_instance_valid(_dock),
+		"dock_count": _count_dock_instances(),
+		"process_performance_status": _get_process_performance_status(),
+		"user_tool_watch_status": _get_user_tool_watch_status()
+	}
+
+
+func _ensure_plugin_self_diagnostics_service():
+	if _plugin_self_diagnostics_service == null:
+		_plugin_self_diagnostics_service = PluginSelfDiagnosticsServiceScript.new()
+	return _plugin_self_diagnostics_service
 
 
 func _record_self_incident(
