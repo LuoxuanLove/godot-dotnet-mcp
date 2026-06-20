@@ -30,6 +30,7 @@ const PluginPerformanceMonitorScript = preload("res://addons/godot_dotnet_mcp/pl
 const PluginUpdateToolFacadeServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_tool_facade_service.gd")
 const PluginUpdateSyncMirrorServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_sync_mirror_service.gd")
 const PluginUpdateRequestPlanningServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_request_planning_service.gd")
+const PluginUpdateRefsDiscoveryServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_refs_discovery_service.gd")
 const PluginUsageGuideServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_usage_guide_service.gd")
 const PluginSelfDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostics_service.gd")
 const PluginProfileConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_profile_config_service.gd")
@@ -83,6 +84,7 @@ var _runtime_reload_completion_service := PluginRuntimeReloadCompletionServiceSc
 var _plugin_update_tool_facade := PluginUpdateToolFacadeServiceScript.new()
 var _plugin_update_sync_mirror_service := PluginUpdateSyncMirrorServiceScript.new()
 var _plugin_update_request_planning_service := PluginUpdateRequestPlanningServiceScript.new()
+var _plugin_update_refs_discovery_service := PluginUpdateRefsDiscoveryServiceScript.new()
 var _plugin_usage_guide_service := PluginUsageGuideServiceScript.new()
 var _plugin_self_diagnostics_service := PluginSelfDiagnosticsServiceScript.new()
 var _plugin_profile_config_service := PluginProfileConfigServiceScript.new()
@@ -278,6 +280,7 @@ func _dispose_lifecycle_services() -> void:
 	_plugin_update_tool_facade = null
 	_plugin_update_sync_mirror_service = null
 	_plugin_update_request_planning_service = null
+	_plugin_update_refs_discovery_service = null
 	_plugin_usage_guide_service = null
 	_plugin_self_diagnostics_service = null
 	_plugin_profile_config_service = null
@@ -1279,55 +1282,23 @@ func _request_next_update_refs_page_if_available(kind: String, headers: PackedSt
 
 
 func _extract_update_refs_next_url(headers: PackedStringArray) -> String:
-	for header in headers:
-		var header_text := str(header)
-		if not header_text.to_lower().begins_with("link:"):
-			continue
-		var link_value := header_text.substr(header_text.find(":") + 1).strip_edges()
-		for segment in link_value.split(","):
-			if segment.find('rel="next"') == -1:
-				continue
-			var start := segment.find("<")
-			var end := segment.find(">")
-			if start >= 0 and end > start:
-				return segment.substr(start + 1, end - start - 1)
-	return ""
+	return _ensure_plugin_update_refs_discovery_service().extract_next_url(headers)
 
 
 func _append_update_refs_pending_names(key: String, names: Array[String]) -> void:
-	var values: Array[String] = _to_string_array(_update_refs_pending.get(key, []))
-	for name in names:
-		_append_unique_update_ref(values, name)
-	_update_refs_pending[key] = values
+	_update_refs_pending = _ensure_plugin_update_refs_discovery_service().append_names(_update_refs_pending, key, names)
 
 
 func _append_update_refs_pending_commits(items: Array, name_key: String) -> void:
-	var commits: Dictionary = _update_refs_pending.get("commits", {})
-	for item in items:
-		if not (item is Dictionary):
-			continue
-		var item_dict := item as Dictionary
-		var name := str(item_dict.get(name_key, "")).strip_edges()
-		var commit := _extract_update_ref_commit(item_dict)
-		if not name.is_empty() and not commit.is_empty():
-			commits[name] = commit
-	_update_refs_pending["commits"] = commits
+	_update_refs_pending = _ensure_plugin_update_refs_discovery_service().append_commits(_update_refs_pending, items, name_key)
 
 
 func _extract_update_ref_commit(item: Dictionary) -> String:
-	var commit_value = item.get("commit", "")
-	if commit_value is Dictionary:
-		return str((commit_value as Dictionary).get("sha", "")).strip_edges()
-	return str(item.get("target_commitish", "")).strip_edges()
+	return _ensure_plugin_update_refs_discovery_service().extract_commit(item)
 
 
 func _to_string_array(values) -> Array[String]:
-	var result: Array[String] = []
-	if not (values is Array):
-		return result
-	for value in values:
-		_append_unique_update_ref(result, str(value))
-	return result
+	return _ensure_plugin_update_refs_discovery_service().to_string_array(values)
 
 
 func _handle_update_refs_http_failure(kind: String, result: int, response_code: int, serial: int) -> void:
@@ -1573,20 +1544,15 @@ func _finalize_update_refs_discovery_if_ready(serial: int) -> void:
 	if not bool(_update_refs_pending.get("branch_done", false)) or not bool(_update_refs_pending.get("release_done", false)) or not bool(_update_refs_pending.get("tag_done", false)):
 		_refresh_dock()
 		return
-	var errors: Array = _update_refs_pending.get("errors", [])
-	_state.update_ref_commits = _duplicate_update_ref_commits(_update_refs_pending.get("commits", {}))
-	var releases := _to_string_array(_update_refs_pending.get("releases", []))
-	var stable_releases := _to_string_array(_update_refs_pending.get("stable_releases", []))
-	var release_or_tag_values: Array[String] = []
-	for release in releases:
-		_append_unique_update_ref(release_or_tag_values, release)
-	for tag in _to_string_array(_update_refs_pending.get("tags", [])):
-		_append_unique_update_ref(release_or_tag_values, tag)
-	_state.update_ref_releases = release_or_tag_values
-	_state.update_ref_latest_release = releases[0] if not releases.is_empty() else ""
-	_state.update_ref_latest_stable_release = stable_releases[0] if not stable_releases.is_empty() else ""
-	_state.update_refs_release_source = "releases_and_tags"
-	if errors.is_empty() or not _state.update_ref_branches.is_empty() or not release_or_tag_values.is_empty():
+	var snapshot: Dictionary = _ensure_plugin_update_refs_discovery_service().build_final_snapshot(_update_refs_pending)
+	var errors: Array = snapshot.get("errors", [])
+	_state.update_ref_branches = snapshot.get("branches", [])
+	_state.update_ref_commits = snapshot.get("commits", {})
+	_state.update_ref_releases = snapshot.get("releases", [])
+	_state.update_ref_latest_release = str(snapshot.get("latest_release", ""))
+	_state.update_ref_latest_stable_release = str(snapshot.get("latest_stable_release", ""))
+	_state.update_refs_release_source = str(snapshot.get("release_source", ""))
+	if errors.is_empty() or not _state.update_ref_branches.is_empty() or not _state.update_ref_releases.is_empty():
 		_state.update_refs_state = "success"
 		_state.update_refs_error = ""
 		_state.update_refs_status = _localization.get_text("settings_update_refs_success") if _localization != null else "Update refs loaded."
@@ -1748,50 +1714,23 @@ func _parse_update_compare_json(body: PackedByteArray) -> Dictionary:
 
 
 func _parse_update_refs_json_array(body: PackedByteArray) -> Dictionary:
-	var json := JSON.new()
-	var parse_error := json.parse(body.get_string_from_utf8())
-	if parse_error != OK:
-		return {"success": false, "error": json.get_error_message()}
-	if not (json.data is Array):
-		return {"success": false, "error": "Expected a JSON array"}
-	return {"success": true, "items": json.data}
+	return _ensure_plugin_update_refs_discovery_service().parse_refs_json_array(body)
 
 
 func _extract_update_ref_names(items: Array, key: String) -> Array[String]:
-	var names: Array[String] = []
-	for item in items:
-		if not (item is Dictionary):
-			continue
-		_append_unique_update_ref(names, str((item as Dictionary).get(key, "")))
-	return names
+	return _ensure_plugin_update_refs_discovery_service().collect_names(items, key)
 
 
 func _extract_update_stable_release_names(items: Array) -> Array[String]:
-	var names: Array[String] = []
-	for item in items:
-		if not (item is Dictionary):
-			continue
-		var item_dict := item as Dictionary
-		if bool(item_dict.get("prerelease", false)):
-			continue
-		_append_unique_update_ref(names, str(item_dict.get("tag_name", "")))
-	return names
+	return _ensure_plugin_update_refs_discovery_service().collect_stable_release_names(items)
 
 
 func _duplicate_update_ref_commits(raw_commits) -> Dictionary:
-	var commits: Dictionary = {}
-	if not (raw_commits is Dictionary):
-		return commits
-	for key in (raw_commits as Dictionary).keys():
-		commits[str(key)] = str((raw_commits as Dictionary).get(key, ""))
-	return commits
+	return _ensure_plugin_update_refs_discovery_service().duplicate_commits(raw_commits)
 
 
 func _append_unique_update_ref(values: Array[String], value: String) -> void:
-	var normalized := value.strip_edges()
-	if normalized.is_empty() or values.has(normalized):
-		return
-	values.append(normalized)
+	_ensure_plugin_update_refs_discovery_service().append_unique_ref(values, value)
 
 
 func _on_start_requested() -> void:
@@ -1951,6 +1890,12 @@ func _ensure_plugin_update_request_planning_service():
 	if _plugin_update_request_planning_service == null:
 		_plugin_update_request_planning_service = PluginUpdateRequestPlanningServiceScript.new()
 	return _plugin_update_request_planning_service
+
+
+func _ensure_plugin_update_refs_discovery_service():
+	if _plugin_update_refs_discovery_service == null:
+		_plugin_update_refs_discovery_service = PluginUpdateRefsDiscoveryServiceScript.new()
+	return _plugin_update_refs_discovery_service
 
 
 func _build_plugin_update_tool_context(target: Dictionary = {}) -> Dictionary:
