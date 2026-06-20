@@ -93,6 +93,7 @@ Target version: 2.0.0.
 - Moved plugin runtime restart, soft reload, full reload, and Dock focus restore completion into a dedicated runtime reload completion service while keeping the existing deferred reload entrypoints intact.
 - Moved plugin update refs discovery parsing, pagination, commit aggregation, and release/tag snapshot construction into a dedicated refs discovery service while preserving existing Settings and MCP update behavior.
 - Moved plugin update compare target selection, target-version URL construction, plugin.cfg version parsing, current-commit resolution, and GitHub compare response parsing into a dedicated compare service while preserving existing Settings update status behavior.
+- Moved plugin update HTTP request startup, timeout/body/download configuration, and request-node cleanup into a dedicated request service while preserving Dock and MCP update workflow callbacks.
 - Added release-policy, PR-policy, and merge-queue validation coverage for v2.0 branch integration, trusted `refactor/v2.0.0` to `dev` version metadata handoff, version metadata changes, BOM-prefixed PR headings, and formal changelog section requirements.
 - Hardened tag-triggered plugin verification so manual branch runs cannot skip release preflight, release-note rendering, or release-note artifact validation.
 - Added safe-write and clean-install validation scripts for the DotnetBridge write surface, isolated Roslyn runtime bundle, and exported Asset Library addon shape.
