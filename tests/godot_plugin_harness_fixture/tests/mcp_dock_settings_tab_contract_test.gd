@@ -298,4 +298,8 @@ func _assert_dock_applies_visible_tabs_only() -> String:
 		return "MCP Dock should not apply every model update to all heavy tabs."
 	if source.find("_apply_tab_model(_get_tab_for_index(index), _last_model)") == -1:
 		return "MCP Dock should apply the cached model when a tab becomes visible."
+	if source.find("func _connect_signal_once(source: Object, signal_name: StringName, callback: Callable) -> void:") == -1:
+		return "MCP Dock should connect lazy tab signals through an idempotent helper."
+	if source.find("_tools_tab.tool_toggled.connect(") != -1 or source.find("_config_tab.cli_scope_changed.connect(") != -1 or source.find("_settings_tab.port_changed.connect(") != -1:
+		return "MCP Dock should not use unguarded signal connections for lazily instantiated heavy tabs."
 	return ""
