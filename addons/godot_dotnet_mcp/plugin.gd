@@ -726,7 +726,32 @@ func _refresh_dock_if_status_changed() -> void:
 func _build_dock_refresh_status_signature() -> String:
 	if _state == null:
 		return ""
-	return JSON.stringify(_build_dock_refresh_status_signature_data())
+	var data := _build_dock_refresh_status_signature_data()
+	var parts := PackedStringArray()
+	for key in [
+		"tab",
+		"running",
+		"connections",
+		"total_requests",
+		"rejected_requests",
+		"last_request_id",
+		"loader_initialized",
+		"loader_status",
+		"tool_count",
+		"exposed_tool_count",
+		"category_count",
+		"tool_load_error_count",
+		"user_watch_enabled",
+		"user_watch_watching",
+		"user_watch_count",
+		"user_watch_change",
+		"user_watch_error",
+		"update_refs_state",
+		"update_compare_state",
+		"update_sync_state"
+	]:
+		parts.append("%s=%s" % [key, str(data.get(key, ""))])
+	return "|".join(parts)
 
 
 func _build_dock_refresh_status_signature_data() -> Dictionary:

@@ -632,6 +632,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var plugin_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin.gd")
 	if plugin_source.find("_build_dock_refresh_status_signature(model)") != -1 or plugin_source.find("_build_dock_refresh_status_signature_data_from_model") != -1:
 		return _failure("plugin.gd should derive Dock refresh status signatures from one lightweight source instead of comparing model-derived loader data.")
+	if plugin_source.find("func _build_dock_refresh_status_signature() -> String:\n\tif _state == null:\n\t\treturn \"\"\n\treturn JSON.stringify(") != -1:
+		return _failure("plugin.gd should build Dock refresh signatures without serializing JSON on every status poll.")
 
 	var shared_sync_entry_result := _run_shared_update_sync_entry_contract()
 	if not bool(shared_sync_entry_result.get("success", false)):
