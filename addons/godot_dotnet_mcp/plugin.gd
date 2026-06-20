@@ -1127,7 +1127,7 @@ func _start_update_archive_sync_request_attempt(target: Dictionary, serial: int,
 	_state.update_sync_status = _get_localized_text("settings_update_sync_downloading_archive")
 	_state.update_sync_progress = max(float(_state.update_sync_progress), min(0.55, 0.28 + float(attempt_index) * 0.08))
 	_refresh_dock()
-	var archive_path := _ensure_plugin_update_endpoint_config_service().get_sync_archive_path()
+	var archive_path: String = _ensure_plugin_update_endpoint_config_service().get_sync_archive_path()
 	if FileAccess.file_exists(archive_path):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(archive_path))
 	var request_node := HTTPRequest.new()
@@ -1419,7 +1419,7 @@ func _request_update_sync_editor_refresh(_serial: int) -> Dictionary:
 	if tree != null:
 		await tree.process_frame
 		if file_system != null and file_system.has_method("is_scanning"):
-			var deadline_msec := Time.get_ticks_msec() + _ensure_plugin_update_endpoint_config_service().get_sync_editor_refresh_timeout_ms()
+			var deadline_msec: int = Time.get_ticks_msec() + _ensure_plugin_update_endpoint_config_service().get_sync_editor_refresh_timeout_ms()
 			scan_completed = not bool(file_system.is_scanning())
 			while not scan_completed and Time.get_ticks_msec() < deadline_msec:
 				await tree.process_frame
@@ -1610,7 +1610,7 @@ func _start_update_compare_request(base_commit: String, compare_head: String, ta
 	request_node.body_size_limit = _ensure_plugin_update_endpoint_config_service().get_refs_body_size_limit()
 	request_parent.add_child(request_node)
 	request_node.request_completed.connect(Callable(self, "_on_update_compare_request_completed").bind(base_commit, target_commit, serial, request_node), CONNECT_ONE_SHOT)
-	var compare_url := _ensure_plugin_update_endpoint_config_service().get_compare_url_template() % [base_commit.uri_encode(), compare_head.uri_encode()]
+	var compare_url: String = _ensure_plugin_update_endpoint_config_service().get_compare_url_template() % [base_commit.uri_encode(), compare_head.uri_encode()]
 	var error := request_node.request(compare_url, _get_update_refs_headers())
 	if error != OK:
 		request_node.queue_free()
