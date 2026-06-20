@@ -29,6 +29,7 @@ const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_bu
 const PluginPerformanceMonitorScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_performance_monitor.gd")
 const PluginUpdateToolFacadeServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_tool_facade_service.gd")
 const PluginUpdateSyncMirrorServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_sync_mirror_service.gd")
+const PluginUpdateRequestPlanningServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_request_planning_service.gd")
 const PluginUsageGuideServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_usage_guide_service.gd")
 const PluginSelfDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostics_service.gd")
 const PluginProfileConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_profile_config_service.gd")
@@ -81,6 +82,7 @@ var _runtime_reload_request_service := PluginRuntimeReloadRequestServiceScript.n
 var _runtime_reload_completion_service := PluginRuntimeReloadCompletionServiceScript.new()
 var _plugin_update_tool_facade := PluginUpdateToolFacadeServiceScript.new()
 var _plugin_update_sync_mirror_service := PluginUpdateSyncMirrorServiceScript.new()
+var _plugin_update_request_planning_service := PluginUpdateRequestPlanningServiceScript.new()
 var _plugin_usage_guide_service := PluginUsageGuideServiceScript.new()
 var _plugin_self_diagnostics_service := PluginSelfDiagnosticsServiceScript.new()
 var _plugin_profile_config_service := PluginProfileConfigServiceScript.new()
@@ -275,6 +277,7 @@ func _dispose_lifecycle_services() -> void:
 	_config_reload_context_service = null
 	_plugin_update_tool_facade = null
 	_plugin_update_sync_mirror_service = null
+	_plugin_update_request_planning_service = null
 	_plugin_usage_guide_service = null
 	_plugin_self_diagnostics_service = null
 	_plugin_profile_config_service = null
@@ -1014,35 +1017,13 @@ func _request_update_sync(target: Dictionary, source: String = "unknown") -> boo
 
 
 func _resolve_update_sync_target() -> Dictionary:
-	var source := _normalize_update_source(str(_state.settings.get("update_source", "latest_stable")))
-	var target_ref := ""
-	var target_kind := "branch"
-	match source:
-		"custom_branch":
-			var branch_ref := str(_state.settings.get("update_custom_branch", "")).strip_edges()
-			target_ref = branch_ref if not branch_ref.is_empty() else "dev"
-		"latest_stable":
-			target_ref = str(_state.update_ref_latest_stable_release).strip_edges()
-			target_kind = "tag"
-		"latest_release":
-			var selected_release_tag := str(_state.settings.get("update_release_tag", "")).strip_edges()
-			target_ref = selected_release_tag if not selected_release_tag.is_empty() else str(_state.update_ref_latest_release).strip_edges()
-			target_kind = "tag"
-		_:
-			target_ref = str(_state.update_ref_latest_stable_release).strip_edges()
-			target_kind = "tag"
-	return {
-		"kind": target_kind,
-		"ref": target_ref,
-		"commit": _resolve_update_ref_commit(target_ref)
-	}
+	return _ensure_plugin_update_request_planning_service().resolve_sync_target(_state.settings, _build_update_refs_planning_context())
 
 
 func _resolve_update_ref_commit(target_ref: String) -> String:
 	if _state == null:
 		return ""
-	var commits: Dictionary = _state.update_ref_commits
-	return str(commits.get(target_ref, "")).strip_edges()
+	return _ensure_plugin_update_request_planning_service().resolve_ref_commit(target_ref, _state.update_ref_commits)
 
 
 func _start_update_refs_request(kind: String, url: String, serial: int) -> void:
@@ -1089,9 +1070,7 @@ func _start_update_archive_sync_request(target: Dictionary, serial: int) -> void
 
 
 func _should_resolve_update_branch_commit_before_archive(target: Dictionary) -> bool:
-	if str(target.get("kind", "branch")) != "branch":
-		return false
-	return str(target.get("ref", "")).strip_edges() != "" and str(target.get("commit", "")).strip_edges() == ""
+	return _ensure_plugin_update_request_planning_service().should_resolve_branch_commit_before_archive(target)
 
 
 func _start_update_archive_branch_ref_request(target: Dictionary, serial: int) -> void:
@@ -1113,7 +1092,7 @@ func _start_update_archive_branch_ref_request(target: Dictionary, serial: int) -
 
 
 func _get_update_branch_ref_url(target_ref: String) -> String:
-	return UPDATE_BRANCH_REF_URL_TEMPLATE % target_ref.strip_edges().uri_encode()
+	return _ensure_plugin_update_request_planning_service().get_branch_ref_url(target_ref, UPDATE_BRANCH_REF_URL_TEMPLATE)
 
 
 func _on_update_archive_branch_ref_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, target: Dictionary, serial: int, request_node: HTTPRequest) -> void:
@@ -1124,7 +1103,7 @@ func _on_update_archive_branch_ref_request_completed(result: int, response_code:
 	var failures: Array[String] = []
 	var resolved_target := target.duplicate(true)
 	if result == HTTPRequest.RESULT_SUCCESS and response_code >= 200 and response_code < 300:
-		var parse_result := _parse_update_branch_ref_response(body)
+		var parse_result: Dictionary = _ensure_plugin_update_request_planning_service().parse_branch_ref_response(body)
 		if bool(parse_result.get("success", false)):
 			resolved_target["commit"] = str(parse_result.get("commit", "")).strip_edges()
 			var commits: Dictionary = _state.update_ref_commits
@@ -1137,62 +1116,12 @@ func _on_update_archive_branch_ref_request_completed(result: int, response_code:
 		failures.append("branch ref request failed with result %s and HTTP %s" % [result, response_code])
 	_start_update_archive_sync_request_attempt(resolved_target, serial, _build_update_archive_request_attempts(resolved_target), 0, failures)
 
-
-func _parse_update_branch_ref_response(body: PackedByteArray) -> Dictionary:
-	var json := JSON.new()
-	var parse_error := json.parse(body.get_string_from_utf8())
-	if parse_error != OK:
-		return {"success": false, "error": json.get_error_message()}
-	if not (json.data is Dictionary):
-		return {"success": false, "error": "Expected a JSON object"}
-	var data: Dictionary = json.data
-	var commit_value = data.get("commit", {})
-	if commit_value is Dictionary:
-		var sha := str((commit_value as Dictionary).get("sha", "")).strip_edges()
-		if not sha.is_empty():
-			return {"success": true, "commit": sha}
-	return {"success": false, "error": "Branch response did not include commit.sha"}
-
-
 func _build_update_archive_request_attempts(target: Dictionary) -> Array:
-	var target_kind := str(target.get("kind", "branch"))
-	var target_ref := str(target.get("ref", "")).strip_edges()
-	var target_commit := str(target.get("commit", "")).strip_edges()
-	var encoded_ref := _encode_update_archive_ref_path(target_ref)
-	var attempts: Array = []
-	if target_kind == "branch" and not target_commit.is_empty():
-		attempts.append({
-			"label": "codeload commit archive",
-			"url": "%s%s" % [UPDATE_SYNC_COMMIT_ARCHIVE_URL_PREFIX, target_commit.uri_encode()]
-		})
-		attempts.append({
-			"label": "github commit archive",
-			"url": "%s%s.zip" % [UPDATE_SYNC_GITHUB_COMMIT_ARCHIVE_URL_PREFIX, target_commit.uri_encode()]
-		})
-	if not encoded_ref.is_empty():
-		if target_kind == "tag":
-			attempts.append({
-				"label": "codeload tag archive",
-				"url": "%s%s" % [UPDATE_SYNC_TAG_ARCHIVE_URL_PREFIX, encoded_ref]
-			})
-			attempts.append({
-				"label": "github tag archive",
-				"url": "%s%s.zip" % [UPDATE_SYNC_GITHUB_TAG_ARCHIVE_URL_PREFIX, encoded_ref]
-			})
-		elif target_commit.is_empty():
-			attempts.append({
-				"label": "codeload branch archive",
-				"url": "%s%s" % [UPDATE_SYNC_BRANCH_ARCHIVE_URL_PREFIX, encoded_ref]
-			})
-			attempts.append({
-				"label": "github branch archive",
-				"url": "%s%s.zip" % [UPDATE_SYNC_GITHUB_BRANCH_ARCHIVE_URL_PREFIX, encoded_ref]
-			})
-	return attempts
+	return _ensure_plugin_update_request_planning_service().build_archive_request_attempts(target, _build_update_archive_url_prefixes())
 
 
 func _encode_update_archive_ref_path(target_ref: String) -> String:
-	return target_ref.strip_edges().uri_encode().replace("%2F", "/")
+	return _ensure_plugin_update_request_planning_service().encode_archive_ref_path(target_ref)
 
 
 func _start_update_archive_sync_request_attempt(target: Dictionary, serial: int, attempts: Array, attempt_index: int, failures: Array) -> void:
@@ -1500,18 +1429,11 @@ func _complete_update_archive_sync_download(target: Dictionary, serial: int, att
 
 
 func _should_try_next_update_archive_attempt(error: String, attempts: Array, attempt_index: int) -> bool:
-	if attempt_index < 0 or attempt_index + 1 >= attempts.size():
-		return false
-	return error.begins_with("Failed to open branch archive") or error.begins_with("Branch archive does not contain")
+	return _ensure_plugin_update_request_planning_service().should_try_next_archive_attempt(error, attempts, attempt_index)
 
 
 func _format_update_archive_failures(failures: Array) -> String:
-	if failures.is_empty():
-		return "Update archive request failed before a download could start."
-	var details: Array[String] = []
-	for failure in failures:
-		details.append(str(failure))
-	return "Update archive request failed after %s attempt(s): %s" % [details.size(), "; ".join(details)]
+	return _ensure_plugin_update_request_planning_service().format_archive_failures(failures)
 
 
 func _complete_update_sync_after_editor_refresh(target_ref: String, sync_result: Dictionary, serial: int) -> void:
@@ -1561,21 +1483,36 @@ func _request_update_sync_editor_refresh(_serial: int) -> Dictionary:
 
 
 func _write_update_sync_marker(target: Dictionary, written: int) -> int:
-	var marker := {
-		"last_sync_at_unix": int(Time.get_unix_time_from_system()),
-		"source_repo_path": "https://github.com/LuoxuanLove/godot-dotnet-mcp",
-		"target_addon_path": UPDATE_SYNC_ADDON_ROOT,
-		"source_git_commit": str(target.get("commit", "")),
-		"source_ref_kind": str(target.get("kind", "")),
-		"source_ref": str(target.get("ref", "")),
-		"written_files": written
-	}
+	var marker: Dictionary = _ensure_plugin_update_request_planning_service().build_sync_marker(target, written, {
+		"unix_time": int(Time.get_unix_time_from_system()),
+		"source_repo_path": UPDATE_SYNC_REPO_URL,
+		"target_addon_path": UPDATE_SYNC_ADDON_ROOT
+	})
 	var file := FileAccess.open(UPDATE_SYNC_MARKER_PATH, FileAccess.WRITE)
 	if file == null:
 		return FileAccess.get_open_error()
 	file.store_string(JSON.stringify(marker, "	"))
 	file.close()
 	return OK
+
+
+func _build_update_refs_planning_context() -> Dictionary:
+	return {
+		"latest_stable_release": str(_state.update_ref_latest_stable_release),
+		"latest_release": str(_state.update_ref_latest_release),
+		"commits": _state.update_ref_commits
+	}
+
+
+func _build_update_archive_url_prefixes() -> Dictionary:
+	return {
+		"commit_codeload": UPDATE_SYNC_COMMIT_ARCHIVE_URL_PREFIX,
+		"commit_github": UPDATE_SYNC_GITHUB_COMMIT_ARCHIVE_URL_PREFIX,
+		"branch_codeload": UPDATE_SYNC_BRANCH_ARCHIVE_URL_PREFIX,
+		"branch_github": UPDATE_SYNC_GITHUB_BRANCH_ARCHIVE_URL_PREFIX,
+		"tag_codeload": UPDATE_SYNC_TAG_ARCHIVE_URL_PREFIX,
+		"tag_github": UPDATE_SYNC_GITHUB_TAG_ARCHIVE_URL_PREFIX
+	}
 
 
 func _sync_update_archive_to_addon(archive_path: String) -> Dictionary:
@@ -2008,6 +1945,12 @@ func _ensure_plugin_update_tool_facade():
 	if _plugin_update_tool_facade == null:
 		_plugin_update_tool_facade = PluginUpdateToolFacadeServiceScript.new()
 	return _plugin_update_tool_facade
+
+
+func _ensure_plugin_update_request_planning_service():
+	if _plugin_update_request_planning_service == null:
+		_plugin_update_request_planning_service = PluginUpdateRequestPlanningServiceScript.new()
+	return _plugin_update_request_planning_service
 
 
 func _build_plugin_update_tool_context(target: Dictionary = {}) -> Dictionary:
