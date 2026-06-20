@@ -31,6 +31,7 @@ const PluginUpdateToolFacadeServiceScript = preload("res://addons/godot_dotnet_m
 const PluginUpdateSyncMirrorServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_sync_mirror_service.gd")
 const PluginUsageGuideServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_usage_guide_service.gd")
 const PluginSelfDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostics_service.gd")
+const PluginProfileConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_profile_config_service.gd")
 const MCP_DOCK_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.tscn"
 const MCP_DOCK_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.gd"
 const PLUGIN_ID := "godot_dotnet_mcp"
@@ -79,6 +80,7 @@ var _plugin_update_tool_facade := PluginUpdateToolFacadeServiceScript.new()
 var _plugin_update_sync_mirror_service := PluginUpdateSyncMirrorServiceScript.new()
 var _plugin_usage_guide_service := PluginUsageGuideServiceScript.new()
 var _plugin_self_diagnostics_service := PluginSelfDiagnosticsServiceScript.new()
+var _plugin_profile_config_service := PluginProfileConfigServiceScript.new()
 var _client_install_detection_service = null
 var _user_tool_service = null
 var _user_tool_watch_service = null
@@ -272,6 +274,7 @@ func _dispose_lifecycle_services() -> void:
 	_plugin_update_sync_mirror_service = null
 	_plugin_usage_guide_service = null
 	_plugin_self_diagnostics_service = null
+	_plugin_profile_config_service = null
 	_client_install_detection_service = null
 	_tool_catalog = null
 	_settings_store = null
@@ -2156,98 +2159,20 @@ func _on_show_user_tools_changed(enabled: bool) -> void:
 
 
 func _apply_tool_profile(profile_id: String) -> void:
-	var tool_names = _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category())
-	_state.settings["tool_profile_id"] = profile_id
-	_state.settings["disabled_tools"] = _tool_catalog.get_disabled_tools_for_profile(
-		profile_id,
-		PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES,
-		_state.custom_tool_profiles,
-		tool_names,
-		_state.settings.get("disabled_tools", [])
-	)
-	_server_controller.set_disabled_tools(_state.settings["disabled_tools"])
-	_save_settings()
+	_ensure_plugin_profile_config_service().apply_tool_profile(_build_plugin_profile_config_context(), profile_id)
 	_refresh_dock()
 
 
 func _save_custom_profile(profile_name: String) -> Dictionary:
-	if profile_name.is_empty():
-		return {
-			"success": false,
-			"error": _localization.get_text("tool_profile_name_required")
-		}
-
-	var result = _settings_store.save_custom_profile(
-		PluginRuntimeStateScript.TOOL_PROFILE_DIR,
-		profile_name,
-		_state.settings.get("disabled_tools", [])
-	)
-	if not result.get("success", false):
-		return {
-			"success": false,
-			"error": _localization.get_text("tool_profile_save_failed")
-		}
-
-	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeStateScript.TOOL_PROFILE_DIR)
-	_state.settings["tool_profile_id"] = "custom:%s" % str(result.get("slug", ""))
-	_save_settings()
-	return {
-		"success": true,
-		"profile_id": str(_state.settings.get("tool_profile_id", "")),
-		"message": _localization.get_text("tool_profile_saved") % profile_name
-	}
+	return _ensure_plugin_profile_config_service().save_custom_profile(_build_plugin_profile_config_context(), profile_name)
 
 
 func _rename_custom_profile(profile_id: String, profile_name: String) -> Dictionary:
-	if _is_builtin_profile_id(profile_id):
-		return {"success": false, "error": _localization.get_text("tool_profile_builtin_protected")}
-
-	var result = _settings_store.rename_custom_profile(
-		PluginRuntimeStateScript.TOOL_PROFILE_DIR,
-		profile_id,
-		profile_name
-	)
-	if not bool(result.get("success", false)):
-		return {"success": false, "error": _get_custom_profile_error_text(str(result.get("error_code", "rename_failed")))}
-
-	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeStateScript.TOOL_PROFILE_DIR)
-	if str(_state.settings.get("tool_profile_id", "")) == profile_id:
-		_state.settings["tool_profile_id"] = str(result.get("profile_id", profile_id))
-	_server_controller.set_disabled_tools(_state.settings.get("disabled_tools", []))
-	_save_settings()
-	return {
-		"success": true,
-		"profile_id": str(result.get("profile_id", profile_id)),
-		"message": _localization.get_text("tool_profile_renamed") % str(result.get("profile_name", profile_name.strip_edges()))
-	}
+	return _ensure_plugin_profile_config_service().rename_custom_profile(_build_plugin_profile_config_context(), profile_id, profile_name)
 
 
 func _delete_custom_profile(profile_id: String) -> Dictionary:
-	if _is_builtin_profile_id(profile_id):
-		return {"success": false, "error": _localization.get_text("tool_profile_builtin_protected")}
-
-	var result = _settings_store.delete_custom_profile(PluginRuntimeStateScript.TOOL_PROFILE_DIR, profile_id)
-	if not bool(result.get("success", false)):
-		return {"success": false, "error": _get_custom_profile_error_text(str(result.get("error_code", "delete_failed")))}
-
-	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeStateScript.TOOL_PROFILE_DIR)
-	if str(_state.settings.get("tool_profile_id", "")) == profile_id:
-		var tool_names = _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category())
-		_state.settings["tool_profile_id"] = "default"
-		_state.settings["disabled_tools"] = _tool_catalog.get_disabled_tools_for_profile(
-			"default",
-			PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES,
-			_state.custom_tool_profiles,
-			tool_names,
-			_state.settings.get("disabled_tools", [])
-		)
-	_server_controller.set_disabled_tools(_state.settings.get("disabled_tools", []))
-	_save_settings()
-	return {
-		"success": true,
-		"profile_id": "default" if str(_state.settings.get("tool_profile_id", "")) == "default" else profile_id,
-		"message": _localization.get_text("tool_profile_deleted")
-	}
+	return _ensure_plugin_profile_config_service().delete_custom_profile(_build_plugin_profile_config_context(), profile_id)
 
 
 func _is_builtin_profile_id(profile_id: String) -> bool:
@@ -2255,31 +2180,11 @@ func _is_builtin_profile_id(profile_id: String) -> bool:
 
 
 func _get_custom_profile_error_text(error_code: String) -> String:
-	match error_code:
-		"empty_profile_name":
-			return _localization.get_text("tool_profile_name_required")
-		"profile_name_conflict":
-			return _localization.get_text("tool_profile_name_conflict")
-		"profile_not_found", "invalid_profile_id":
-			return _localization.get_text("tool_profile_not_found")
-		_:
-			if error_code.begins_with("rename"):
-				return _localization.get_text("tool_profile_rename_failed")
-			return _localization.get_text("tool_profile_delete_failed")
+	return _ensure_plugin_profile_config_service().map_custom_profile_error(_localization, error_code)
 
 
 func _get_tool_config_error_text(error_code: String) -> String:
-	match error_code:
-		"config_path_required":
-			return _localization.get_text("tool_config_path_required")
-		"config_not_found":
-			return _localization.get_text("tool_config_not_found")
-		"config_profile_required", "config_disabled_tools_invalid", "config_parse_failed":
-			return _localization.get_text("tool_config_validation_failed")
-		"config_dir_create_failed", "config_write_failed", "config_open_failed":
-			return _localization.get_text("tool_config_write_failed")
-		_:
-			return _localization.get_text("tool_config_validation_failed")
+	return _ensure_plugin_profile_config_service().map_tool_config_error(_localization, error_code)
 
 
 func _on_delete_user_tool_requested(script_path: String) -> void:
@@ -2840,79 +2745,16 @@ func delete_profile_from_tools(profile_id: String) -> Dictionary:
 
 
 func export_config_from_tools(file_path: String) -> Dictionary:
-	var disabled_tools: Array = _state.settings.get("disabled_tools", [])
-	var result = _settings_store.export_tool_config(
-		file_path,
-		str(_state.settings.get("tool_profile_id", "default")),
-		disabled_tools
-	)
-	if not bool(result.get("success", false)):
-		return {"success": false, "error": _get_tool_config_error_text(str(result.get("error_code", "config_write_failed")))}
-
-	return {
-		"success": true,
-		"data": {
-			"path": str(result.get("file_path", file_path)),
-			"profile_id": str(_state.settings.get("tool_profile_id", "default")),
-			"disabled_tools": disabled_tools.duplicate(),
-			"disabled_tool_count": disabled_tools.size()
-		},
-		"message": _localization.get_text("tool_config_exported")
-	}
+	return _ensure_plugin_profile_config_service().export_config(_build_plugin_profile_config_context(), file_path)
 
 
 func import_config_from_tools(file_path: String) -> Dictionary:
-	var result = _settings_store.import_tool_config(file_path)
-	if not bool(result.get("success", false)):
-		return {"success": false, "error": _get_tool_config_error_text(str(result.get("error_code", "config_parse_failed")))}
-
-	var imported_data: Dictionary = result.get("data", {})
-	var tool_names = _tool_catalog.build_tool_name_index(_server_controller.get_all_tools_by_category())
-	var valid_tools := {}
-	for tool_name in tool_names:
-		valid_tools[str(tool_name)] = true
-
-	var imported_disabled: Array[String] = []
-	var ignored_tools: Array[String] = []
-	for tool_name in imported_data.get("disabled_tools", []):
-		var normalized_tool_name = str(tool_name)
-		if valid_tools.has(normalized_tool_name):
-			imported_disabled.append(normalized_tool_name)
-		else:
-			ignored_tools.append(normalized_tool_name)
-	imported_disabled.sort()
-	ignored_tools.sort()
-
-	var requested_profile_id = str(imported_data.get("profile_id", "default"))
-	var resolved_profile_id = requested_profile_id
-	if not _tool_catalog.has_tool_profile(resolved_profile_id, PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES, _state.custom_tool_profiles):
-		resolved_profile_id = _tool_catalog.find_matching_profile_id(
-			imported_disabled,
-			PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES,
-			_state.custom_tool_profiles,
-			tool_names
-		)
-		if resolved_profile_id.is_empty():
-			resolved_profile_id = "default"
-
-	_state.settings["tool_profile_id"] = resolved_profile_id
-	_state.settings["disabled_tools"] = imported_disabled
-	_cleanup_disabled_tools()
-	_save_settings()
-	_refresh_dock()
-
-	return {
-		"success": true,
-		"data": {
-			"path": str(result.get("file_path", file_path)),
-			"requested_profile_id": requested_profile_id,
-			"resolved_profile_id": resolved_profile_id,
-			"disabled_tools": _state.settings.get("disabled_tools", []).duplicate(),
-			"disabled_tool_count": _state.settings.get("disabled_tools", []).size(),
-			"ignored_tools": ignored_tools
-		},
-		"message": _localization.get_text("tool_config_imported")
-	}
+	var response = _ensure_plugin_profile_config_service().import_config(_build_plugin_profile_config_context(), file_path)
+	if bool(response.get("success", false)):
+		_cleanup_disabled_tools()
+		_save_settings()
+		_refresh_dock()
+	return response
 
 
 func get_runtime_usage_guide_from_tools() -> Dictionary:
@@ -2960,6 +2802,25 @@ func _ensure_plugin_self_diagnostics_service():
 	if _plugin_self_diagnostics_service == null:
 		_plugin_self_diagnostics_service = PluginSelfDiagnosticsServiceScript.new()
 	return _plugin_self_diagnostics_service
+
+
+func _build_plugin_profile_config_context() -> Dictionary:
+	return {
+		"state": _state,
+		"settings_store": _settings_store,
+		"tool_catalog": _tool_catalog,
+		"server_controller": _server_controller,
+		"localization": _localization,
+		"settings_path": PluginRuntimeStateScript.SETTINGS_PATH,
+		"profile_dir": PluginRuntimeStateScript.TOOL_PROFILE_DIR,
+		"builtin_profiles": PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES
+	}
+
+
+func _ensure_plugin_profile_config_service():
+	if _plugin_profile_config_service == null:
+		_plugin_profile_config_service = PluginProfileConfigServiceScript.new()
+	return _plugin_profile_config_service
 
 
 func _record_self_incident(
