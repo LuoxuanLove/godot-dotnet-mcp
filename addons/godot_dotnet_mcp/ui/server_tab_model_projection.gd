@@ -20,6 +20,7 @@ func project(model: Dictionary) -> Dictionary:
 		"overview": {
 			"health_text": _build_overview_health_text(self_diagnostics, localization),
 			"service_text": _build_overview_service_text(is_running, settings, localization),
+			"service_risk": _build_service_bind_risk(str(settings.get("host", DEFAULT_HOST)), localization),
 			"connections_text": _build_overview_connections_text(stats),
 			"config_text": _build_overview_config_text(model, localization),
 			"activity_text": _build_overview_activity_text(stats, localization)
@@ -45,8 +46,44 @@ func _build_overview_health_text(self_diagnostics: Dictionary, localization) -> 
 func _build_overview_service_text(is_running: bool, settings: Dictionary, localization) -> String:
 	var service_state_key := "status_running" if is_running else "status_stopped"
 	var service_state := _get_localized_text(localization, service_state_key, service_state_key.capitalize())
-	var endpoint = "http://%s:%d/mcp" % [settings.get("host", DEFAULT_HOST), int(settings.get("port", DEFAULT_PORT))]
+	var host := str(settings.get("host", DEFAULT_HOST)).strip_edges()
+	if host.is_empty():
+		host = DEFAULT_HOST
+	var endpoint = "http://%s:%d/mcp" % [host, int(settings.get("port", DEFAULT_PORT))]
+	var risk := _build_service_bind_risk(host, localization)
+	if not risk.is_empty():
+		return "%s · %s · %s" % [service_state, endpoint, str(risk.get("summary_text", ""))]
 	return "%s · %s" % [service_state, endpoint]
+
+
+func _build_service_bind_risk(host: String, localization) -> Dictionary:
+	var normalized := host.strip_edges().to_lower()
+	if _is_loopback_host(normalized):
+		return {}
+	var risk_code := "external_host"
+	if normalized == "0.0.0.0" or normalized == "::" or normalized == "[::]":
+		risk_code = "wildcard_host"
+	var summary := _get_localized_text(
+		localization,
+		"server_bind_risk_%s" % risk_code,
+		"External bind: reachable outside this machine"
+	)
+	return {
+		"code": risk_code,
+		"host": host,
+		"summary_text": summary,
+		"severity": "warning"
+	}
+
+
+func _is_loopback_host(normalized_host: String) -> bool:
+	if normalized_host.is_empty():
+		return true
+	if normalized_host == "localhost" or normalized_host == "127.0.0.1" or normalized_host == "::1" or normalized_host == "[::1]":
+		return true
+	if normalized_host.begins_with("127."):
+		return true
+	return false
 
 
 func _build_overview_connections_text(stats: Dictionary) -> String:

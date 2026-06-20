@@ -64,8 +64,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var service = ServerTabModelProjectionServiceScript.new()
 
 	var projected = service.project(_build_primary_model())
-	if str((projected.get("overview", {}) as Dictionary).get("service_text", "")) != "Running · http://10.0.0.8:4100/mcp":
-		return _failure("Server tab projection should preserve the overview service text.")
+	var projected_service_text := str((projected.get("overview", {}) as Dictionary).get("service_text", ""))
+	if not projected_service_text.begins_with("Running · http://10.0.0.8:4100/mcp"):
+		return _failure("Server tab projection should preserve the overview service endpoint text.")
+	var primary_service_risk: Dictionary = (projected.get("overview", {}) as Dictionary).get("service_risk", {})
+	if str(primary_service_risk.get("code", "")) != "external_host" or str(primary_service_risk.get("severity", "")) != "warning":
+		return _failure("Server tab projection should flag non-loopback service hosts as external bind risk.")
+	if projected_service_text.find("External bind") == -1:
+		return _failure("Server tab service text should include an external bind warning for non-loopback hosts.")
 	if str((projected.get("overview", {}) as Dictionary).get("config_text", "")) != "Custom · Warning · English":
 		return _failure("Server tab projection should compose the overview config text from the projected values.")
 	if str((projected.get("overview", {}) as Dictionary).get("activity_text", "")).find("tools/call") == -1:
@@ -117,6 +123,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Server tab projection should project localized language labels and current selection.")
 
 	var empty_projection = service.project(_build_fallback_model())
+	if not ((empty_projection.get("overview", {}) as Dictionary).get("service_risk", {}) as Dictionary).is_empty():
+		return _failure("Server tab projection should not flag the default loopback host as a service bind risk.")
 	var empty_self_diagnostics: Dictionary = empty_projection.get("self_diagnostics", {})
 	if str(empty_self_diagnostics.get("badge_text", "")) != "":
 		return _failure("Server tab projection should hide the badge when there are no diagnostics.")
@@ -136,6 +144,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var empty_activity = str((empty_projection.get("overview", {}) as Dictionary).get("activity_text", ""))
 	if empty_activity.find("none") == -1:
 		return _failure("Server tab projection should use the no-request fallback when there is no last request time.")
+
+	var wildcard_projection = service.project(_build_wildcard_host_model())
+	var wildcard_risk: Dictionary = (wildcard_projection.get("overview", {}) as Dictionary).get("service_risk", {})
+	if str(wildcard_risk.get("code", "")) != "wildcard_host":
+		return _failure("Server tab projection should distinguish wildcard binds from specific external hosts.")
+	if str((wildcard_projection.get("overview", {}) as Dictionary).get("service_text", "")).find("External bind") == -1:
+		return _failure("Server tab service text should include a warning for wildcard binds.")
 
 	return {
 		"name": "server_tab_model_projection_contracts",
@@ -237,6 +252,16 @@ func _build_fallback_model() -> Dictionary:
 			"en": true
 		}
 	}
+
+
+func _build_wildcard_host_model() -> Dictionary:
+	var model := _build_fallback_model()
+	model["settings"] = {
+		"host": "0.0.0.0",
+		"port": 3000
+	}
+	model["is_running"] = true
+	return model
 
 
 func _failure(message: String) -> Dictionary:
