@@ -45,10 +45,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 func _verify_tool_loader_delegates_lifecycle_tick_budget() -> String:
 	var loader_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
 	var service_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/tools/core/tool_loader_lifecycle_tick_budget_service.gd")
-	if loader_source.is_empty() or service_source.is_empty():
+	var factory_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/tools/core/tool_loader_service_factory.gd")
+	if loader_source.is_empty() or service_source.is_empty() or factory_source.is_empty():
 		return "Tool loader lifecycle tick budget sources should be readable."
 	for required in [
-		"ToolLoaderLifecycleTickBudgetServiceScript.new()",
+		"_service_factory.ensure_services(",
 		"_lifecycle_tick_budget_service.accumulate(",
 		"_lifecycle_tick_budget_service.record_performance("
 	]:
@@ -62,6 +63,12 @@ func _verify_tool_loader_delegates_lifecycle_tick_budget() -> String:
 	]:
 		if loader_source.find(forbidden) != -1:
 			return "MCPToolLoader should not retain lifecycle tick budget internals: %s" % forbidden
+	for required_factory in [
+		"ToolLoaderLifecycleTickBudgetServiceScript",
+		'"lifecycle_tick_budget_service": _ensure(current, "lifecycle_tick_budget_service", ToolLoaderLifecycleTickBudgetServiceScript)'
+	]:
+		if factory_source.find(required_factory) == -1:
+			return "ToolLoaderServiceFactory should own lifecycle tick budget construction: %s" % required_factory
 	for required_service in [
 		"func accumulate(delta: float, has_active_lsp_request: bool)",
 		"func resolve_interval_seconds(has_active_lsp_request: bool)",

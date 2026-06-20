@@ -3,58 +3,37 @@ extends RefCounted
 class_name MCPToolLoader
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
-const MCPToolRegistry = preload("res://addons/godot_dotnet_mcp/tools/tool_registry.gd")
-const ToolPublicSurfacePolicyScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_public_surface_policy.gd")
-const ToolExecutionObserverScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_execution_observer.gd")
-const ToolRuntimeManagerScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_runtime_manager.gd")
-const ToolLoaderStatusServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_status_service.gd")
-const ToolLoaderDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_diagnostics_service.gd")
-const ToolRegistryEntryServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_registry_entry_service.gd")
-const ToolLoaderRuntimeContextServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_runtime_context_service.gd")
-const ToolLoaderCatalogProjectionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_catalog_projection_service.gd")
-const ToolExecutionServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_execution_service.gd")
-const ToolLoaderTickServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_tick_service.gd")
-const ToolLoaderEnablementServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_enablement_service.gd")
-const ToolLoaderReloadServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_reload_service.gd")
-const ToolLoaderUserReloadServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_user_reload_service.gd")
-const ToolLoaderRuntimeStateServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_runtime_state_service.gd")
-const ToolLoaderLifecycleServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_lifecycle_service.gd")
-const ToolLoaderStateStoreScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_state_store.gd")
-const ToolLoaderAccessServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_access_service.gd")
-const ToolLoaderLspDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_lsp_diagnostics_service.gd")
-const ToolLoaderExecutionContextServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_execution_context_service.gd")
-const ToolLoaderContextServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_context_service.gd")
-const ToolLoaderQueryServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_query_service.gd")
-const ToolLoaderLifecycleTickBudgetServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_lifecycle_tick_budget_service.gd")
+const ToolLoaderServiceFactoryScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_service_factory.gd")
 
-var _registry := MCPToolRegistry.new()
+var _service_factory := ToolLoaderServiceFactoryScript.new()
+var _registry = null
 var _server_context: Object
-var _state_store = ToolLoaderStateStoreScript.new()
+var _state_store = null
 var _entries_by_category: Dictionary = {}
 var _ordered_categories: Array[String] = []
 var _runtime_by_category: Dictionary = {}
 var _tool_definitions_by_category: Dictionary = {}
-var _public_surface_policy = ToolPublicSurfacePolicyScript.new()
-var _execution_observer = ToolExecutionObserverScript.new()
-var _runtime_manager = ToolRuntimeManagerScript.new()
-var _status_service = ToolLoaderStatusServiceScript.new()
-var _diagnostics_service = ToolLoaderDiagnosticsServiceScript.new()
-var _entry_service = ToolRegistryEntryServiceScript.new()
-var _runtime_context_service = ToolLoaderRuntimeContextServiceScript.new()
-var _catalog_projection_service = ToolLoaderCatalogProjectionServiceScript.new()
-var _execution_service = ToolExecutionServiceScript.new()
-var _tick_service = ToolLoaderTickServiceScript.new()
-var _enablement_service = ToolLoaderEnablementServiceScript.new()
-var _reload_service = ToolLoaderReloadServiceScript.new()
-var _user_reload_service = ToolLoaderUserReloadServiceScript.new()
-var _runtime_state_service = ToolLoaderRuntimeStateServiceScript.new()
-var _lifecycle_service = ToolLoaderLifecycleServiceScript.new()
-var _access_service = ToolLoaderAccessServiceScript.new()
-var _lsp_diagnostics_service = ToolLoaderLspDiagnosticsServiceScript.new()
-var _execution_context_service = ToolLoaderExecutionContextServiceScript.new()
-var _context_service = ToolLoaderContextServiceScript.new()
-var _query_service = ToolLoaderQueryServiceScript.new()
-var _lifecycle_tick_budget_service = ToolLoaderLifecycleTickBudgetServiceScript.new()
+var _public_surface_policy = null
+var _execution_observer = null
+var _runtime_manager = null
+var _status_service = null
+var _diagnostics_service = null
+var _entry_service = null
+var _runtime_context_service = null
+var _catalog_projection_service = null
+var _execution_service = null
+var _tick_service = null
+var _enablement_service = null
+var _reload_service = null
+var _user_reload_service = null
+var _runtime_state_service = null
+var _lifecycle_service = null
+var _access_service = null
+var _lsp_diagnostics_service = null
+var _execution_context_service = null
+var _context_service = null
+var _query_service = null
+var _lifecycle_tick_budget_service = null
 var _tool_activity_registry = null
 var _performance: Dictionary = {}
 var _preload_runtimes_on_initialize := false
@@ -74,58 +53,64 @@ func _bind_state_refs() -> void:
 
 
 func _ensure_services_ready() -> void:
-	if _registry == null:
-		_registry = MCPToolRegistry.new()
-	if _state_store == null:
-		_state_store = ToolLoaderStateStoreScript.new()
-	if _public_surface_policy == null:
-		_public_surface_policy = ToolPublicSurfacePolicyScript.new()
-	if _execution_observer == null:
-		_execution_observer = ToolExecutionObserverScript.new()
-	if _runtime_manager == null:
-		_runtime_manager = ToolRuntimeManagerScript.new()
-	if _status_service == null:
-		_status_service = ToolLoaderStatusServiceScript.new()
-	if _diagnostics_service == null:
-		_diagnostics_service = ToolLoaderDiagnosticsServiceScript.new()
-	if _entry_service == null:
-		_entry_service = ToolRegistryEntryServiceScript.new()
-	if _runtime_context_service == null:
-		_runtime_context_service = ToolLoaderRuntimeContextServiceScript.new()
-	if _catalog_projection_service == null:
-		_catalog_projection_service = ToolLoaderCatalogProjectionServiceScript.new()
-	if _execution_service == null:
-		_execution_service = ToolExecutionServiceScript.new()
-	if _tick_service == null:
-		_tick_service = ToolLoaderTickServiceScript.new()
-	if _enablement_service == null:
-		_enablement_service = ToolLoaderEnablementServiceScript.new()
-	if _reload_service == null:
-		_reload_service = ToolLoaderReloadServiceScript.new()
-	if _user_reload_service == null:
-		_user_reload_service = ToolLoaderUserReloadServiceScript.new()
-	if _runtime_state_service == null:
-		_runtime_state_service = ToolLoaderRuntimeStateServiceScript.new()
-	if _lifecycle_service == null:
-		_lifecycle_service = ToolLoaderLifecycleServiceScript.new()
-	if _access_service == null:
-		_access_service = ToolLoaderAccessServiceScript.new()
-	if _lsp_diagnostics_service == null:
-		_lsp_diagnostics_service = ToolLoaderLspDiagnosticsServiceScript.new()
-	if _execution_context_service == null:
-		_execution_context_service = ToolLoaderExecutionContextServiceScript.new()
-	if _context_service == null:
-		_context_service = ToolLoaderContextServiceScript.new()
-	if _query_service == null:
-		_query_service = ToolLoaderQueryServiceScript.new()
-	if _lifecycle_tick_budget_service == null:
-		_lifecycle_tick_budget_service = ToolLoaderLifecycleTickBudgetServiceScript.new()
+	var services: Dictionary = _service_factory.ensure_services(_build_service_factory_context())
+	_registry = services.get("registry", _registry)
+	_state_store = services.get("state_store", _state_store)
+	_public_surface_policy = services.get("public_surface_policy", _public_surface_policy)
+	_execution_observer = services.get("execution_observer", _execution_observer)
+	_runtime_manager = services.get("runtime_manager", _runtime_manager)
+	_status_service = services.get("status_service", _status_service)
+	_diagnostics_service = services.get("diagnostics_service", _diagnostics_service)
+	_entry_service = services.get("entry_service", _entry_service)
+	_runtime_context_service = services.get("runtime_context_service", _runtime_context_service)
+	_catalog_projection_service = services.get("catalog_projection_service", _catalog_projection_service)
+	_execution_service = services.get("execution_service", _execution_service)
+	_tick_service = services.get("tick_service", _tick_service)
+	_enablement_service = services.get("enablement_service", _enablement_service)
+	_reload_service = services.get("reload_service", _reload_service)
+	_user_reload_service = services.get("user_reload_service", _user_reload_service)
+	_runtime_state_service = services.get("runtime_state_service", _runtime_state_service)
+	_lifecycle_service = services.get("lifecycle_service", _lifecycle_service)
+	_access_service = services.get("access_service", _access_service)
+	_lsp_diagnostics_service = services.get("lsp_diagnostics_service", _lsp_diagnostics_service)
+	_execution_context_service = services.get("execution_context_service", _execution_context_service)
+	_context_service = services.get("context_service", _context_service)
+	_query_service = services.get("query_service", _query_service)
+	_lifecycle_tick_budget_service = services.get("lifecycle_tick_budget_service", _lifecycle_tick_budget_service)
 	_bind_state_refs()
 	_runtime_manager.configure(Callable(self, "_build_executor_runtime_context"))
 	_execution_observer.set_activity_registry(_tool_activity_registry)
 	_lsp_diagnostics_service.configure(self)
 	_execution_context_service.configure(_execution_observer)
 	_context_service.configure(_state_store)
+
+
+func _build_service_factory_context() -> Dictionary:
+	return {
+		"registry": _registry,
+		"state_store": _state_store,
+		"public_surface_policy": _public_surface_policy,
+		"execution_observer": _execution_observer,
+		"runtime_manager": _runtime_manager,
+		"status_service": _status_service,
+		"diagnostics_service": _diagnostics_service,
+		"entry_service": _entry_service,
+		"runtime_context_service": _runtime_context_service,
+		"catalog_projection_service": _catalog_projection_service,
+		"execution_service": _execution_service,
+		"tick_service": _tick_service,
+		"enablement_service": _enablement_service,
+		"reload_service": _reload_service,
+		"user_reload_service": _user_reload_service,
+		"runtime_state_service": _runtime_state_service,
+		"lifecycle_service": _lifecycle_service,
+		"access_service": _access_service,
+		"lsp_diagnostics_service": _lsp_diagnostics_service,
+		"execution_context_service": _execution_context_service,
+		"context_service": _context_service,
+		"query_service": _query_service,
+		"lifecycle_tick_budget_service": _lifecycle_tick_budget_service
+	}
 
 
 func configure(server_context: Object) -> void:

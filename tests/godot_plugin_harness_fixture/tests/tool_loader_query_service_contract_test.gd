@@ -157,10 +157,11 @@ func _is_public_removed_tool_definition(tool_def: Dictionary) -> bool:
 
 func _verify_loader_source_delegates_read_side() -> Dictionary:
 	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
-	if source.is_empty():
+	var factory_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/tools/core/tool_loader_service_factory.gd")
+	if source.is_empty() or factory_source.is_empty():
 		return _failure("Tool loader source should be readable for query-service source guards.")
 	for required in [
-		"ToolLoaderQueryServiceScript.new()",
+		"_service_factory.ensure_services(",
 		"_query_service.build_tools_by_category(",
 		"_query_service.build_tool_definitions(",
 		"_query_service.build_exposed_tool_definitions(",
@@ -170,6 +171,12 @@ func _verify_loader_source_delegates_read_side() -> Dictionary:
 	]:
 		if source.find(required) == -1:
 			return _failure("MCPToolLoader should delegate read-side query behavior to ToolLoaderQueryService: %s" % required)
+	for required_factory in [
+		"ToolLoaderQueryServiceScript",
+		'"query_service": _ensure(current, "query_service", ToolLoaderQueryServiceScript)'
+	]:
+		if factory_source.find(required_factory) == -1:
+			return _failure("ToolLoaderServiceFactory should own query service construction: %s" % required_factory)
 	for forbidden in [
 		"for tool_def in get_exposed_tool_definitions():",
 		"var tool_count := get_tool_definitions().size()",
