@@ -63,6 +63,13 @@ func configure_client_executable_dialog(editor_interface, on_file_selected: Call
 
 func remove_client_executable_dialog() -> void:
 	if _client_executable_dialog != null and is_instance_valid(_client_executable_dialog):
+		for connection in _client_executable_dialog.file_selected.get_connections():
+			var callable: Callable = connection.get("callable", Callable())
+			if callable.is_valid():
+				_client_executable_dialog.file_selected.disconnect(callable)
+		var parent = _client_executable_dialog.get_parent()
+		if parent != null:
+			parent.remove_child(_client_executable_dialog)
 		_client_executable_dialog.queue_free()
 	_client_executable_dialog = null
 

@@ -32,8 +32,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	service.remove_client_executable_dialog()
 	if service.get_client_executable_dialog() != null:
 		return _failure("Client config state service should clear the executable picker dialog on removal.")
-	if dialog.is_inside_tree():
-		return _failure("Client config state service should detach the executable picker dialog on removal.")
+	if editor_interface.base_control.get_child_count() != 0 or dialog.get_parent() != null:
+		return _failure("Client config state service should synchronously detach the executable picker dialog on removal.")
+	if dialog.file_selected.is_connected(Callable(self, "_on_file_selected").bind(selected)):
+		return _failure("Client config state service should disconnect executable picker callbacks before queued free.")
 
 	service.dispose()
 	editor_interface.base_control.free()
@@ -68,7 +70,8 @@ func _verify_plugin_entrypoint_delegates_client_config_state() -> String:
 		"func invalidate_client_install_status_cache()",
 		"func configure_client_executable_dialog(editor_interface, on_file_selected: Callable)",
 		"func remove_client_executable_dialog()",
-		"func get_client_executable_dialog()"
+		"func get_client_executable_dialog()",
+		"parent.remove_child(_client_executable_dialog)"
 	]:
 		if service_source.find(required_service) == -1:
 			return "PluginClientConfigStateService should own client config method: %s" % required_service
