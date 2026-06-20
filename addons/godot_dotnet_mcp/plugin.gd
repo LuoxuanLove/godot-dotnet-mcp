@@ -2508,7 +2508,7 @@ func _schedule_runtime_reload(method_name: String, bound_args: Array = []) -> vo
 
 
 func _complete_runtime_server_restart(operation_id: String) -> void:
-	var success := _ensure_runtime_reload_completion_service().complete_server_restart(_build_runtime_reload_completion_context())
+	var success: bool = bool(_ensure_runtime_reload_completion_service().complete_server_restart(_build_runtime_reload_completion_context()))
 	_pending_runtime_reload_action = ""
 	_finish_self_operation(
 		{"operation_id": operation_id},
@@ -2519,7 +2519,7 @@ func _complete_runtime_server_restart(operation_id: String) -> void:
 
 
 func _complete_runtime_soft_reload(operation_id: String, was_running: bool, focus_snapshot: Dictionary = {}) -> void:
-	var success := _ensure_runtime_reload_completion_service().complete_soft_reload(_build_runtime_reload_completion_context(), was_running, focus_snapshot)
+	var success: bool = bool(_ensure_runtime_reload_completion_service().complete_soft_reload(_build_runtime_reload_completion_context(), was_running, focus_snapshot))
 	_pending_runtime_reload_action = ""
 	_finish_self_operation(
 		{"operation_id": operation_id},
@@ -2530,7 +2530,7 @@ func _complete_runtime_soft_reload(operation_id: String, was_running: bool, focu
 
 
 func _complete_runtime_full_reload(operation_id: String, was_running: bool, focus_snapshot: Dictionary = {}) -> void:
-	var success := _ensure_runtime_reload_completion_service().complete_full_reload(_build_runtime_reload_completion_context(), was_running, focus_snapshot)
+	var success: bool = bool(_ensure_runtime_reload_completion_service().complete_full_reload(_build_runtime_reload_completion_context(), was_running, focus_snapshot))
 	_pending_runtime_reload_action = ""
 	_finish_self_operation(
 		{"operation_id": operation_id},
