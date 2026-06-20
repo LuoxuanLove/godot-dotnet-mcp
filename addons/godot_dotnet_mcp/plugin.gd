@@ -32,6 +32,7 @@ const PluginUpdateSyncMirrorServiceScript = preload("res://addons/godot_dotnet_m
 const PluginUsageGuideServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_usage_guide_service.gd")
 const PluginSelfDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostics_service.gd")
 const PluginProfileConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_profile_config_service.gd")
+const PluginDeveloperSettingsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_developer_settings_service.gd")
 const MCP_DOCK_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.tscn"
 const MCP_DOCK_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.gd"
 const PLUGIN_ID := "godot_dotnet_mcp"
@@ -81,6 +82,7 @@ var _plugin_update_sync_mirror_service := PluginUpdateSyncMirrorServiceScript.ne
 var _plugin_usage_guide_service := PluginUsageGuideServiceScript.new()
 var _plugin_self_diagnostics_service := PluginSelfDiagnosticsServiceScript.new()
 var _plugin_profile_config_service := PluginProfileConfigServiceScript.new()
+var _plugin_developer_settings_service := PluginDeveloperSettingsServiceScript.new()
 var _client_install_detection_service = null
 var _user_tool_service = null
 var _user_tool_watch_service = null
@@ -275,6 +277,7 @@ func _dispose_lifecycle_services() -> void:
 	_plugin_usage_guide_service = null
 	_plugin_self_diagnostics_service = null
 	_plugin_profile_config_service = null
+	_plugin_developer_settings_service = null
 	_client_install_detection_service = null
 	_tool_catalog = null
 	_settings_store = null
@@ -2659,56 +2662,23 @@ func set_show_user_tools_from_tools(enabled: bool) -> Dictionary:
 
 
 func get_developer_settings_for_tools() -> Dictionary:
-	return {
-		"success": true,
-		"data": {
-			"log_level": get_log_level_for_tools(),
-			"show_user_tools": true,
-			"language": str(_state.settings.get("language", "")),
-			"resolved_language": _state.resolve_active_language(_localization),
-			"tool_profile_id": str(_state.settings.get("tool_profile_id", "default"))
-		}
-	}
+	return _ensure_plugin_developer_settings_service().build_settings_response(_build_plugin_developer_settings_context())
 
 
 func set_language_from_tools(language_code: String) -> Dictionary:
-	if language_code.is_empty():
-		return {"success": false, "error": "Language code is required"}
-	if not _localization.get_available_languages().has(language_code):
-		return {"success": false, "error": "Unsupported language: %s" % language_code}
+	var validation = _ensure_plugin_developer_settings_service().validate_language(_localization, language_code)
+	if not bool(validation.get("success", false)):
+		return validation
 	_on_language_changed(language_code)
-	return {
-		"success": true,
-		"language": _state.resolve_active_language(_localization)
-	}
+	return _ensure_plugin_developer_settings_service().build_language_set_response(_state, _localization)
 
 
 func get_languages_for_tools() -> Dictionary:
-	var languages: Array[Dictionary] = []
-	var active_language = _state.resolve_active_language(_localization)
-	var codes: Array = _localization.get_available_language_codes()
-	for code in codes:
-		languages.append({
-			"code": str(code),
-			"name": _localization.get_language_display_name(str(code), active_language)
-		})
-	return {
-		"success": true,
-		"data": {
-			"current_language": active_language,
-			"languages": languages
-		}
-	}
+	return _ensure_plugin_developer_settings_service().build_languages_response(_state, _localization)
 
 
 func list_profiles_from_tools() -> Dictionary:
-	return {
-		"success": true,
-		"data": {
-			"builtin_profiles": PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES,
-			"custom_profiles": _state.custom_tool_profiles
-		}
-	}
+	return _ensure_plugin_developer_settings_service().build_profiles_response(_state, PluginRuntimeStateScript.BUILTIN_TOOL_PROFILES)
 
 
 func apply_profile_from_tools(profile_id: String) -> Dictionary:
@@ -2821,6 +2791,20 @@ func _ensure_plugin_profile_config_service():
 	if _plugin_profile_config_service == null:
 		_plugin_profile_config_service = PluginProfileConfigServiceScript.new()
 	return _plugin_profile_config_service
+
+
+func _build_plugin_developer_settings_context() -> Dictionary:
+	return {
+		"state": _state,
+		"localization": _localization,
+		"log_level": get_log_level_for_tools()
+	}
+
+
+func _ensure_plugin_developer_settings_service():
+	if _plugin_developer_settings_service == null:
+		_plugin_developer_settings_service = PluginDeveloperSettingsServiceScript.new()
+	return _plugin_developer_settings_service
 
 
 func _record_self_incident(
