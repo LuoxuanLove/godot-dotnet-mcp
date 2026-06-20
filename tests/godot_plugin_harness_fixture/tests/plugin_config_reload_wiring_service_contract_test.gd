@@ -3,6 +3,7 @@ extends RefCounted
 # {"name": "plugin_config_reload_wiring_service_contracts"}
 
 const PluginConfigReloadWiringServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_config_reload_wiring_service.gd")
+const PluginConfigReloadContextServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_config_reload_context_service.gd")
 
 
 class FakeBaseControl:
@@ -158,11 +159,28 @@ class FakePluginContext:
 	func get_client_executable_dialog():
 		return null
 
+	func _schedule_plugin_reenable() -> bool: return schedule_plugin_reenable()
+	func _complete_plugin_reenable_schedule() -> void: complete_plugin_reenable_schedule()
+	func _apply_external_user_tool_catalog_refresh(paths: Array[String], reason: String = "external_watch") -> void:
+		apply_external_user_tool_catalog_refresh(paths, reason)
+	func _get_client_install_statuses() -> Dictionary: return get_client_install_statuses()
+	func _invalidate_client_install_status_cache() -> void: invalidate_client_install_status_cache()
+	func _configure_client_install_detection_service() -> void: configure_client_install_detection_service()
+	func _refresh_dock() -> void: refresh_dock()
+	func _save_settings() -> void: save_settings()
+	func _show_message(message: String) -> void: show_message(message)
+	func _show_confirmation(message: String, on_confirmed: Callable) -> void: show_confirmation(message, on_confirmed)
+	func _configure_client_executable_dialog() -> void: ensure_client_executable_dialog()
+	func _get_client_executable_dialog(): return get_client_executable_dialog()
+
 
 func run_case(_tree: SceneTree) -> Dictionary:
 	var source_guard := _assert_plugin_entrypoint_uses_config_reload_wiring_service()
 	if not source_guard.is_empty():
 		return _failure(source_guard)
+	var context_guard := _assert_config_reload_context_service_builds_entrypoint_context()
+	if not context_guard.is_empty():
+		return _failure(context_guard)
 
 	var service = PluginConfigReloadWiringServiceScript.new()
 	var fake := FakePluginContext.new()
@@ -225,6 +243,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"error": "",
 		"details": {
 			"config_context_keys": action_service.configured_context.size(),
+			"context_service_keys": fake.build().size(),
 			"defer_delay": fake.tree.timer_delay,
 			"watch_calls": watch.calls.size()
 		}
@@ -238,6 +257,11 @@ func _assert_plugin_entrypoint_uses_config_reload_wiring_service() -> String:
 	var source := FileAccess.get_file_as_string(source_path)
 	for required in [
 		"PluginConfigReloadWiringServiceScript",
+		"PluginConfigReloadContextServiceScript.new()",
+		"_config_reload_context_service.build_config_reload_context(self,",
+		"func _get_config_reload_wiring_context()",
+		"_cached_config_reload_wiring_context = _build_config_reload_wiring_context()",
+		"func _invalidate_config_reload_wiring_context()",
 		"_config_reload_wiring_service.schedule_plugin_reenable(",
 		"_config_reload_wiring_service.schedule_plugin_reenable_deferred(",
 		"_config_reload_wiring_service.configure_user_tool_watch_service(",
@@ -254,10 +278,42 @@ func _assert_plugin_entrypoint_uses_config_reload_wiring_service() -> String:
 		"coordinator.request_reload_by_script(",
 		"coordinator.request_reload_all(",
 		"ConfigTabActionServiceScript.new()",
-		"UserToolWatchServiceScript.new()"
+		"UserToolWatchServiceScript.new()",
+		"\"get_client_install_statuses\": Callable(self",
+		"\"apply_external_user_tool_catalog_refresh\": Callable(self"
 	]:
 		if source.find(forbidden) != -1:
 			return "Plugin entrypoint should not own config/reload wiring primitive directly: %s" % forbidden
+	return ""
+
+
+func _assert_config_reload_context_service_builds_entrypoint_context() -> String:
+	var service = PluginConfigReloadContextServiceScript.new()
+	var fake := FakePluginContext.new()
+	var dependencies := fake.build()
+	var context: Dictionary = service.build_config_reload_context(fake, {
+		"plugin_id": "godot_dotnet_mcp",
+		"server_controller": dependencies.get("server_controller", null),
+		"state": dependencies.get("state", null),
+		"localization": dependencies.get("localization", null),
+		"config_service": dependencies.get("config_service", null),
+		"client_install_detection_service": dependencies.get("client_install_detection_service", null),
+		"user_tool_service": dependencies.get("user_tool_service", null)
+	})
+	for key in dependencies.keys():
+		if not context.has(key):
+			return "PluginConfigReloadContextService should preserve config/reload context key: %s" % str(key)
+		if key in ["plugin_id"]:
+			continue
+		if str(key).ends_with("_service") or key in ["plugin_host", "server_controller", "state", "localization"]:
+			continue
+		if not (context.get(key, Callable()) is Callable) or not (context[key] as Callable).is_valid():
+			return "PluginConfigReloadContextService should expose a valid callable for key: %s" % str(key)
+	if str(context.get("plugin_id", "")) != "godot_dotnet_mcp":
+		return "PluginConfigReloadContextService should preserve the plugin id."
+	if context.get("plugin_host", null) != fake:
+		return "PluginConfigReloadContextService should preserve the plugin host."
+	(context["refresh_dock"] as Callable).call()
 	return ""
 
 
