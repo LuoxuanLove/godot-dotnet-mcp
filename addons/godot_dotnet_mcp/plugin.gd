@@ -31,6 +31,7 @@ const PluginUpdateToolFacadeServiceScript = preload("res://addons/godot_dotnet_m
 const PluginUpdateSyncMirrorServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_sync_mirror_service.gd")
 const PluginUpdateRequestPlanningServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_request_planning_service.gd")
 const PluginUpdateRefsDiscoveryServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_refs_discovery_service.gd")
+const PluginUpdateCompareServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_compare_service.gd")
 const PluginUsageGuideServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_usage_guide_service.gd")
 const PluginSelfDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostics_service.gd")
 const PluginProfileConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_profile_config_service.gd")
@@ -85,6 +86,7 @@ var _plugin_update_tool_facade := PluginUpdateToolFacadeServiceScript.new()
 var _plugin_update_sync_mirror_service := PluginUpdateSyncMirrorServiceScript.new()
 var _plugin_update_request_planning_service := PluginUpdateRequestPlanningServiceScript.new()
 var _plugin_update_refs_discovery_service := PluginUpdateRefsDiscoveryServiceScript.new()
+var _plugin_update_compare_service := PluginUpdateCompareServiceScript.new()
 var _plugin_usage_guide_service := PluginUsageGuideServiceScript.new()
 var _plugin_self_diagnostics_service := PluginSelfDiagnosticsServiceScript.new()
 var _plugin_profile_config_service := PluginProfileConfigServiceScript.new()
@@ -281,6 +283,7 @@ func _dispose_lifecycle_services() -> void:
 	_plugin_update_sync_mirror_service = null
 	_plugin_update_request_planning_service = null
 	_plugin_update_refs_discovery_service = null
+	_plugin_update_compare_service = null
 	_plugin_usage_guide_service = null
 	_plugin_self_diagnostics_service = null
 	_plugin_profile_config_service = null
@@ -1192,12 +1195,15 @@ func _start_update_ref_version_request(target_ref: String, target_kind: String =
 	request_node.body_size_limit = 65536
 	request_parent.add_child(request_node)
 	request_node.request_completed.connect(Callable(self, "_on_update_ref_version_request_completed").bind(normalized_ref, serial, request_node), CONNECT_ONE_SHOT)
-	var url_template := UPDATE_TARGET_PLUGIN_CFG_TAG_URL_TEMPLATE if target_kind == "tag" else UPDATE_TARGET_PLUGIN_CFG_BRANCH_URL_TEMPLATE
-	var url := url_template % normalized_ref.uri_encode().replace("%2F", "/")
+	var url := _build_update_target_version_url(normalized_ref, target_kind)
 	var error := request_node.request(url, _get_update_refs_headers())
 	if error != OK:
 		_update_ref_version_requests_in_flight.erase(normalized_ref)
 		request_node.queue_free()
+
+
+func _build_update_target_version_url(target_ref: String, target_kind: String) -> String:
+	return _ensure_plugin_update_compare_service().build_target_version_url(target_ref, target_kind, UPDATE_TARGET_PLUGIN_CFG_BRANCH_URL_TEMPLATE, UPDATE_TARGET_PLUGIN_CFG_TAG_URL_TEMPLATE)
 
 
 func _on_update_ref_version_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, target_ref: String, serial: int, request_node: HTTPRequest) -> void:
@@ -1216,18 +1222,7 @@ func _on_update_ref_version_request_completed(result: int, response_code: int, _
 
 
 func _parse_update_target_plugin_cfg_version(content: String) -> String:
-	for line in content.split("\n"):
-		var normalized := str(line).strip_edges()
-		if not normalized.begins_with("version"):
-			continue
-		var separator := normalized.find("=")
-		if separator == -1:
-			continue
-		var value := normalized.substr(separator + 1).strip_edges()
-		if value.length() >= 2 and ((value.begins_with("\"") and value.ends_with("\"")) or (value.begins_with("'") and value.ends_with("'"))):
-			value = value.substr(1, value.length() - 2)
-		return value.strip_edges()
-	return ""
+	return _ensure_plugin_update_compare_service().parse_plugin_cfg_version(content)
 
 
 func _on_update_refs_request_completed(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, kind: String, serial: int, request_node: HTTPRequest) -> void:
@@ -1592,45 +1587,36 @@ func _refresh_update_compare_for_current_target() -> void:
 		return
 	var target := _resolve_update_sync_target()
 	var base_commit := _resolve_current_update_commit()
-	var target_ref := str(target.get("ref", "")).strip_edges()
-	var target_commit := str(target.get("commit", "")).strip_edges()
-	var compare_head := _resolve_update_compare_head(target)
-	_state.update_compare_base_commit = base_commit
+	var compare_snapshot := _build_update_compare_start_snapshot(base_commit, target)
+	var target_ref := str(compare_snapshot.get("target_ref", ""))
+	_state.update_compare_base_commit = str(compare_snapshot.get("base_commit", ""))
 	_state.update_compare_target_ref = target_ref
-	_state.update_compare_target_commit = target_commit
-	_state.update_compare_ahead_by = -1
-	_state.update_compare_behind_by = -1
-	_state.update_compare_error = ""
+	_state.update_compare_target_commit = str(compare_snapshot.get("target_commit", ""))
+	_state.update_compare_ahead_by = int(compare_snapshot.get("ahead_by", -1))
+	_state.update_compare_behind_by = int(compare_snapshot.get("behind_by", -1))
+	_state.update_compare_error = str(compare_snapshot.get("error", ""))
 	if not (_state.update_ref_versions as Dictionary).has(target_ref):
 		_start_update_ref_version_request(target_ref, str(target.get("kind", "branch")))
-	if base_commit.is_empty() or compare_head.is_empty():
+	var compare_state := str(compare_snapshot.get("state", "loading"))
+	if compare_state == "unavailable":
 		_state.update_compare_state = "unavailable"
 		return
-	if not target_commit.is_empty() and base_commit == target_commit:
+	if compare_state == "success":
 		_state.update_compare_state = "success"
-		_state.update_compare_ahead_by = 0
-		_state.update_compare_behind_by = 0
 		return
-	_start_update_compare_request(base_commit, compare_head, target_commit)
+	_start_update_compare_request(base_commit, str(compare_snapshot.get("compare_head", "")), str(compare_snapshot.get("target_commit", "")))
+
+
+func _build_update_compare_start_snapshot(base_commit: String, target: Dictionary) -> Dictionary:
+	return _ensure_plugin_update_compare_service().build_compare_start_snapshot(base_commit, target)
 
 
 func _resolve_update_compare_head(target: Dictionary) -> String:
-	var target_ref := str(target.get("ref", "")).strip_edges()
-	var target_commit := str(target.get("commit", "")).strip_edges()
-	if str(target.get("kind", "branch")) == "tag" and not target_ref.is_empty():
-		return target_ref
-	if not target_commit.is_empty():
-		return target_commit
-	return target_ref
+	return _ensure_plugin_update_compare_service().resolve_compare_head(target)
 
 
 func _resolve_current_update_commit() -> String:
-	var freshness := PluginInstanceFreshness.get_freshness_snapshot()
-	if freshness is Dictionary:
-		var sync_snapshot = (freshness as Dictionary).get("sync", {})
-		if sync_snapshot is Dictionary:
-			return str((sync_snapshot as Dictionary).get("source_git_commit", "")).strip_edges()
-	return ""
+	return _ensure_plugin_update_compare_service().resolve_current_commit(PluginInstanceFreshness.get_freshness_snapshot())
 
 
 func _reset_update_compare_state() -> void:
@@ -1699,18 +1685,7 @@ func _mark_update_compare_failed(message: String, serial: int) -> void:
 
 
 func _parse_update_compare_json(body: PackedByteArray) -> Dictionary:
-	var json := JSON.new()
-	var parse_error := json.parse(body.get_string_from_utf8())
-	if parse_error != OK:
-		return {"success": false, "error": json.get_error_message()}
-	if not (json.data is Dictionary):
-		return {"success": false, "error": "Expected a JSON object"}
-	var data := json.data as Dictionary
-	return {
-		"success": true,
-		"ahead_by": int(data.get("ahead_by", -1)),
-		"behind_by": int(data.get("behind_by", -1))
-	}
+	return _ensure_plugin_update_compare_service().parse_compare_response(body)
 
 
 func _parse_update_refs_json_array(body: PackedByteArray) -> Dictionary:
@@ -1896,6 +1871,12 @@ func _ensure_plugin_update_refs_discovery_service():
 	if _plugin_update_refs_discovery_service == null:
 		_plugin_update_refs_discovery_service = PluginUpdateRefsDiscoveryServiceScript.new()
 	return _plugin_update_refs_discovery_service
+
+
+func _ensure_plugin_update_compare_service():
+	if _plugin_update_compare_service == null:
+		_plugin_update_compare_service = PluginUpdateCompareServiceScript.new()
+	return _plugin_update_compare_service
 
 
 func _build_plugin_update_tool_context(target: Dictionary = {}) -> Dictionary:
