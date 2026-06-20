@@ -456,33 +456,27 @@ func _execute_runtime_capabilities_async() -> Dictionary:
 
 func _execute_runtime_tool(tool_name: String, request: Dictionary) -> Dictionary:
 	var request_path := _make_runtime_request_path(tool_name)
-	var file := FileAccess.open(request_path, FileAccess.WRITE)
-	if file == null:
+	var write_result := _write_runtime_request_file(request_path, request)
+	if not bool(write_result.get("success", false)):
 		return {
 			"success": false,
-			"error": "Failed to create Roslyn runtime request file: %s" % request_path
+			"error": str(write_result.get("error", "Failed to create Roslyn runtime request file: %s" % request_path))
 		}
-	file.store_string(JSON.stringify(request))
-	file.close()
 	var result := _execute_runtime_process(["--call-json-file", tool_name, ProjectSettings.globalize_path(request_path)])
-	if FileAccess.file_exists(request_path):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(request_path))
+	_cleanup_runtime_request_file(request_path)
 	return result
 
 
 func _execute_runtime_tool_async(tool_name: String, request: Dictionary) -> Dictionary:
 	var request_path := _make_runtime_request_path(tool_name)
-	var file := FileAccess.open(request_path, FileAccess.WRITE)
-	if file == null:
+	var write_result := _write_runtime_request_file(request_path, request)
+	if not bool(write_result.get("success", false)):
 		return {
 			"success": false,
-			"error": "Failed to create Roslyn runtime request file: %s" % request_path
+			"error": str(write_result.get("error", "Failed to create Roslyn runtime request file: %s" % request_path))
 		}
-	file.store_string(JSON.stringify(request))
-	file.close()
 	var result: Dictionary = await _execute_runtime_process_async(["--call-json-file", tool_name, ProjectSettings.globalize_path(request_path)])
-	if FileAccess.file_exists(request_path):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(request_path))
+	_cleanup_runtime_request_file(request_path)
 	return result
 
 
@@ -599,6 +593,22 @@ func _make_runtime_response_path() -> String:
 func _remove_file_if_exists(path: String) -> void:
 	if FileAccess.file_exists(path):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func _write_runtime_request_file(request_path: String, request: Dictionary) -> Dictionary:
+	var file := FileAccess.open(request_path, FileAccess.WRITE)
+	if file == null:
+		return {
+			"success": false,
+			"error": "Failed to create Roslyn runtime request file: %s" % request_path
+		}
+	file.store_string(JSON.stringify(request))
+	file.close()
+	return {"success": true}
+
+
+func _cleanup_runtime_request_file(request_path: String) -> void:
+	_remove_file_if_exists(request_path)
 
 
 func _convert_bridge_read_response(response: Dictionary, script_path: String) -> Dictionary:

@@ -334,6 +334,34 @@ else {
     $errors.Add("DotnetBridge Program.cs is missing: addons\godot_dotnet_mcp\dotnet_bridge\Program.cs")
 }
 
+$dotnetBridgeSafeXmlLoaderPath = Join-Path $repoRoot "addons\godot_dotnet_mcp\dotnet_bridge\SafeXmlDocumentLoader.cs"
+if (Test-Path -LiteralPath $dotnetBridgeSafeXmlLoaderPath) {
+    $dotnetBridgeSafeXmlLoaderText = Get-Content -LiteralPath $dotnetBridgeSafeXmlLoaderPath -Raw -Encoding UTF8
+    foreach ($requiredText in @("XmlReaderSettings", "DtdProcessing = DtdProcessing.Prohibit", "XmlResolver = null", "XDocument.Load(reader")) {
+        if (-not $dotnetBridgeSafeXmlLoaderText.Contains($requiredText)) {
+            $errors.Add("DotnetBridge SafeXmlDocumentLoader must contain '$requiredText'.")
+        }
+    }
+}
+else {
+    $errors.Add("DotnetBridge SafeXmlDocumentLoader is missing: addons\godot_dotnet_mcp\dotnet_bridge\SafeXmlDocumentLoader.cs")
+}
+
+foreach ($relativePath in @("addons\godot_dotnet_mcp\dotnet_bridge\CsprojReader.cs", "addons\godot_dotnet_mcp\dotnet_bridge\CsprojWriteTool.cs")) {
+    $absolutePath = Join-Path $repoRoot $relativePath
+    if (-not (Test-Path -LiteralPath $absolutePath)) {
+        $errors.Add("DotnetBridge csproj helper is missing: $relativePath")
+        continue
+    }
+    $helperText = Get-Content -LiteralPath $absolutePath -Raw -Encoding UTF8
+    if (-not $helperText.Contains("SafeXmlDocumentLoader.Load(")) {
+        $errors.Add("DotnetBridge csproj helper must use SafeXmlDocumentLoader.Load: $relativePath")
+    }
+    if ($helperText.Contains("XDocument.Load(path")) {
+        $errors.Add("DotnetBridge csproj helper must not call XDocument.Load(path) directly: $relativePath")
+    }
+}
+
 $dotnetBridgeRuntimeCliTestPath = Join-Path $repoRoot "scripts\test_dotnet_bridge_runtime_cli.ps1"
 if (Test-Path -LiteralPath $dotnetBridgeRuntimeCliTestPath) {
     $dotnetBridgeRuntimeCliTestText = Get-Content -LiteralPath $dotnetBridgeRuntimeCliTestPath -Raw -Encoding UTF8

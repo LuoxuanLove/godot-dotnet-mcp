@@ -226,6 +226,8 @@ func _assert_isolated_runtime_process_has_timeout_guards() -> Dictionary:
 		"roslyn_runtime_timeout",
 		"_parse_runtime_process_response",
 		"_execute_runtime_process_async",
+		"_write_runtime_request_file",
+		"_cleanup_runtime_request_file",
 		"await _await_process_frame()",
 		"roslyn_runtime_process_requires_async"
 	]:
@@ -235,6 +237,8 @@ func _assert_isolated_runtime_process_has_timeout_guards() -> Dictionary:
 		return _failure("PluginRoslynService must not use blocking OS.execute for isolated Roslyn runtime calls.")
 	if service_source.find("OS.delay_usec") != -1:
 		return _failure("PluginRoslynService isolated runtime process must yield frames instead of busy-wait polling.")
+	if service_source.find("DirAccess.remove_absolute(ProjectSettings.globalize_path(request_path))") != -1:
+		return _failure("PluginRoslynService should cleanup runtime request files through the shared cleanup helper.")
 
 	return {"success": true}
 
