@@ -33,6 +33,8 @@ const MAX_STDIN_BYTES_PER_TICK := 8192
 const MAX_STDIN_CONTENT_LENGTH := 1024 * 1024
 const MAX_STDIN_HEADER_BYTES := 64 * 1024
 const MAX_STDIN_PENDING_BYTES := MAX_STDIN_CONTENT_LENGTH + MAX_STDIN_HEADER_BYTES
+const LEGACY_CONTENT_LENGTH_PREFIX := "Content-Length:"
+const LEGACY_HEADER_TERMINATOR := "\r\n\r\n"
 
 
 func _ready() -> void:
@@ -162,7 +164,7 @@ func _try_parse_newline_frame(generation: int) -> bool:
 				"stdio_pending_buffer_exceeded"
 			)
 			return false
-		if _buffer.size() > 0 and _buffer.get_string_from_utf8().begins_with("Content-Length:"):
+		if _buffer_starts_with_ascii(_buffer, LEGACY_CONTENT_LENGTH_PREFIX):
 			_reject_stdio_frame(
 				"Legacy Content-Length stdio framing requires explicit compatibility mode.",
 				"stdio_legacy_content_length_requires_compat"
@@ -205,8 +207,7 @@ func _try_parse_legacy_content_length_frame(generation: int) -> bool:
 				"stdio_pending_buffer_exceeded"
 			)
 			return false
-		var buffer_text: String = _buffer.get_string_from_ascii()
-		var header_end: int = buffer_text.find("\r\n\r\n")
+		var header_end: int = _find_ascii_sequence(_buffer, LEGACY_HEADER_TERMINATOR)
 		if header_end == -1:
 			return false
 		var header_bytes: PackedByteArray = _buffer.slice(0, header_end)
@@ -235,6 +236,37 @@ func _try_parse_legacy_content_length_frame(generation: int) -> bool:
 func _find_byte(bytes: PackedByteArray, byte_value: int) -> int:
 	for index in range(bytes.size()):
 		if bytes[index] == byte_value:
+			return index
+	return -1
+
+
+func _buffer_starts_with_ascii(bytes: PackedByteArray, prefix: String) -> bool:
+	var prefix_length := prefix.length()
+	if prefix_length == 0:
+		return true
+	if bytes.size() < prefix_length:
+		return false
+	for index in range(prefix_length):
+		if bytes[index] != prefix.unicode_at(index):
+			return false
+	return true
+
+
+func _find_ascii_sequence(bytes: PackedByteArray, sequence: String, from_index: int = 0) -> int:
+	var sequence_length := sequence.length()
+	if sequence_length == 0:
+		return clampi(from_index, 0, bytes.size())
+	var start_index = maxi(from_index, 0)
+	var last_start := bytes.size() - sequence_length
+	if last_start < start_index:
+		return -1
+	for index in range(start_index, last_start + 1):
+		var matched := true
+		for offset in range(sequence_length):
+			if bytes[index + offset] != sequence.unicode_at(offset):
+				matched = false
+				break
+		if matched:
 			return index
 	return -1
 

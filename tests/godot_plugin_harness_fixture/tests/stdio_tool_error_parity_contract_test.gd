@@ -192,6 +192,11 @@ func _assert_stdio_framing_guards(stdio_server) -> Dictionary:
 		stdio_server.stop()
 		return _failure("Stdio should default to newline-delimited JSON-RPC framing.")
 
+	var byte_scan_check := _assert_stdio_byte_level_framing_scan()
+	if not bool(byte_scan_check.get("success", false)):
+		stdio_server.stop()
+		return byte_scan_check
+
 	var newline_check := await _assert_newline_stdio_frames(stdio_server)
 	if not bool(newline_check.get("success", false)):
 		stdio_server.stop()
@@ -316,6 +321,23 @@ func _assert_stdio_framing_guards(stdio_server) -> Dictionary:
 		return _failure("Stdio parser should drain valid pipelined frames exactly.")
 
 	stdio_server.stop()
+	return {"success": true, "error": ""}
+
+
+func _assert_stdio_byte_level_framing_scan() -> Dictionary:
+	var stdio_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_server.gd")
+	if stdio_source.find("get_string_from_utf8().begins_with(\"Content-Length:\")") != -1:
+		return _failure("Stdio newline framing should detect legacy Content-Length with byte-level prefix checks, not full-buffer UTF-8 decode.")
+	if stdio_source.find("var buffer_text: String = _buffer.get_string_from_ascii()") != -1:
+		return _failure("Stdio legacy framing should find header terminators with byte-level scanning before decoding only the header.")
+	for required in [
+		"func _buffer_starts_with_ascii",
+		"func _find_ascii_sequence",
+		"_buffer_starts_with_ascii(_buffer, LEGACY_CONTENT_LENGTH_PREFIX)",
+		"_find_ascii_sequence(_buffer, LEGACY_HEADER_TERMINATOR)"
+	]:
+		if stdio_source.find(required) == -1:
+			return _failure("Stdio framing byte-level scan guard missing required implementation marker: %s" % required)
 	return {"success": true, "error": ""}
 
 
