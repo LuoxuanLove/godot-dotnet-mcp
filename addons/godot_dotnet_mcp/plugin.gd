@@ -2552,6 +2552,7 @@ func _build_runtime_reload_completion_context() -> Dictionary:
 	return {
 		"state": _state,
 		"dock": _dock,
+		"get_dock": Callable(self, "_get_dock"),
 		"server_controller": _server_controller,
 		"get_server_controller": Callable(self, "_get_server_controller"),
 		"refresh_service_instances": Callable(self, "_refresh_service_instances"),
@@ -2565,6 +2566,10 @@ func _build_runtime_reload_completion_context() -> Dictionary:
 
 func _get_server_controller():
 	return _server_controller
+
+
+func _get_dock():
+	return _dock
 
 
 func _reset_runtime_reload_localization() -> void:

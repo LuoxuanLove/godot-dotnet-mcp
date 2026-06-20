@@ -31,7 +31,7 @@ func capture_dock_focus_snapshot(dock, state) -> Dictionary:
 
 
 func restore_dock_focus_snapshot(context: Dictionary, snapshot: Dictionary) -> void:
-	var dock = context.get("dock", null)
+	var dock = _get_dock(context)
 	if dock == null or not is_instance_valid(dock):
 		return
 	var state = context.get("state", null)
@@ -88,3 +88,10 @@ func _get_server_controller(context: Dictionary):
 	if callback.is_valid():
 		return callback.call()
 	return context.get("server_controller", null)
+
+
+func _get_dock(context: Dictionary):
+	var callback: Callable = context.get("get_dock", Callable())
+	if callback.is_valid():
+		return callback.call()
+	return context.get("dock", null)

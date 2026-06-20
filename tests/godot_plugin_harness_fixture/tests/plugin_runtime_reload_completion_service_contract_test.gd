@@ -16,7 +16,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var active_controller = original_controller
 	var recorder := {
 		"calls": [],
-		"active_controller": active_controller
+		"active_controller": active_controller,
+		"dock_generation": 0
 	}
 	var context := _build_context(state, original_controller, recorder)
 	if not service.complete_server_restart(context):
@@ -39,6 +40,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for expected in ["refresh_service_instances", "recreate_server_controller", "reset_localization", "recreate_dock", "refresh_dock"]:
 		if not (recorder["calls"] as Array).has(expected):
 			return _failure("Runtime reload completion service should preserve soft reload step: %s" % expected, {"calls": recorder["calls"]})
+	if not (recorder["calls"] as Array).has("restore_focus_snapshot:2:dock1"):
+		return _failure("Runtime reload completion service should restore focus on the recreated dock after soft reload.", {"calls": recorder["calls"]})
 
 	var full_context := _build_context(state, original_controller, recorder)
 	recorder["calls"] = []
@@ -50,6 +53,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Runtime reload completion service should reinitialize the recreated controller when it was stopped.", {"calls": full_controller.calls})
 	if not (recorder["calls"] as Array).has("ensure_update_refs_discovery_requested"):
 		return _failure("Runtime reload completion service should trigger update refs discovery when restoring update tab focus.", {"calls": recorder["calls"]})
+	if not (recorder["calls"] as Array).has("restore_focus_snapshot:5:dock2"):
+		return _failure("Runtime reload completion service should restore focus on the latest recreated dock after full reload.", {"calls": recorder["calls"]})
 
 	var focus_snapshot = service.capture_dock_focus_snapshot(null, state)
 	if int(focus_snapshot.get("tab_index", -1)) != int(state.current_tab):
@@ -61,19 +66,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 func _build_context(state, server_controller, recorder: Dictionary) -> Dictionary:
 	recorder["active_controller"] = server_controller
-	var dock := FakeDock.new(recorder)
+	var dock := FakeDock.new(recorder, "dock%d" % int(recorder.get("dock_generation", 0)))
 	if not recorder.has("docks"):
 		recorder["docks"] = []
+	recorder["active_dock"] = dock
 	(recorder["docks"] as Array).append(dock)
 	return {
 		"state": state,
 		"dock": dock,
+		"get_dock": Callable(self, "_get_active_dock").bind(recorder),
 		"server_controller": server_controller,
 		"get_server_controller": Callable(self, "_get_active_controller").bind(recorder),
 		"refresh_service_instances": Callable(self, "_record_call").bind(recorder, "refresh_service_instances"),
 		"recreate_server_controller": Callable(self, "_recreate_controller").bind(recorder),
 		"reset_localization": Callable(self, "_record_call").bind(recorder, "reset_localization"),
-		"recreate_dock": Callable(self, "_record_call").bind(recorder, "recreate_dock"),
+		"recreate_dock": Callable(self, "_recreate_dock").bind(recorder),
 		"refresh_dock": Callable(self, "_record_call").bind(recorder, "refresh_dock"),
 		"ensure_update_refs_discovery_requested": Callable(self, "_record_call").bind(recorder, "ensure_update_refs_discovery_requested")
 	}
@@ -83,9 +90,23 @@ func _get_active_controller(recorder: Dictionary):
 	return recorder.get("active_controller", null)
 
 
+func _get_active_dock(recorder: Dictionary):
+	return recorder.get("active_dock", null)
+
+
 func _recreate_controller(recorder: Dictionary) -> void:
 	_record_call(recorder, "recreate_server_controller")
 	recorder["active_controller"] = FakeServerController.new("recreated")
+
+
+func _recreate_dock(recorder: Dictionary) -> void:
+	_record_call(recorder, "recreate_dock")
+	recorder["dock_generation"] = int(recorder.get("dock_generation", 0)) + 1
+	var dock := FakeDock.new(recorder, "dock%d" % int(recorder.get("dock_generation", 0)))
+	if not recorder.has("docks"):
+		recorder["docks"] = []
+	(recorder["docks"] as Array).append(dock)
+	recorder["active_dock"] = dock
 
 
 func _record_call(recorder: Dictionary, name: String) -> bool:
@@ -111,7 +132,8 @@ func _verify_plugin_entrypoint_delegates_runtime_reload_completion() -> String:
 		"_ensure_runtime_reload_completion_service().complete_soft_reload(",
 		"_ensure_runtime_reload_completion_service().complete_full_reload(",
 		"_ensure_runtime_reload_completion_service().capture_dock_focus_snapshot(",
-		"_ensure_runtime_reload_completion_service().restore_dock_focus_snapshot("
+		"_ensure_runtime_reload_completion_service().restore_dock_focus_snapshot(",
+		"\"get_dock\": Callable(self, \"_get_dock\")"
 	]:
 		if plugin_source.find(required) == -1:
 			return "plugin.gd should delegate runtime reload completion responsibility: %s" % required
@@ -158,15 +180,17 @@ class FakeDock:
 	extends Control
 
 	var recorder: Dictionary
+	var dock_id := ""
 
-	func _init(recorder_in: Dictionary) -> void:
+	func _init(recorder_in: Dictionary, dock_id_in: String) -> void:
 		recorder = recorder_in
+		dock_id = dock_id_in
 
 	func activate_editor_dock_tab() -> void:
 		(recorder["calls"] as Array).append("activate_editor_dock_tab")
 
 	func restore_focus_snapshot(snapshot: Dictionary) -> void:
-		(recorder["calls"] as Array).append("restore_focus_snapshot:%s" % str(snapshot.get("tab_index", "")))
+		(recorder["calls"] as Array).append("restore_focus_snapshot:%s:%s" % [str(snapshot.get("tab_index", "")), dock_id])
 
 	func focus_active_panel() -> void:
 		(recorder["calls"] as Array).append("focus_active_panel")
