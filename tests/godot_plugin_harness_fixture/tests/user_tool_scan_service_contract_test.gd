@@ -15,6 +15,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("UserToolScanService should expose explicit incremental scan steps.")
 	if source.find("func get_status() -> Dictionary:") == -1:
 		return _failure("UserToolScanService should expose lightweight status snapshots for diagnostics.")
+	var last_error_reset_index := source.find("_last_error = \"\"")
+	var root_job_index := source.find("_scan_stack = [_make_scan_directory_job(_root_dir)]")
+	if last_error_reset_index == -1 or root_job_index == -1 or last_error_reset_index > root_job_index:
+		return _failure("UserToolScanService should clear stale errors before creating the root scan job so open failures remain visible.")
 
 	_cleanup_root()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SCAN_ROOT))

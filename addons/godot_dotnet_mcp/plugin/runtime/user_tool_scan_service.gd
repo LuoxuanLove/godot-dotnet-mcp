@@ -23,12 +23,12 @@ func configure(root_dir: String, entry_budget_per_tick: int = DEFAULT_ENTRY_BUDG
 
 func begin_scan() -> Dictionary:
 	_scan_in_progress = true
-	_scan_stack = [_make_scan_directory_job(_root_dir)]
 	_scan_snapshot_data = {}
 	_entries_processed = 0
 	_last_scan_duration_ms = 0.0
 	_last_scan_slices = 0
 	_last_error = ""
+	_scan_stack = [_make_scan_directory_job(_root_dir)]
 	return continue_scan()
 
 
