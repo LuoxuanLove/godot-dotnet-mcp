@@ -630,6 +630,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	stable_refresh_dock.free()
 
 	var plugin_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin.gd")
+	var mirror_service_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_sync_mirror_service.gd")
+	if plugin_source.is_empty() or mirror_service_source.is_empty():
+		return _failure("Plugin update sync mirror sources should be readable.")
+	if plugin_source.find("PluginUpdateSyncMirrorServiceScript.new()") == -1:
+		return _failure("plugin.gd should delegate update sync mirror responsibilities to PluginUpdateSyncMirrorService.")
+	for required_mirror_method in [
+		"func sync_archive_to_addon(",
+		"func cleanup_stale_addon_files(",
+		"func delete_stale_paths(",
+		"func is_path_or_ancestor_link("
+	]:
+		if mirror_service_source.find(required_mirror_method) == -1:
+			return _failure("PluginUpdateSyncMirrorService should own mirror helper: %s" % required_mirror_method)
+	for forbidden_plugin_body in [
+		"var reader := ZIPReader.new()",
+		"func _delete_update_sync_stale_paths_recursive(",
+		"const UPDATE_SYNC_STALE_ADDON_FILES := [",
+		"const UPDATE_SYNC_ADDON_PREFIX :="
+	]:
+		if plugin_source.find(forbidden_plugin_body) != -1:
+			return _failure("plugin.gd should not retain update sync mirror internals: %s" % forbidden_plugin_body)
 	if plugin_source.find("_build_dock_refresh_status_signature(model)") != -1 or plugin_source.find("_build_dock_refresh_status_signature_data_from_model") != -1:
 		return _failure("plugin.gd should derive Dock refresh status signatures from one lightweight source instead of comparing model-derived loader data.")
 	if plugin_source.find("func _build_dock_refresh_status_signature() -> String:\n\tif _state == null:\n\t\treturn \"\"\n\treturn JSON.stringify(") != -1:
