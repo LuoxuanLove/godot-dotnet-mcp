@@ -67,6 +67,8 @@ const TRANSLATIONS: Dictionary = {
 	"server_status": "Server Status",
 	"server_state_label": "State:",
 	"endpoint": "Endpoint:",
+	"server_bind_risk_external_host": "External bind: reachable outside this machine",
+	"server_bind_risk_wildcard_host": "External bind: listening on all network interfaces",
 	"connections": "Connections:",
 	"active_connections": "Active Connections:",
 	"total_requests": "Total Requests:",

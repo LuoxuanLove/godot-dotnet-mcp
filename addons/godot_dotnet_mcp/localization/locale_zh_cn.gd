@@ -67,6 +67,8 @@ const TRANSLATIONS: Dictionary = {
 	"server_status": "服务器状态",
 	"server_state_label": "状态：",
 	"endpoint": "端点地址：",
+	"server_bind_risk_external_host": "外部监听：可能被本机以外访问",
+	"server_bind_risk_wildcard_host": "外部监听：正在监听全部网络接口",
 	"connections": "连接数：",
 	"active_connections": "活跃连接：",
 	"total_requests": "总请求数：",
