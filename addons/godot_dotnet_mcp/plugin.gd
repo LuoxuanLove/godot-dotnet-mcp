@@ -3001,6 +3001,8 @@ func _refresh_service_instances() -> void:
 	_config_service = ClientConfigServiceScript.new()
 	if _dock_model_service == null:
 		_dock_model_service = DockModelServiceScript.new()
+	if _plugin_client_config_state_service != null:
+		_plugin_client_config_state_service.dispose()
 	_plugin_client_config_state_service = PluginClientConfigStateServiceScript.new()
 	_user_tool_service = UserToolServiceScript.new()
 

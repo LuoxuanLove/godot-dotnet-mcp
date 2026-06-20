@@ -50,7 +50,8 @@ func _verify_plugin_entrypoint_delegates_client_config_state() -> String:
 		"_ensure_plugin_client_config_state_service().get_client_install_statuses(",
 		"_ensure_plugin_client_config_state_service().configure_client_executable_dialog(",
 		"_ensure_plugin_client_config_state_service().remove_client_executable_dialog()",
-		"_ensure_plugin_client_config_state_service().get_client_executable_dialog()"
+		"_ensure_plugin_client_config_state_service().get_client_executable_dialog()",
+		"_plugin_client_config_state_service.dispose()"
 	]:
 		if plugin_source.find(required) == -1:
 			return "plugin.gd should delegate client config state responsibility: %s" % required
