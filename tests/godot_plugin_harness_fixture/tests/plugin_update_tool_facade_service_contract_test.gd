@@ -54,6 +54,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("PluginUpdateToolFacadeService should preserve ref discovery metadata.")
 	if int((status.get("compare", {}) as Dictionary).get("ahead_by", -1)) != 5:
 		return _failure("PluginUpdateToolFacadeService should preserve compare metadata.")
+	context["target"]["ref"] = "mutated-ref"
+	context["commits"]["refactor/v2.0.0"] = "mutated-sha"
+	if str((status.get("target", {}) as Dictionary).get("ref", "")) != "refactor/v2.0.0":
+		return _failure("PluginUpdateToolFacadeService should defensively copy target metadata.")
+	if str((status.get("refs", {}) as Dictionary).get("commits", {}).get("refactor/v2.0.0", "")) != "target-sha":
+		return _failure("PluginUpdateToolFacadeService should defensively copy ref commit metadata.")
 
 	var syncing_context := context.duplicate(true)
 	syncing_context["sync_state"] = "loading"

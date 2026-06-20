@@ -8,9 +8,9 @@ const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/ru
 
 func build_current_snapshot() -> Dictionary:
 	var freshness := PluginInstanceFreshness.get_freshness_snapshot()
-	var running_instance: Dictionary = freshness.get("running_instance", {})
-	var disk_source: Dictionary = freshness.get("disk_source", {})
-	var sync_snapshot: Dictionary = freshness.get("sync", {})
+	var running_instance: Dictionary = _duplicate_dictionary(freshness.get("running_instance", {}))
+	var disk_source: Dictionary = _duplicate_dictionary(freshness.get("disk_source", {}))
+	var sync_snapshot: Dictionary = _duplicate_dictionary(freshness.get("sync", {}))
 	var source_snapshot := disk_source if not disk_source.is_empty() else running_instance
 	var source_fingerprint := str(source_snapshot.get("source_fingerprint", running_instance.get("source_fingerprint", "")))
 	var short_fingerprint := shorten_fingerprint(source_fingerprint)
@@ -31,8 +31,8 @@ func build_current_snapshot() -> Dictionary:
 		"running_instance": running_instance,
 		"disk_source": disk_source,
 		"sync": sync_snapshot,
-		"lifecycle_reload": freshness.get("lifecycle_reload", {}),
-		"comparison": freshness.get("comparison", {})
+		"lifecycle_reload": _duplicate_dictionary(freshness.get("lifecycle_reload", {})),
+		"comparison": _duplicate_dictionary(freshness.get("comparison", {}))
 	}
 
 
@@ -43,7 +43,7 @@ func build_status_snapshot(context: Dictionary) -> Dictionary:
 		"source": str(context.get("source", "")),
 		"custom_branch": str(context.get("custom_branch", "")),
 		"release_tag": str(context.get("release_tag", "")),
-		"target": context.get("target", {}),
+		"target": _duplicate_dictionary(context.get("target", {})),
 		"current_commit": str(context.get("current_commit", "")),
 		"request_host_available": bool(context.get("request_host_available", false)),
 		"discovery_retry_pending": bool(context.get("discovery_retry_pending", false)),
@@ -52,7 +52,7 @@ func build_status_snapshot(context: Dictionary) -> Dictionary:
 		"refs": build_refs_status(context),
 		"compare": build_compare_status(context),
 		"sync": build_sync_status(context),
-		"lifecycle_reload": PluginInstanceFreshness.get_freshness_snapshot().get("lifecycle_reload", {})
+		"lifecycle_reload": _duplicate_dictionary(PluginInstanceFreshness.get_freshness_snapshot().get("lifecycle_reload", {}))
 	}
 
 
