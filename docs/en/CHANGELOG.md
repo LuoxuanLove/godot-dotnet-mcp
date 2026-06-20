@@ -78,6 +78,7 @@ Target version: 2.0.0.
 
 - Added aggregate v2.0 conformance and guardrail coverage for lifecycle, JSON-RPC, Tools, Resources, Prompts, schema metadata, Streamable HTTP, stdio, Dock metadata, public-tool removals, root monolith closure, catalog facts, optional capabilities, release-facing install guidance, changelog section order, and Roslyn runtime bundle shape.
 - Moved plugin config/reload callback context construction into a dedicated context service so the plugin entrypoint keeps less wiring state while preserving existing reload, client setup, and User-tool watcher behavior.
+- Moved plugin update tool status snapshots and maintenance response enrichment into a dedicated facade service, keeping archive download and file sync operations in the plugin runtime while reducing plugin entrypoint response-shaping debt.
 - Added release-policy, PR-policy, and merge-queue validation coverage for v2.0 branch integration, trusted `refactor/v2.0.0` to `dev` version metadata handoff, version metadata changes, BOM-prefixed PR headings, and formal changelog section requirements.
 - Hardened tag-triggered plugin verification so manual branch runs cannot skip release preflight, release-note rendering, or release-note artifact validation.
 - Added safe-write and clean-install validation scripts for the DotnetBridge write surface, isolated Roslyn runtime bundle, and exported Asset Library addon shape.
