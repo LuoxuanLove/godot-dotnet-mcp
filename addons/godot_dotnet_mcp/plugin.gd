@@ -11,6 +11,7 @@ const PluginRuntimeCoordinatorScript = preload("res://addons/godot_dotnet_mcp/pl
 const PluginLifecycleServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_lifecycle_service.gd")
 const PluginLifecycleContextServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_lifecycle_context_service.gd")
 const PluginConfigReloadWiringServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_config_reload_wiring_service.gd")
+const PluginConfigReloadContextServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_config_reload_context_service.gd")
 const DockModelServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd")
 const DockMcpCatalogPreviewServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_mcp_catalog_preview_service.gd")
 const PluginActionRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_action_router.gd")
@@ -109,6 +110,7 @@ var _runtime_coordinator := PluginRuntimeCoordinatorScript.new()
 var _plugin_lifecycle_service := PluginLifecycleServiceScript.new()
 var _plugin_lifecycle_context_service := PluginLifecycleContextServiceScript.new()
 var _config_reload_wiring_service := PluginConfigReloadWiringServiceScript.new()
+var _config_reload_context_service := PluginConfigReloadContextServiceScript.new()
 var _runtime_reload_request_service := PluginRuntimeReloadRequestServiceScript.new()
 var _client_install_detection_service = null
 var _user_tool_service = null
@@ -138,6 +140,7 @@ var _update_ref_version_requests_in_flight := {}
 var _update_sync_request_serial := 0
 var _last_dock_refresh_status_signature := ""
 var _cached_lifecycle_context: Dictionary = {}
+var _cached_config_reload_wiring_context: Dictionary = {}
 var _tree_collapse_save_pending := false
 const USER_TOOL_WATCH_TICK_INTERVAL := 0.25
 
@@ -198,31 +201,27 @@ func _invalidate_plugin_lifecycle_context() -> void:
 
 
 func _build_config_reload_wiring_context() -> Dictionary:
-	return {
+	if _config_reload_context_service == null:
+		_config_reload_context_service = PluginConfigReloadContextServiceScript.new()
+	return _config_reload_context_service.build_config_reload_context(self, {
 		"plugin_id": PLUGIN_ID,
-		"plugin_host": self,
 		"server_controller": _server_controller,
 		"state": _state,
 		"localization": _localization,
 		"config_service": _config_service,
 		"client_install_detection_service": _client_install_detection_service,
-		"user_tool_service": _user_tool_service,
-		"get_editor_interface": Callable(self, "get_editor_interface"),
-		"is_inside_tree": Callable(self, "is_inside_tree"),
-		"get_tree": Callable(self, "get_tree"),
-		"schedule_plugin_reenable": Callable(self, "_schedule_plugin_reenable"),
-		"complete_plugin_reenable_schedule": Callable(self, "_complete_plugin_reenable_schedule"),
-		"apply_external_user_tool_catalog_refresh": Callable(self, "_apply_external_user_tool_catalog_refresh"),
-		"get_client_install_statuses": Callable(self, "_get_client_install_statuses"),
-		"invalidate_client_install_status_cache": Callable(self, "_invalidate_client_install_status_cache"),
-		"configure_client_install_detection_service": Callable(self, "_configure_client_install_detection_service"),
-		"refresh_dock": Callable(self, "_refresh_dock"),
-		"save_settings": Callable(self, "_save_settings"),
-		"show_message": Callable(self, "_show_message"),
-		"show_confirmation": Callable(self, "_show_confirmation"),
-		"ensure_client_executable_dialog": Callable(self, "_configure_client_executable_dialog"),
-		"get_client_executable_dialog": Callable(self, "_get_client_executable_dialog")
-	}
+		"user_tool_service": _user_tool_service
+	})
+
+
+func _get_config_reload_wiring_context() -> Dictionary:
+	if _cached_config_reload_wiring_context.is_empty():
+		_cached_config_reload_wiring_context = _build_config_reload_wiring_context()
+	return _cached_config_reload_wiring_context
+
+
+func _invalidate_config_reload_wiring_context() -> void:
+	_cached_config_reload_wiring_context = {}
 
 
 func _configure_lifecycle_enter_state() -> void:
@@ -285,6 +284,7 @@ func _dispose_action_router() -> void:
 
 func _dispose_lifecycle_services() -> void:
 	_invalidate_plugin_lifecycle_context()
+	_invalidate_config_reload_wiring_context()
 	LocalizationService.reset_instance()
 	_localization = null
 	_user_tool_service = null
@@ -300,6 +300,7 @@ func _dispose_lifecycle_services() -> void:
 		_mcp_catalog_preview_service.dispose()
 	_mcp_catalog_preview_service = null
 	_runtime_coordinator = null
+	_config_reload_context_service = null
 	_client_install_detection_service = null
 	_tool_catalog = null
 	_settings_store = null
@@ -3508,11 +3509,11 @@ func _restore_pending_focus_snapshot_if_needed() -> void:
 		_ensure_update_refs_discovery_requested()
 
 func _schedule_plugin_reenable() -> bool:
-	return _config_reload_wiring_service.schedule_plugin_reenable(_build_config_reload_wiring_context())
+	return _config_reload_wiring_service.schedule_plugin_reenable(_get_config_reload_wiring_context())
 
 
 func _schedule_plugin_reenable_deferred() -> bool:
-	return _config_reload_wiring_service.schedule_plugin_reenable_deferred(_build_config_reload_wiring_context())
+	return _config_reload_wiring_service.schedule_plugin_reenable_deferred(_get_config_reload_wiring_context())
 
 
 func _complete_plugin_reenable_schedule() -> void:
@@ -3521,13 +3522,13 @@ func _complete_plugin_reenable_schedule() -> void:
 
 
 func _create_reload_coordinator():
-	return _config_reload_wiring_service.create_reload_coordinator(_build_config_reload_wiring_context())
+	return _config_reload_wiring_service.create_reload_coordinator(_get_config_reload_wiring_context())
 
 
 func _configure_user_tool_watch_service() -> void:
 	_user_tool_watch_service = _config_reload_wiring_service.configure_user_tool_watch_service(
 		_user_tool_watch_service,
-		_build_config_reload_wiring_context()
+		_get_config_reload_wiring_context()
 	)
 	_invalidate_plugin_lifecycle_context()
 
@@ -3535,7 +3536,7 @@ func _configure_user_tool_watch_service() -> void:
 func _configure_config_tab_action_service() -> void:
 	_config_tab_action_service = _config_reload_wiring_service.configure_config_tab_action_service(
 		_config_tab_action_service,
-		_build_config_reload_wiring_context()
+		_get_config_reload_wiring_context()
 	)
 
 
@@ -3583,6 +3584,7 @@ func _cleanup_disabled_tools() -> void:
 
 func _refresh_service_instances() -> void:
 	_ensure_runtime_state()
+	_invalidate_config_reload_wiring_context()
 	_settings_store = SettingsStoreScript.new()
 	if _server_controller == null:
 		_server_controller = ServerRuntimeControllerScript.new()
