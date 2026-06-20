@@ -497,6 +497,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var legacy_error: String = await _assert_legacy_fallback_catalog_rendering(tool_tree, preview_text, search_edit)
 	if not legacy_error.is_empty():
 		return _failure(legacy_error)
+	var icon_cache_error := _assert_icon_texture_cache_is_bounded()
+	if not icon_cache_error.is_empty():
+		return _failure(icon_cache_error)
 
 	return {
 		"name": "tools_tab_rendering_contracts",
@@ -509,6 +512,29 @@ func run_case(tree: SceneTree) -> Dictionary:
 			"catalog_tool_count": SystemTreeCatalog.SYSTEM_TOOL_ATOMIC_CHILDREN.size()
 		}
 	}
+
+
+func _assert_icon_texture_cache_is_bounded() -> String:
+	var cache_limit := 64
+	for index in range(cache_limit + 8):
+		var src := "contract-icon-%03d" % index
+		var image := Image.create(1, 1, false, Image.FORMAT_RGBA8)
+		image.fill(Color(1.0, 1.0, 1.0, 1.0))
+		var texture := ImageTexture.create_from_image(image)
+		_instance.call("_store_icon_texture", src, texture)
+	if int(_instance._icon_texture_cache.size()) != cache_limit:
+		return "Tools tab protocol icon texture cache should be bounded to MAX_ICON_TEXTURE_CACHE_ENTRIES."
+	if _instance._icon_texture_cache.has("contract-icon-000"):
+		return "Tools tab protocol icon texture cache should evict least-recently-used entries."
+	var retained_key := "contract-icon-%03d" % (cache_limit + 7)
+	if not _instance._icon_texture_cache.has(retained_key):
+		return "Tools tab protocol icon texture cache should retain recently inserted icons."
+	var refreshed_key := "contract-icon-%03d" % (cache_limit - 1)
+	_instance.call("_store_icon_texture", refreshed_key, _instance._icon_texture_cache.get(refreshed_key))
+	_instance.call("_store_icon_texture", "contract-icon-new", ImageTexture.create_from_image(Image.create(1, 1, false, Image.FORMAT_RGBA8)))
+	if not _instance._icon_texture_cache.has(refreshed_key):
+		return "Tools tab protocol icon texture cache hits should refresh LRU order."
+	return ""
 
 
 func _build_exposed_tools(tools_by_category: Dictionary) -> Array:

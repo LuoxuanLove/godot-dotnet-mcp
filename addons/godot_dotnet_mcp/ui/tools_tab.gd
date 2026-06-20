@@ -54,6 +54,7 @@ const TREE_HORIZONTAL_CHROME_WIDTH := 56.0
 const MAX_PROTOCOL_ICON_SRC_LENGTH := 8192
 const MAX_PROTOCOL_ICON_BASE64_LENGTH := 6144
 const MAX_PROTOCOL_ICON_DECODED_BYTES := 4096
+const MAX_ICON_TEXTURE_CACHE_ENTRIES := 64
 const VIEW_AGENT_TOOLS := "agent_tools"
 const VIEW_INTERNAL_EXECUTORS := "internal_executors"
 const VIEW_DIAGNOSTICS := "tool_diagnostics"
@@ -96,6 +97,7 @@ var _selection_sync_queued := false
 var _last_tree_signature := ""
 var _last_preview_key := ""
 var _icon_texture_cache: Dictionary = {}
+var _icon_texture_cache_order: Array[String] = []
 var _active_tools_view := VIEW_AGENT_TOOLS
 var _view_buttons: Dictionary = {}
 
@@ -453,6 +455,7 @@ func _texture_from_icon_src(src: String) -> Texture2D:
 	if src.length() > MAX_PROTOCOL_ICON_SRC_LENGTH:
 		return null
 	if _icon_texture_cache.has(src):
+		_touch_icon_texture_cache_key(src)
 		return _icon_texture_cache.get(src)
 	var texture: Texture2D = null
 	var svg_prefix := "data:image/svg+xml;base64,"
@@ -467,8 +470,23 @@ func _texture_from_icon_src(src: String) -> Texture2D:
 					if image.load_svg_from_buffer(bytes) == OK:
 						texture = ImageTexture.create_from_image(image)
 	if texture != null:
-		_icon_texture_cache[src] = texture
+		_store_icon_texture(src, texture)
 	return texture
+
+
+func _store_icon_texture(src: String, texture: Texture2D) -> void:
+	_icon_texture_cache[src] = texture
+	_touch_icon_texture_cache_key(src)
+	while _icon_texture_cache_order.size() > MAX_ICON_TEXTURE_CACHE_ENTRIES:
+		var evicted_src := _icon_texture_cache_order.pop_front()
+		_icon_texture_cache.erase(evicted_src)
+
+
+func _touch_icon_texture_cache_key(src: String) -> void:
+	var existing_index := _icon_texture_cache_order.find(src)
+	if existing_index >= 0:
+		_icon_texture_cache_order.remove_at(existing_index)
+	_icon_texture_cache_order.append(src)
 
 
 func _scale() -> float:

@@ -245,6 +245,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 	copy_preview_button = _find_entry_card(prompts_tab, "prompt", "godot.project_orientation").find_child("CopyPreviewButton", true, false) as Button
 	if copy_preview_button != null:
 		return _failure("Stale generated prompt text should not remain copyable immediately after prompt arguments change.")
+	var resource_icon_cache_error := _assert_icon_texture_cache_is_bounded(resources_tab, "Resources")
+	if not resource_icon_cache_error.is_empty():
+		return _failure(resource_icon_cache_error)
+	var prompt_icon_cache_error := _assert_icon_texture_cache_is_bounded(prompts_tab, "Prompts")
+	if not prompt_icon_cache_error.is_empty():
+		return _failure(prompt_icon_cache_error)
 
 	return {"name": "mcp_catalog_tab_rendering_contracts", "success": true, "error": ""}
 
@@ -266,6 +272,29 @@ func _instantiate_tab(tree: SceneTree, mode: String):
 	await tree.process_frame
 	instance.set_catalog_mode(mode)
 	return instance
+
+
+func _assert_icon_texture_cache_is_bounded(instance, label: String) -> String:
+	var cache_limit := 64
+	var prefix := "contract-%s-icon" % label.to_lower()
+	for index in range(cache_limit + 8):
+		var src := "%s-%03d" % [prefix, index]
+		var image := Image.create(1, 1, false, Image.FORMAT_RGBA8)
+		image.fill(Color(1.0, 1.0, 1.0, 1.0))
+		instance.call("_store_icon_texture", src, ImageTexture.create_from_image(image))
+	if int(instance._icon_texture_cache.size()) != cache_limit:
+		return "%s tab protocol icon texture cache should be bounded to MAX_ICON_TEXTURE_CACHE_ENTRIES." % label
+	if instance._icon_texture_cache.has("%s-000" % prefix):
+		return "%s tab protocol icon texture cache should evict least-recently-used entries." % label
+	var retained_key := "%s-%03d" % [prefix, cache_limit + 7]
+	if not instance._icon_texture_cache.has(retained_key):
+		return "%s tab protocol icon texture cache should retain recently inserted icons." % label
+	var refreshed_key := "%s-%03d" % [prefix, cache_limit - 1]
+	instance.call("_store_icon_texture", refreshed_key, instance._icon_texture_cache.get(refreshed_key))
+	instance.call("_store_icon_texture", "%s-new" % prefix, ImageTexture.create_from_image(Image.create(1, 1, false, Image.FORMAT_RGBA8)))
+	if not instance._icon_texture_cache.has(refreshed_key):
+		return "%s tab protocol icon texture cache hits should refresh LRU order." % label
+	return ""
 
 
 func _build_model() -> Dictionary:
