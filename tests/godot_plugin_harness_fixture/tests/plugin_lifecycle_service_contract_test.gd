@@ -279,15 +279,27 @@ func _assert_plugin_entrypoint_delegates_to_lifecycle_service() -> String:
 		"func _get_plugin_lifecycle_context()",
 		"_cached_lifecycle_context = _build_plugin_lifecycle_context()",
 		"func _invalidate_plugin_lifecycle_context()",
-		"peek_light_tool_loader_status"
+		"peek_light_tool_loader_status",
+		"const PluginRuntimeReloadCompletionServiceScript = preload(\"res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_reload_completion_service.gd\")",
+		"var _runtime_reload_completion_service := PluginRuntimeReloadCompletionServiceScript.new()",
+		"_ensure_runtime_reload_completion_service().complete_server_restart(_build_runtime_reload_completion_context())",
+		"_ensure_runtime_reload_completion_service().complete_soft_reload(_build_runtime_reload_completion_context(), was_running, focus_snapshot)",
+		"_ensure_runtime_reload_completion_service().complete_full_reload(_build_runtime_reload_completion_context(), was_running, focus_snapshot)",
+		"_ensure_runtime_reload_completion_service().capture_dock_focus_snapshot(_dock, _state)",
+		"_ensure_runtime_reload_completion_service().restore_dock_focus_snapshot(_build_runtime_reload_completion_context(), snapshot)",
+		"\"get_dock\": Callable(self, \"_get_dock\")",
+		"\"get_server_controller\": Callable(self, \"_get_server_controller\")"
 	]:
 		if source.find(required) == -1:
 			return "Plugin entrypoint should delegate lifecycle wiring through PluginLifecycleService: %s" % required
 	for forbidden in [
-		"\"refresh_service_instances\": Callable(self",
-		"\"load_state\": Callable(self",
-		"\"finish_self_operation\": Callable(self",
-		"_plugin_lifecycle_service.enter_tree(_get_plugin_lifecycle_context())"
+		"func _build_plugin_lifecycle_context() -> Dictionary:\n\treturn {",
+		"func _build_plugin_lifecycle_context() -> Dictionary:\n\treturn {\n\t\t\"refresh_service_instances\": Callable(self",
+		"func _build_plugin_lifecycle_context() -> Dictionary:\n\treturn {\n\t\t\"finish_self_operation\": Callable(self",
+		"_plugin_lifecycle_service.enter_tree(_get_plugin_lifecycle_context())",
+		"func _complete_plugin_reload(",
+		"_recreate_server_controller()\n\tif was_running:",
+		"_recreate_dock()\n\t_refresh_dock()"
 	]:
 		if source.find(forbidden) != -1:
 			return "Plugin entrypoint should not rebuild lifecycle context callback maps: %s" % forbidden
