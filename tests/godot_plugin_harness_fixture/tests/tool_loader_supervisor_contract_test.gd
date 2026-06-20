@@ -3,6 +3,7 @@ extends RefCounted
 # {"name": "tool_loader_supervisor_contracts"}
 
 const ToolLoaderSupervisorScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_loader_supervisor.gd")
+const ToolLoaderScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
 
 
 class CountingSupervisor:
@@ -19,6 +20,20 @@ class CountingSupervisor:
 			"force_reload_scripts": force_reload_scripts
 		})
 		return {}
+
+
+class FakeActivityRegistry:
+	extends RefCounted
+
+	var sweep_calls := 0
+
+	func sweep_stale(max_age_seconds: int = 300, now_unix: int = 0) -> Dictionary:
+		sweep_calls += 1
+		return {
+			"swept_count": 0,
+			"max_age_seconds": max_age_seconds,
+			"now_unix": now_unix
+		}
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
@@ -45,6 +60,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var init_call: Dictionary = fresh_supervisor.register_calls[0]
 	if str(init_call.get("reason", "")) != "lazy_initialize" or bool(init_call.get("force_reload_scripts", false)):
 		return _failure("Tool loader supervisor lazy initialization should not force reload scripts.")
+
+	var activity_registry := FakeActivityRegistry.new()
+	var loader = ToolLoaderScript.new()
+	loader.set_tool_activity_registry(activity_registry)
+	supervisor.set("_tool_loader", loader)
+	supervisor.tick(0.016)
+	if activity_registry.sweep_calls != 1:
+		return _failure("Tool loader supervisor tick should sweep stale tool activity records through the shared loader tick path.")
+	loader.shutdown()
+	var stdio_loader = ToolLoaderScript.new()
+	stdio_loader.set_tool_activity_registry(activity_registry)
+	stdio_loader.tick(0.016)
+	if activity_registry.sweep_calls != 2:
+		return _failure("Direct shared tool loader ticks should sweep stale tool activity records for stdio callers.")
+	stdio_loader.shutdown()
 
 	return {
 		"name": "tool_loader_supervisor_contracts",

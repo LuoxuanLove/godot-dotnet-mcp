@@ -321,6 +321,8 @@ func execute_tool_async(category: String, tool_name: String, args: Dictionary) -
 
 func tick(delta: float) -> void:
 	_ensure_services_ready()
+	if _tool_activity_registry != null and _tool_activity_registry.has_method("sweep_stale"):
+		_tool_activity_registry.sweep_stale()
 	_lifecycle_tick_accumulator = minf(
 		_lifecycle_tick_accumulator + maxf(delta, 0.0),
 		MAX_LIFECYCLE_TICK_DELTA_SECONDS
