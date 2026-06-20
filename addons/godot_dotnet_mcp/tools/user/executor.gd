@@ -7,6 +7,7 @@ const _CUSTOM_TOOLS_DIR = "res://addons/godot_dotnet_mcp/custom_tools"
 const _CUSTOM_TOOLS_ENABLED_SETTING = "godot_dotnet_mcp/user_tools/enable_runtime_loading"
 const _CUSTOM_TOOLS_ENABLED_SETTING_LEGACY = "user_tools/enable_runtime_loading"
 const _RELOAD_DEBOUNCE_MSEC := 300
+const _INVENTORY_RESCAN_INTERVAL_MSEC := 5000
 
 var _runtime_context: Dictionary = {}
 var _slots_by_script: Dictionary = {}
@@ -89,7 +90,10 @@ func tick(_delta: float) -> void:
 			_request_full_refresh("runtime_loading_disabled")
 		return
 	var now_msec := Time.get_ticks_msec()
-	if _pending_refresh or now_msec - _last_scan_msec >= _RELOAD_DEBOUNCE_MSEC:
+	if _pending_refresh:
+		if _last_scan_msec <= 0 or now_msec - _last_scan_msec >= _RELOAD_DEBOUNCE_MSEC:
+			_refresh_if_needed("tick")
+	elif _last_scan_msec <= 0 or now_msec - _last_scan_msec >= _INVENTORY_RESCAN_INTERVAL_MSEC:
 		_refresh_if_needed("tick")
 	for script_path in _get_sorted_script_paths():
 		_process_pending_slot_change(script_path)
@@ -158,6 +162,7 @@ func request_reload_by_script(script_path: String, reason: String = "manual") ->
 	slot["discovery_source"] = _get_discovery_source(reason)
 	slot["state"] = "reload_pending"
 	_slots_by_script[normalized_path] = slot
+	_pending_refresh = true
 	_bump_definitions_revision()
 
 
@@ -174,8 +179,11 @@ func _refresh_if_needed(reason: String) -> void:
 		_last_scan_msec = Time.get_ticks_msec()
 		_pending_refresh = false
 		return
+	var now_msec := Time.get_ticks_msec()
+	if not _pending_refresh and _last_scan_msec > 0 and now_msec - _last_scan_msec < _INVENTORY_RESCAN_INTERVAL_MSEC:
+		return
 	_reconcile_script_inventory(reason)
-	_last_scan_msec = Time.get_ticks_msec()
+	_last_scan_msec = now_msec
 	_pending_refresh = false
 
 

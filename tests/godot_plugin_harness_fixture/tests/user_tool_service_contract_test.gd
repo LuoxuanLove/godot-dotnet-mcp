@@ -123,6 +123,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var reload_guard_result := _verify_failed_reload_removes_public_user_tool()
 	if not bool(reload_guard_result.get("success", false)):
 		return reload_guard_result
+	var scan_backoff_result := _verify_user_executor_scan_backoff()
+	if not bool(scan_backoff_result.get("success", false)):
+		return scan_backoff_result
 
 	var audit_entries: Array[Dictionary] = _service.get_audit_entries(20, "create_user_tool")
 	if not _contains_script_path(audit_entries, _created_script_path):
@@ -401,6 +404,36 @@ func _verify_failed_reload_removes_public_user_tool() -> Dictionary:
 		return _failure("Failed user tool reload should retain a reload_failed runtime diagnostic state.")
 	if str(reload_state.get("last_error", "")).find("invalid MCP public tool name") == -1:
 		return _failure("Failed user tool reload should explain the invalid MCP public tool name.")
+	return {"success": true}
+
+
+func _verify_user_executor_scan_backoff() -> Dictionary:
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/tools/user/executor.gd")
+	if source.find("const _INVENTORY_RESCAN_INTERVAL_MSEC := 5000") == -1:
+		return _failure("User tool executor should keep low-frequency fallback inventory rescans to avoid duplicating the watcher scan loop.")
+	if source.find("if _pending_refresh:") == -1 or source.find("now_msec - _last_scan_msec >= _RELOAD_DEBOUNCE_MSEC") == -1:
+		return _failure("User tool executor should keep the short debounce only for explicit pending refreshes.")
+	if source.find("now_msec - _last_scan_msec >= _INVENTORY_RESCAN_INTERVAL_MSEC") == -1:
+		return _failure("User tool executor should use the longer inventory rescan interval for idle fallback scans.")
+
+	var previous_setting_exists := ProjectSettings.has_setting(USER_TOOLS_ENABLED_SETTING)
+	var previous_setting_value = ProjectSettings.get_setting(USER_TOOLS_ENABLED_SETTING, false)
+	ProjectSettings.set_setting(USER_TOOLS_ENABLED_SETTING, true)
+	var executor = UserExecutorScript.new()
+	executor._last_scan_msec = Time.get_ticks_msec()
+	executor._pending_refresh = false
+	var before_idle_scan_msec := int(executor._last_scan_msec)
+	executor.tick(0.0)
+	if int(executor._last_scan_msec) != before_idle_scan_msec:
+		_restore_user_tools_enabled_setting(previous_setting_exists, previous_setting_value)
+		return _failure("User tool executor should not run idle fallback inventory scans inside the long rescan interval.")
+	executor._pending_refresh = true
+	executor._last_scan_msec = Time.get_ticks_msec() - 500
+	executor.tick(0.0)
+	var pending_cleared := not bool(executor._pending_refresh)
+	_restore_user_tools_enabled_setting(previous_setting_exists, previous_setting_value)
+	if not pending_cleared:
+		return _failure("User tool executor should still process explicit pending refreshes after the short debounce.")
 	return {"success": true}
 
 
