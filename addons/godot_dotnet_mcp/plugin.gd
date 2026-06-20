@@ -34,6 +34,7 @@ const PluginUpdateRefsDiscoveryServiceScript = preload("res://addons/godot_dotne
 const PluginUpdateCompareServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_compare_service.gd")
 const PluginUpdateStateTransitionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_state_transition_service.gd")
 const PluginUpdateEndpointConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_endpoint_config_service.gd")
+const PluginUpdateHttpRequestServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_http_request_service.gd")
 const PluginUsageGuideServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_usage_guide_service.gd")
 const PluginSelfDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostics_service.gd")
 const PluginProfileConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_profile_config_service.gd")
@@ -68,6 +69,7 @@ var _plugin_update_refs_discovery_service := PluginUpdateRefsDiscoveryServiceScr
 var _plugin_update_compare_service := PluginUpdateCompareServiceScript.new()
 var _plugin_update_state_transition_service := PluginUpdateStateTransitionServiceScript.new()
 var _plugin_update_endpoint_config_service := PluginUpdateEndpointConfigServiceScript.new()
+var _plugin_update_http_request_service := PluginUpdateHttpRequestServiceScript.new()
 var _plugin_usage_guide_service := PluginUsageGuideServiceScript.new()
 var _plugin_self_diagnostics_service := PluginSelfDiagnosticsServiceScript.new()
 var _plugin_profile_config_service := PluginProfileConfigServiceScript.new()
@@ -266,6 +268,8 @@ func _dispose_lifecycle_services() -> void:
 	_plugin_update_refs_discovery_service = null
 	_plugin_update_compare_service = null
 	_plugin_update_state_transition_service = null
+	_plugin_update_endpoint_config_service = null
+	_plugin_update_http_request_service = null
 	_plugin_usage_guide_service = null
 	_plugin_self_diagnostics_service = null
 	_plugin_profile_config_service = null
@@ -1022,16 +1026,16 @@ func _start_update_refs_request(kind: String, url: String, serial: int) -> void:
 	if request_parent == null:
 		_mark_update_refs_request_failed(kind, "No active update refs request host.", serial)
 		return
-	var request_node := HTTPRequest.new()
-	request_node.name = "UpdateRefs%sRequest" % kind.capitalize()
-	request_node.timeout = _ensure_plugin_update_endpoint_config_service().get_refs_http_timeout()
-	request_node.body_size_limit = _ensure_plugin_update_endpoint_config_service().get_refs_body_size_limit()
-	request_parent.add_child(request_node)
-	request_node.request_completed.connect(Callable(self, "_on_update_refs_request_completed").bind(kind, serial, request_node), CONNECT_ONE_SHOT)
-	var error := request_node.request(url, _get_update_refs_headers())
-	if error != OK:
-		request_node.queue_free()
-		_mark_update_refs_request_failed(kind, "Failed to start %s request: %s" % [kind, error], serial)
+	var start_result: Dictionary = _ensure_plugin_update_http_request_service().start_refs_request(
+		request_parent,
+		"UpdateRefs%sRequest" % kind.capitalize(),
+		url,
+		_get_update_refs_headers(),
+		Callable(self, "_on_update_refs_request_completed").bind(kind, serial),
+		_ensure_plugin_update_endpoint_config_service()
+	)
+	if not bool(start_result.get("success", false)):
+		_mark_update_refs_request_failed(kind, "Failed to start %s request: %s" % [kind, int(start_result.get("error", FAILED))], serial)
 
 
 func _start_update_archive_sync_request(target: Dictionary, serial: int) -> void:
@@ -1068,25 +1072,23 @@ func _start_update_archive_branch_ref_request(target: Dictionary, serial: int) -
 		_mark_update_sync_failed("No active update sync request host.", serial)
 		return
 	var target_ref := str(target.get("ref", "")).strip_edges()
-	var request_node := HTTPRequest.new()
-	request_node.name = "UpdateArchiveBranchRefRequest"
-	request_node.timeout = _ensure_plugin_update_endpoint_config_service().get_refs_http_timeout()
-	request_node.body_size_limit = 65536
-	request_parent.add_child(request_node)
-	request_node.request_completed.connect(Callable(self, "_on_update_archive_branch_ref_request_completed").bind(target, serial, request_node), CONNECT_ONE_SHOT)
-	var error := request_node.request(_get_update_branch_ref_url(target_ref), _get_update_refs_headers())
-	if error != OK:
-		request_node.queue_free()
-		_start_update_archive_sync_request_attempt(target, serial, _build_update_archive_request_attempts(target), 0, ["branch ref request start failed: %s" % error])
+	var start_result: Dictionary = _ensure_plugin_update_http_request_service().start_small_refs_request(
+		request_parent,
+		"UpdateArchiveBranchRefRequest",
+		_get_update_branch_ref_url(target_ref),
+		_get_update_refs_headers(),
+		Callable(self, "_on_update_archive_branch_ref_request_completed").bind(target, serial),
+		_ensure_plugin_update_endpoint_config_service()
+	)
+	if not bool(start_result.get("success", false)):
+		_start_update_archive_sync_request_attempt(target, serial, _build_update_archive_request_attempts(target), 0, ["branch ref request start failed: %s" % int(start_result.get("error", FAILED))])
 
 
 func _get_update_branch_ref_url(target_ref: String) -> String:
 	return _ensure_plugin_update_request_planning_service().get_branch_ref_url(target_ref, _ensure_plugin_update_endpoint_config_service().get_branch_ref_url_template())
 
 
-func _on_update_archive_branch_ref_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, target: Dictionary, serial: int, request_node: HTTPRequest) -> void:
-	if request_node != null and is_instance_valid(request_node):
-		request_node.queue_free()
+func _on_update_archive_branch_ref_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, target: Dictionary, serial: int) -> void:
 	if _state == null or serial != _update_sync_request_serial:
 		return
 	var failures: Array[String] = []
@@ -1130,18 +1132,18 @@ func _start_update_archive_sync_request_attempt(target: Dictionary, serial: int,
 	var archive_path: String = _ensure_plugin_update_endpoint_config_service().get_sync_archive_path()
 	if FileAccess.file_exists(archive_path):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(archive_path))
-	var request_node := HTTPRequest.new()
-	request_node.name = "UpdateArchiveSyncRequest"
-	request_node.timeout = _ensure_plugin_update_endpoint_config_service().get_sync_http_timeout()
-	request_node.body_size_limit = _ensure_plugin_update_endpoint_config_service().get_sync_body_size_limit()
-	request_node.download_file = archive_path
-	request_parent.add_child(request_node)
-	request_node.request_completed.connect(Callable(self, "_on_update_archive_sync_request_attempt_completed").bind(target, serial, request_node, attempts, attempt_index, failures), CONNECT_ONE_SHOT)
-	var error := request_node.request(str(attempt.get("url", "")), _get_update_archive_headers())
-	if error != OK:
-		request_node.queue_free()
+	var start_result: Dictionary = _ensure_plugin_update_http_request_service().start_sync_archive_request(
+		request_parent,
+		"UpdateArchiveSyncRequest",
+		str(attempt.get("url", "")),
+		_get_update_archive_headers(),
+		Callable(self, "_on_update_archive_sync_request_attempt_completed").bind(target, serial, attempts, attempt_index, failures),
+		_ensure_plugin_update_endpoint_config_service(),
+		archive_path
+	)
+	if not bool(start_result.get("success", false)):
 		var next_failures := failures.duplicate()
-		next_failures.append("%s start failed: %s" % [str(attempt.get("label", "archive request")), error])
+		next_failures.append("%s start failed: %s" % [str(attempt.get("label", "archive request")), int(start_result.get("error", FAILED))])
 		_start_update_archive_sync_request_attempt(target, serial, attempts, attempt_index + 1, next_failures)
 
 
@@ -1173,17 +1175,17 @@ func _start_update_ref_version_request(target_ref: String, target_kind: String =
 	if request_parent == null:
 		return
 	_update_ref_version_requests_in_flight[normalized_ref] = true
-	var request_node := HTTPRequest.new()
-	request_node.name = "UpdateRefVersionRequest"
-	request_node.timeout = _ensure_plugin_update_endpoint_config_service().get_refs_http_timeout()
-	request_node.body_size_limit = 65536
-	request_parent.add_child(request_node)
-	request_node.request_completed.connect(Callable(self, "_on_update_ref_version_request_completed").bind(normalized_ref, serial, request_node), CONNECT_ONE_SHOT)
 	var url := _build_update_target_version_url(normalized_ref, target_kind)
-	var error := request_node.request(url, _get_update_refs_headers())
-	if error != OK:
+	var start_result: Dictionary = _ensure_plugin_update_http_request_service().start_small_refs_request(
+		request_parent,
+		"UpdateRefVersionRequest",
+		url,
+		_get_update_refs_headers(),
+		Callable(self, "_on_update_ref_version_request_completed").bind(normalized_ref, serial),
+		_ensure_plugin_update_endpoint_config_service()
+	)
+	if not bool(start_result.get("success", false)):
 		_update_ref_version_requests_in_flight.erase(normalized_ref)
-		request_node.queue_free()
 
 
 func _build_update_target_version_url(target_ref: String, target_kind: String) -> String:
@@ -1195,9 +1197,7 @@ func _build_update_target_version_url(target_ref: String, target_kind: String) -
 	)
 
 
-func _on_update_ref_version_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, target_ref: String, serial: int, request_node: HTTPRequest) -> void:
-	if request_node != null and is_instance_valid(request_node):
-		request_node.queue_free()
+func _on_update_ref_version_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, target_ref: String, serial: int) -> void:
 	_update_ref_version_requests_in_flight.erase(target_ref)
 	if _state == null or serial != _update_ref_version_request_serial:
 		return
@@ -1214,9 +1214,7 @@ func _parse_update_target_plugin_cfg_version(content: String) -> String:
 	return _ensure_plugin_update_compare_service().parse_plugin_cfg_version(content)
 
 
-func _on_update_refs_request_completed(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, kind: String, serial: int, request_node: HTTPRequest) -> void:
-	if request_node != null and is_instance_valid(request_node):
-		request_node.queue_free()
+func _on_update_refs_request_completed(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, kind: String, serial: int) -> void:
 	if _state == null or serial != _update_refs_request_serial:
 		return
 	if result != HTTPRequest.RESULT_SUCCESS or response_code < 200 or response_code >= 300:
@@ -1321,9 +1319,7 @@ func _mark_update_sync_failed(message: String, serial: int) -> void:
 	_refresh_dock()
 
 
-func _on_update_archive_sync_request_attempt_completed(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray, target: Dictionary, serial: int, request_node: HTTPRequest, attempts: Array, attempt_index: int, failures: Array) -> void:
-	if request_node != null and is_instance_valid(request_node):
-		request_node.queue_free()
+func _on_update_archive_sync_request_attempt_completed(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray, target: Dictionary, serial: int, attempts: Array, attempt_index: int, failures: Array) -> void:
 	if _state == null or serial != _update_sync_request_serial:
 		return
 	var attempt: Dictionary = attempts[attempt_index] if attempt_index >= 0 and attempt_index < attempts.size() else {}
@@ -1333,17 +1329,6 @@ func _on_update_archive_sync_request_attempt_completed(result: int, response_cod
 		_start_update_archive_sync_request_attempt(target, serial, attempts, attempt_index + 1, next_failures)
 		return
 	await _complete_update_archive_sync_download(target, serial, attempts, attempt_index, failures)
-
-
-func _on_update_archive_sync_request_completed(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray, target: Dictionary, serial: int, request_node: HTTPRequest) -> void:
-	if request_node != null and is_instance_valid(request_node):
-		request_node.queue_free()
-	if _state == null or serial != _update_sync_request_serial:
-		return
-	if result != HTTPRequest.RESULT_SUCCESS or response_code < 200 or response_code >= 300:
-		_mark_update_sync_failed("Update archive request failed with result %s and HTTP %s" % [result, response_code], serial)
-		return
-	await _complete_update_archive_sync_download(target, serial)
 
 
 func _complete_update_archive_sync_download(target: Dictionary, serial: int, attempts: Array = [], attempt_index: int = -1, failures: Array = []) -> void:
@@ -1604,22 +1589,20 @@ func _start_update_compare_request(base_commit: String, compare_head: String, ta
 	if request_parent == null:
 		_mark_update_compare_failed("No active update compare request host.", serial)
 		return
-	var request_node := HTTPRequest.new()
-	request_node.name = "UpdateCompareRequest"
-	request_node.timeout = _ensure_plugin_update_endpoint_config_service().get_refs_http_timeout()
-	request_node.body_size_limit = _ensure_plugin_update_endpoint_config_service().get_refs_body_size_limit()
-	request_parent.add_child(request_node)
-	request_node.request_completed.connect(Callable(self, "_on_update_compare_request_completed").bind(base_commit, target_commit, serial, request_node), CONNECT_ONE_SHOT)
 	var compare_url: String = _ensure_plugin_update_endpoint_config_service().get_compare_url_template() % [base_commit.uri_encode(), compare_head.uri_encode()]
-	var error := request_node.request(compare_url, _get_update_refs_headers())
-	if error != OK:
-		request_node.queue_free()
-		_mark_update_compare_failed("Failed to start update compare request: %s" % error, serial)
+	var start_result: Dictionary = _ensure_plugin_update_http_request_service().start_refs_request(
+		request_parent,
+		"UpdateCompareRequest",
+		compare_url,
+		_get_update_refs_headers(),
+		Callable(self, "_on_update_compare_request_completed").bind(base_commit, target_commit, serial),
+		_ensure_plugin_update_endpoint_config_service()
+	)
+	if not bool(start_result.get("success", false)):
+		_mark_update_compare_failed("Failed to start update compare request: %s" % int(start_result.get("error", FAILED)), serial)
 
 
-func _on_update_compare_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, base_commit: String, target_commit: String, serial: int, request_node: HTTPRequest) -> void:
-	if request_node != null and is_instance_valid(request_node):
-		request_node.queue_free()
+func _on_update_compare_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, base_commit: String, target_commit: String, serial: int) -> void:
 	if _state == null or serial != _update_compare_request_serial:
 		return
 	if result != HTTPRequest.RESULT_SUCCESS or response_code < 200 or response_code >= 300:
@@ -1845,6 +1828,12 @@ func _ensure_plugin_update_endpoint_config_service():
 	if _plugin_update_endpoint_config_service == null:
 		_plugin_update_endpoint_config_service = PluginUpdateEndpointConfigServiceScript.new()
 	return _plugin_update_endpoint_config_service
+
+
+func _ensure_plugin_update_http_request_service():
+	if _plugin_update_http_request_service == null:
+		_plugin_update_http_request_service = PluginUpdateHttpRequestServiceScript.new()
+	return _plugin_update_http_request_service
 
 
 func _build_plugin_update_tool_context(target: Dictionary = {}) -> Dictionary:

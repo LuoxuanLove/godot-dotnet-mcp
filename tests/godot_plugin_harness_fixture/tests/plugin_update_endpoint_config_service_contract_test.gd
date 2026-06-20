@@ -64,21 +64,19 @@ func _verify_plugin_entrypoint_delegates_update_endpoint_config() -> String:
 	for required in [
 		"PluginUpdateEndpointConfigServiceScript.new()",
 		"_ensure_plugin_update_endpoint_config_service().get_refs_request_urls()",
-		"_ensure_plugin_update_endpoint_config_service().get_refs_http_timeout()",
-		"_ensure_plugin_update_endpoint_config_service().get_refs_body_size_limit()",
 		"_ensure_plugin_update_endpoint_config_service().get_branch_ref_url_template()",
 		"_ensure_plugin_update_endpoint_config_service().get_target_plugin_cfg_branch_url_template()",
 		"_ensure_plugin_update_endpoint_config_service().get_target_plugin_cfg_tag_url_template()",
 		"_ensure_plugin_update_endpoint_config_service().get_refs_max_pages()",
 		"_ensure_plugin_update_endpoint_config_service().get_sync_archive_path()",
-		"_ensure_plugin_update_endpoint_config_service().get_sync_http_timeout()",
-		"_ensure_plugin_update_endpoint_config_service().get_sync_body_size_limit()",
 		"_ensure_plugin_update_endpoint_config_service().get_sync_editor_refresh_timeout_ms()",
 		"_ensure_plugin_update_endpoint_config_service().build_sync_marker_context()",
 		"_ensure_plugin_update_endpoint_config_service().get_sync_marker_path()",
 		"_ensure_plugin_update_endpoint_config_service().get_archive_url_prefixes()",
 		"_ensure_plugin_update_endpoint_config_service().get_sync_addon_root()",
-		"_ensure_plugin_update_endpoint_config_service().get_compare_url_template()"
+		"_ensure_plugin_update_endpoint_config_service().get_compare_url_template()",
+		"_ensure_plugin_update_http_request_service().start_refs_request(",
+		"_ensure_plugin_update_http_request_service().start_sync_archive_request("
 	]:
 		if plugin_source.find(required) == -1:
 			return "plugin.gd should delegate update endpoint config responsibility: %s" % required
