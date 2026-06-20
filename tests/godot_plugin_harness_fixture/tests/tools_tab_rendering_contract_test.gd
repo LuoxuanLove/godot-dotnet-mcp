@@ -827,6 +827,8 @@ func _assert_tools_tab_prefers_shared_presentation_metadata() -> String:
 		return "Tools tab tree signature should use reusable presentation signatures instead of serializing the full tree on every refresh."
 	if source.find("JSON.stringify(_active_tool_presentation().get(\"toolTree\"") != -1 or source.find("JSON.stringify((presentation as Dictionary).get(\"toolMetadataByName\"") != -1:
 		return "Tools tab tree signature should not deep-serialize presentation trees or metadata on every refresh."
+	if source.find("func _filter_presentation_node") != -1:
+		return "Tools tab search should render shared presentation nodes directly instead of deep-copying filtered presentation trees."
 	return ""
 
 

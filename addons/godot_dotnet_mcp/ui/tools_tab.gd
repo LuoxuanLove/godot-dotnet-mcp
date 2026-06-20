@@ -192,28 +192,28 @@ func _has_presentation_tree(model: Dictionary) -> bool:
 
 
 func _create_presentation_node(parent: TreeItem, model: Dictionary, node: Dictionary) -> TreeItem:
-	var filtered_node := _filter_presentation_node(model, node)
-	if filtered_node.is_empty():
+	var query := _get_search_query()
+	if not _presentation_node_visible_for_search(model, node, query):
 		return null
-	var kind := str(filtered_node.get("kind", ""))
-	var key := str(filtered_node.get("key", filtered_node.get("id", "")))
+	var kind := str(node.get("kind", ""))
+	var key := str(node.get("key", node.get("id", "")))
 	var item = _tool_tree.create_item(parent)
 	if item == null:
 		return null
-	var display_name := _get_presentation_node_display_name(filtered_node)
-	var metadata := _build_presentation_node_metadata(filtered_node, display_name)
+	var display_name := _get_presentation_node_display_name(node)
+	var metadata := _build_presentation_node_metadata(node, display_name)
 	match kind:
 		"domain", "category", "executor_domain", "executor_category":
-			_configure_item_toggle(item, _is_presentation_group_enabled(filtered_node))
-			var text := "%s    %d/%d" % [display_name, int(filtered_node.get("enabledCount", 0)), int(filtered_node.get("totalCount", 0))]
-			_configure_item_text(item, text, metadata, _get_group_tooltip(_localization, str(filtered_node.get("labelKey", ""))))
+			_configure_item_toggle(item, _is_presentation_group_enabled(node))
+			var text := "%s    %d/%d" % [display_name, int(node.get("enabledCount", 0)), int(node.get("totalCount", 0))]
+			_configure_item_text(item, text, metadata, _get_group_tooltip(_localization, str(node.get("labelKey", ""))))
 		"tool_group", "diagnostic_node":
-			var text := "%s    %d/%d" % [display_name, int(filtered_node.get("enabledCount", filtered_node.get("toolCount", 0))), int(filtered_node.get("totalCount", filtered_node.get("toolCount", 0)))]
+			var text := "%s    %d/%d" % [display_name, int(node.get("enabledCount", node.get("toolCount", 0))), int(node.get("totalCount", node.get("toolCount", 0)))]
 			_configure_info_row(item, text, metadata, TreeCollapseState.is_node_collapsed(model.get("settings", {}), _presentation_collapse_kind(kind), key))
 		"tool", "public_tool", "executor_tool":
 			_configure_item_toggle(item, not _current_model.get("settings", {}).get("disabled_tools", []).has(key))
 			_configure_item_text(item, display_name, metadata, _get_tool_description(_localization, key, _get_tool_metadata(key)))
-			if str(filtered_node.get("callability", "")) == "not_callable":
+			if str(node.get("callability", "")) == "not_callable":
 				item.set_editable(TREE_CHECK_COLUMN, false)
 				item.set_custom_color(TREE_TEXT_COLUMN, _get_dim_text_color())
 		"atomic":
@@ -223,31 +223,26 @@ func _create_presentation_node(parent: TreeItem, model: Dictionary, node: Dictio
 			item.set_custom_color(TREE_TEXT_COLUMN, _get_dim_text_color())
 		_:
 			_configure_item_text(item, display_name, metadata)
-	var children: Array = filtered_node.get("children", [])
+	var children: Array = node.get("children", [])
 	if not children.is_empty() and kind != "atomic":
-		item.collapsed = TreeCollapseState.is_node_collapsed(model.get("settings", {}), _presentation_collapse_kind(kind), key)
+		item.collapsed = false if not query.is_empty() else TreeCollapseState.is_node_collapsed(model.get("settings", {}), _presentation_collapse_kind(kind), key)
 	for child in children:
 		if child is Dictionary:
 			_create_presentation_node(item, model, child as Dictionary)
 	return item
 
 
-func _filter_presentation_node(model: Dictionary, node: Dictionary) -> Dictionary:
-	var query := _get_search_query()
+func _presentation_node_visible_for_search(model: Dictionary, node: Dictionary, query: String) -> bool:
 	if query.is_empty():
-		return node
-	var filtered := node.duplicate(true)
-	var children: Array = []
+		return true
+	if _presentation_node_matches_search(model, node, query):
+		return true
 	for child in node.get("children", []):
 		if not (child is Dictionary):
 			continue
-		var filtered_child := _filter_presentation_node(model, child as Dictionary)
-		if not filtered_child.is_empty():
-			children.append(filtered_child)
-	if query.is_empty() or _presentation_node_matches_search(model, node, query) or not children.is_empty():
-		filtered["children"] = children if not query.is_empty() else node.get("children", [])
-		return filtered
-	return {}
+		if _presentation_node_visible_for_search(model, child as Dictionary, query):
+			return true
+	return false
 
 
 func _presentation_node_matches_search(model: Dictionary, node: Dictionary, query: String) -> bool:
