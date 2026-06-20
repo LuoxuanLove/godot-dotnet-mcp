@@ -35,6 +35,7 @@ class FakeLifecycleContext:
 	var tick_deltas: Array = []
 	var lsp_tick_deltas: Array = []
 	var preload_runtimes := false
+	var disabled_tools_changed := true
 
 	func build() -> Dictionary:
 		return {
@@ -83,8 +84,11 @@ class FakeLifecycleContext:
 	func reset_state() -> void:
 		reset_count += 1
 
-	func set_disabled_tools(new_disabled_tools: Array) -> void:
+	func set_disabled_tools(new_disabled_tools: Array) -> bool:
+		if not disabled_tools_changed:
+			return false
 		disabled_tools = new_disabled_tools.duplicate()
+		return true
 
 	func reset_gdscript_lsp_diagnostics_service() -> void:
 		lsp_reset_count += 1
@@ -216,6 +220,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Lifecycle service should unload disabled categories with disabled_tools_changed reason.")
 	if disabled_context.runtime_refresh_count != 1:
 		return _failure("Lifecycle service should refresh runtime context after disabled-tool changes.")
+	disabled_context.disabled_tools_changed = false
+	service.set_disabled_tools(["debug_probe"], disabled_context.build())
+	if disabled_context.ensured_runtimes.size() != 1 or disabled_context.unloaded_runtimes.size() != 1 or disabled_context.runtime_refresh_count != 1:
+		return _failure("Lifecycle service should skip runtime rewiring when disabled tools are unchanged.")
 
 	var shutdown_context := FakeLifecycleContext.new()
 	shutdown_context.runtime_by_category = {

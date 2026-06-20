@@ -4,12 +4,25 @@ class_name ToolLoaderEnablementService
 
 
 var _disabled_tools: Dictionary = {}
+var _disabled_tools_signature := ""
 
 
-func configure_disabled_tools(disabled_tools: Array) -> void:
-	_disabled_tools.clear()
+func configure_disabled_tools(disabled_tools: Array) -> bool:
+	var next_disabled := {}
+	var names := PackedStringArray()
 	for tool_name in disabled_tools:
+		var normalized := str(tool_name)
+		next_disabled[normalized] = true
+		names.append(normalized)
+	names.sort()
+	var next_signature := "\n".join(names)
+	if next_signature == _disabled_tools_signature:
+		return false
+	_disabled_tools.clear()
+	for tool_name in next_disabled.keys():
 		_disabled_tools[str(tool_name)] = true
+	_disabled_tools_signature = next_signature
+	return true
 
 
 func get_disabled_tools() -> Array:

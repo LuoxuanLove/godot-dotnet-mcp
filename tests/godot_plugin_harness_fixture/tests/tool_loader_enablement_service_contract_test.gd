@@ -5,11 +5,15 @@ const ToolLoaderEnablementServiceScript = preload("res://addons/godot_dotnet_mcp
 
 func run_case(_tree: SceneTree) -> Dictionary:
 	var service = ToolLoaderEnablementServiceScript.new()
-	service.configure_disabled_tools([
+	var first_changed := service.configure_disabled_tools([
 		"system_project_state",
 		&"debug_log_write",
 		42
 	])
+	if not first_changed:
+		return _failure("Enablement service should report a change when disabled tools are first configured.")
+	if service.configure_disabled_tools([42, "debug_log_write", "system_project_state"]):
+		return _failure("Enablement service should treat equivalent disabled tool sets as a no-op.")
 
 	var disabled := service.get_disabled_tools()
 	if not disabled.has("system_project_state") or not disabled.has("debug_log_write") or not disabled.has("42"):
@@ -40,7 +44,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Enablement service should report categories with only disabled definitions as unavailable.")
 	if service.category_has_enabled_tools("empty", definitions_by_category):
 		return _failure("Enablement service should report empty categories as unavailable.")
-	service.configure_disabled_tools([])
+	if not service.configure_disabled_tools([]):
+		return _failure("Enablement service should report a change when disabled tools are cleared.")
 	if service.count_enabled_tools_in_category("debug", definitions_by_category) != 1:
 		return _failure("Enablement service should clear previous disabled tools when reconfigured.")
 
