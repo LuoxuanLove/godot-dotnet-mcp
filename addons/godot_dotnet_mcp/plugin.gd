@@ -33,6 +33,7 @@ const PluginUpdateRequestPlanningServiceScript = preload("res://addons/godot_dot
 const PluginUpdateRefsDiscoveryServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_refs_discovery_service.gd")
 const PluginUpdateCompareServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_compare_service.gd")
 const PluginUpdateStateTransitionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_state_transition_service.gd")
+const PluginUpdateEndpointConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_endpoint_config_service.gd")
 const PluginUsageGuideServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_usage_guide_service.gd")
 const PluginSelfDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostics_service.gd")
 const PluginProfileConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_profile_config_service.gd")
@@ -44,29 +45,6 @@ const PLUGIN_ID := "godot_dotnet_mcp"
 const PENDING_FOCUS_SNAPSHOT_KEY := "_pending_focus_snapshot"
 const RUNTIME_BRIDGE_AUTOLOAD_NAME := "MCPRuntimeBridge"
 const RUNTIME_BRIDGE_AUTOLOAD_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_bridge.gd"
-const UPDATE_REFS_BRANCHES_URL := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/branches?per_page=100&page=1"
-const UPDATE_REFS_RELEASES_URL := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/releases?per_page=100&page=1"
-const UPDATE_REFS_TAGS_URL := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/tags?per_page=100&page=1"
-const UPDATE_COMPARE_URL_TEMPLATE := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/compare/%s...%s"
-const UPDATE_BRANCH_REF_URL_TEMPLATE := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/branches/%s"
-const UPDATE_TARGET_PLUGIN_CFG_BRANCH_URL_TEMPLATE := "https://raw.githubusercontent.com/LuoxuanLove/godot-dotnet-mcp/refs/heads/%s/addons/godot_dotnet_mcp/plugin.cfg"
-const UPDATE_TARGET_PLUGIN_CFG_TAG_URL_TEMPLATE := "https://raw.githubusercontent.com/LuoxuanLove/godot-dotnet-mcp/refs/tags/%s/addons/godot_dotnet_mcp/plugin.cfg"
-const UPDATE_REFS_HTTP_TIMEOUT := 10.0
-const UPDATE_REFS_BODY_SIZE_LIMIT := 16777216
-const UPDATE_REFS_MAX_PAGES := 20
-const UPDATE_SYNC_COMMIT_ARCHIVE_URL_PREFIX := "https://codeload.github.com/LuoxuanLove/godot-dotnet-mcp/zip/"
-const UPDATE_SYNC_BRANCH_ARCHIVE_URL_PREFIX := "https://codeload.github.com/LuoxuanLove/godot-dotnet-mcp/zip/refs/heads/"
-const UPDATE_SYNC_TAG_ARCHIVE_URL_PREFIX := "https://codeload.github.com/LuoxuanLove/godot-dotnet-mcp/zip/refs/tags/"
-const UPDATE_SYNC_GITHUB_BRANCH_ARCHIVE_URL_PREFIX := "https://github.com/LuoxuanLove/godot-dotnet-mcp/archive/refs/heads/"
-const UPDATE_SYNC_GITHUB_TAG_ARCHIVE_URL_PREFIX := "https://github.com/LuoxuanLove/godot-dotnet-mcp/archive/refs/tags/"
-const UPDATE_SYNC_GITHUB_COMMIT_ARCHIVE_URL_PREFIX := "https://github.com/LuoxuanLove/godot-dotnet-mcp/archive/"
-const UPDATE_SYNC_ARCHIVE_PATH := "user://godot_dotnet_mcp/update_branch.zip"
-const UPDATE_SYNC_MARKER_PATH := "res://addons/godot_dotnet_mcp/.mcp_sync.json"
-const UPDATE_SYNC_REPO_URL := "https://github.com/LuoxuanLove/godot-dotnet-mcp"
-const UPDATE_SYNC_HTTP_TIMEOUT := 60.0
-const UPDATE_SYNC_BODY_SIZE_LIMIT := 67108864
-const UPDATE_SYNC_ADDON_ROOT := "res://addons/godot_dotnet_mcp"
-const UPDATE_SYNC_EDITOR_REFRESH_TIMEOUT_MS := 15000
 
 var _state = null
 var _settings_store = null
@@ -89,6 +67,7 @@ var _plugin_update_request_planning_service := PluginUpdateRequestPlanningServic
 var _plugin_update_refs_discovery_service := PluginUpdateRefsDiscoveryServiceScript.new()
 var _plugin_update_compare_service := PluginUpdateCompareServiceScript.new()
 var _plugin_update_state_transition_service := PluginUpdateStateTransitionServiceScript.new()
+var _plugin_update_endpoint_config_service := PluginUpdateEndpointConfigServiceScript.new()
 var _plugin_usage_guide_service := PluginUsageGuideServiceScript.new()
 var _plugin_self_diagnostics_service := PluginSelfDiagnosticsServiceScript.new()
 var _plugin_profile_config_service := PluginProfileConfigServiceScript.new()
@@ -983,9 +962,10 @@ func _on_update_check_requested() -> void:
 	_update_ref_version_requests_in_flight.clear()
 	_reset_update_compare_state()
 	_refresh_dock()
-	_start_update_refs_request("branches", UPDATE_REFS_BRANCHES_URL, serial)
-	_start_update_refs_request("releases", UPDATE_REFS_RELEASES_URL, serial)
-	_start_update_refs_request("tags", UPDATE_REFS_TAGS_URL, serial)
+	var refs_request_urls: Dictionary = _ensure_plugin_update_endpoint_config_service().get_refs_request_urls()
+	_start_update_refs_request("branches", str(refs_request_urls.get("branches", "")), serial)
+	_start_update_refs_request("releases", str(refs_request_urls.get("releases", "")), serial)
+	_start_update_refs_request("tags", str(refs_request_urls.get("tags", "")), serial)
 
 
 func _on_update_sync_requested() -> void:
@@ -1044,8 +1024,8 @@ func _start_update_refs_request(kind: String, url: String, serial: int) -> void:
 		return
 	var request_node := HTTPRequest.new()
 	request_node.name = "UpdateRefs%sRequest" % kind.capitalize()
-	request_node.timeout = UPDATE_REFS_HTTP_TIMEOUT
-	request_node.body_size_limit = UPDATE_REFS_BODY_SIZE_LIMIT
+	request_node.timeout = _ensure_plugin_update_endpoint_config_service().get_refs_http_timeout()
+	request_node.body_size_limit = _ensure_plugin_update_endpoint_config_service().get_refs_body_size_limit()
 	request_parent.add_child(request_node)
 	request_node.request_completed.connect(Callable(self, "_on_update_refs_request_completed").bind(kind, serial, request_node), CONNECT_ONE_SHOT)
 	var error := request_node.request(url, _get_update_refs_headers())
@@ -1090,7 +1070,7 @@ func _start_update_archive_branch_ref_request(target: Dictionary, serial: int) -
 	var target_ref := str(target.get("ref", "")).strip_edges()
 	var request_node := HTTPRequest.new()
 	request_node.name = "UpdateArchiveBranchRefRequest"
-	request_node.timeout = UPDATE_REFS_HTTP_TIMEOUT
+	request_node.timeout = _ensure_plugin_update_endpoint_config_service().get_refs_http_timeout()
 	request_node.body_size_limit = 65536
 	request_parent.add_child(request_node)
 	request_node.request_completed.connect(Callable(self, "_on_update_archive_branch_ref_request_completed").bind(target, serial, request_node), CONNECT_ONE_SHOT)
@@ -1101,7 +1081,7 @@ func _start_update_archive_branch_ref_request(target: Dictionary, serial: int) -
 
 
 func _get_update_branch_ref_url(target_ref: String) -> String:
-	return _ensure_plugin_update_request_planning_service().get_branch_ref_url(target_ref, UPDATE_BRANCH_REF_URL_TEMPLATE)
+	return _ensure_plugin_update_request_planning_service().get_branch_ref_url(target_ref, _ensure_plugin_update_endpoint_config_service().get_branch_ref_url_template())
 
 
 func _on_update_archive_branch_ref_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, target: Dictionary, serial: int, request_node: HTTPRequest) -> void:
@@ -1147,13 +1127,14 @@ func _start_update_archive_sync_request_attempt(target: Dictionary, serial: int,
 	_state.update_sync_status = _get_localized_text("settings_update_sync_downloading_archive")
 	_state.update_sync_progress = max(float(_state.update_sync_progress), min(0.55, 0.28 + float(attempt_index) * 0.08))
 	_refresh_dock()
-	if FileAccess.file_exists(UPDATE_SYNC_ARCHIVE_PATH):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(UPDATE_SYNC_ARCHIVE_PATH))
+	var archive_path := _ensure_plugin_update_endpoint_config_service().get_sync_archive_path()
+	if FileAccess.file_exists(archive_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(archive_path))
 	var request_node := HTTPRequest.new()
 	request_node.name = "UpdateArchiveSyncRequest"
-	request_node.timeout = UPDATE_SYNC_HTTP_TIMEOUT
-	request_node.body_size_limit = UPDATE_SYNC_BODY_SIZE_LIMIT
-	request_node.download_file = UPDATE_SYNC_ARCHIVE_PATH
+	request_node.timeout = _ensure_plugin_update_endpoint_config_service().get_sync_http_timeout()
+	request_node.body_size_limit = _ensure_plugin_update_endpoint_config_service().get_sync_body_size_limit()
+	request_node.download_file = archive_path
 	request_parent.add_child(request_node)
 	request_node.request_completed.connect(Callable(self, "_on_update_archive_sync_request_attempt_completed").bind(target, serial, request_node, attempts, attempt_index, failures), CONNECT_ONE_SHOT)
 	var error := request_node.request(str(attempt.get("url", "")), _get_update_archive_headers())
@@ -1194,7 +1175,7 @@ func _start_update_ref_version_request(target_ref: String, target_kind: String =
 	_update_ref_version_requests_in_flight[normalized_ref] = true
 	var request_node := HTTPRequest.new()
 	request_node.name = "UpdateRefVersionRequest"
-	request_node.timeout = UPDATE_REFS_HTTP_TIMEOUT
+	request_node.timeout = _ensure_plugin_update_endpoint_config_service().get_refs_http_timeout()
 	request_node.body_size_limit = 65536
 	request_parent.add_child(request_node)
 	request_node.request_completed.connect(Callable(self, "_on_update_ref_version_request_completed").bind(normalized_ref, serial, request_node), CONNECT_ONE_SHOT)
@@ -1206,7 +1187,12 @@ func _start_update_ref_version_request(target_ref: String, target_kind: String =
 
 
 func _build_update_target_version_url(target_ref: String, target_kind: String) -> String:
-	return _ensure_plugin_update_compare_service().build_target_version_url(target_ref, target_kind, UPDATE_TARGET_PLUGIN_CFG_BRANCH_URL_TEMPLATE, UPDATE_TARGET_PLUGIN_CFG_TAG_URL_TEMPLATE)
+	return _ensure_plugin_update_compare_service().build_target_version_url(
+		target_ref,
+		target_kind,
+		_ensure_plugin_update_endpoint_config_service().get_target_plugin_cfg_branch_url_template(),
+		_ensure_plugin_update_endpoint_config_service().get_target_plugin_cfg_tag_url_template()
+	)
 
 
 func _on_update_ref_version_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, target_ref: String, serial: int, request_node: HTTPRequest) -> void:
@@ -1272,7 +1258,7 @@ func _request_next_update_refs_page_if_available(kind: String, headers: PackedSt
 		return false
 	var page_key := "%s_pages" % kind
 	var page_count := int(_update_refs_pending.get(page_key, 1))
-	if page_count >= UPDATE_REFS_MAX_PAGES:
+	if page_count >= _ensure_plugin_update_endpoint_config_service().get_refs_max_pages():
 		return false
 	_update_refs_pending[page_key] = page_count + 1
 	_start_update_refs_request(kind, next_url, serial)
@@ -1370,7 +1356,7 @@ func _complete_update_archive_sync_download(target: Dictionary, serial: int, att
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree != null:
 		await tree.process_frame
-	var sync_result := _sync_update_archive_to_addon(UPDATE_SYNC_ARCHIVE_PATH)
+	var sync_result := _sync_update_archive_to_addon(_ensure_plugin_update_endpoint_config_service().get_sync_archive_path())
 	if not bool(sync_result.get("success", false)):
 		if _should_try_next_update_archive_attempt(str(sync_result.get("error", "")), attempts, attempt_index):
 			var next_failures := failures.duplicate()
@@ -1433,7 +1419,7 @@ func _request_update_sync_editor_refresh(_serial: int) -> Dictionary:
 	if tree != null:
 		await tree.process_frame
 		if file_system != null and file_system.has_method("is_scanning"):
-			var deadline_msec := Time.get_ticks_msec() + UPDATE_SYNC_EDITOR_REFRESH_TIMEOUT_MS
+			var deadline_msec := Time.get_ticks_msec() + _ensure_plugin_update_endpoint_config_service().get_sync_editor_refresh_timeout_ms()
 			scan_completed = not bool(file_system.is_scanning())
 			while not scan_completed and Time.get_ticks_msec() < deadline_msec:
 				await tree.process_frame
@@ -1446,12 +1432,10 @@ func _request_update_sync_editor_refresh(_serial: int) -> Dictionary:
 
 
 func _write_update_sync_marker(target: Dictionary, written: int) -> int:
-	var marker: Dictionary = _ensure_plugin_update_request_planning_service().build_sync_marker(target, written, {
-		"unix_time": int(Time.get_unix_time_from_system()),
-		"source_repo_path": UPDATE_SYNC_REPO_URL,
-		"target_addon_path": UPDATE_SYNC_ADDON_ROOT
-	})
-	var file := FileAccess.open(UPDATE_SYNC_MARKER_PATH, FileAccess.WRITE)
+	var marker_context: Dictionary = _ensure_plugin_update_endpoint_config_service().build_sync_marker_context()
+	marker_context["unix_time"] = int(Time.get_unix_time_from_system())
+	var marker: Dictionary = _ensure_plugin_update_request_planning_service().build_sync_marker(target, written, marker_context)
+	var file := FileAccess.open(_ensure_plugin_update_endpoint_config_service().get_sync_marker_path(), FileAccess.WRITE)
 	if file == null:
 		return FileAccess.get_open_error()
 	file.store_string(JSON.stringify(marker, "	"))
@@ -1468,14 +1452,7 @@ func _build_update_refs_planning_context() -> Dictionary:
 
 
 func _build_update_archive_url_prefixes() -> Dictionary:
-	return {
-		"commit_codeload": UPDATE_SYNC_COMMIT_ARCHIVE_URL_PREFIX,
-		"commit_github": UPDATE_SYNC_GITHUB_COMMIT_ARCHIVE_URL_PREFIX,
-		"branch_codeload": UPDATE_SYNC_BRANCH_ARCHIVE_URL_PREFIX,
-		"branch_github": UPDATE_SYNC_GITHUB_BRANCH_ARCHIVE_URL_PREFIX,
-		"tag_codeload": UPDATE_SYNC_TAG_ARCHIVE_URL_PREFIX,
-		"tag_github": UPDATE_SYNC_GITHUB_TAG_ARCHIVE_URL_PREFIX
-	}
+	return _ensure_plugin_update_endpoint_config_service().get_archive_url_prefixes()
 
 
 func _sync_update_archive_to_addon(archive_path: String) -> Dictionary:
@@ -1483,7 +1460,7 @@ func _sync_update_archive_to_addon(archive_path: String) -> Dictionary:
 
 
 func _get_update_sync_addon_root() -> String:
-	return UPDATE_SYNC_ADDON_ROOT
+	return _ensure_plugin_update_endpoint_config_service().get_sync_addon_root()
 
 
 func _cleanup_stale_update_sync_addon_files() -> Dictionary:
@@ -1629,11 +1606,11 @@ func _start_update_compare_request(base_commit: String, compare_head: String, ta
 		return
 	var request_node := HTTPRequest.new()
 	request_node.name = "UpdateCompareRequest"
-	request_node.timeout = UPDATE_REFS_HTTP_TIMEOUT
-	request_node.body_size_limit = UPDATE_REFS_BODY_SIZE_LIMIT
+	request_node.timeout = _ensure_plugin_update_endpoint_config_service().get_refs_http_timeout()
+	request_node.body_size_limit = _ensure_plugin_update_endpoint_config_service().get_refs_body_size_limit()
 	request_parent.add_child(request_node)
 	request_node.request_completed.connect(Callable(self, "_on_update_compare_request_completed").bind(base_commit, target_commit, serial, request_node), CONNECT_ONE_SHOT)
-	var compare_url := UPDATE_COMPARE_URL_TEMPLATE % [base_commit.uri_encode(), compare_head.uri_encode()]
+	var compare_url := _ensure_plugin_update_endpoint_config_service().get_compare_url_template() % [base_commit.uri_encode(), compare_head.uri_encode()]
 	var error := request_node.request(compare_url, _get_update_refs_headers())
 	if error != OK:
 		request_node.queue_free()
@@ -1862,6 +1839,12 @@ func _ensure_plugin_update_state_transition_service():
 	if _plugin_update_state_transition_service == null:
 		_plugin_update_state_transition_service = PluginUpdateStateTransitionServiceScript.new()
 	return _plugin_update_state_transition_service
+
+
+func _ensure_plugin_update_endpoint_config_service():
+	if _plugin_update_endpoint_config_service == null:
+		_plugin_update_endpoint_config_service = PluginUpdateEndpointConfigServiceScript.new()
+	return _plugin_update_endpoint_config_service
 
 
 func _build_plugin_update_tool_context(target: Dictionary = {}) -> Dictionary:
