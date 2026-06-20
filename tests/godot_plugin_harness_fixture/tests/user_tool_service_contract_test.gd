@@ -411,6 +411,10 @@ func _verify_user_executor_scan_backoff() -> Dictionary:
 	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/tools/user/executor.gd")
 	if source.find("const _INVENTORY_RESCAN_INTERVAL_MSEC := 5000") == -1:
 		return _failure("User tool executor should keep low-frequency fallback inventory rescans to avoid duplicating the watcher scan loop.")
+	if source.find("UserToolScanService") == -1:
+		return _failure("User tool executor should reuse UserToolScanService for fallback inventory scans.")
+	if source.find("func _collect_script_paths") != -1:
+		return _failure("User tool executor should not keep a second recursive custom_tools directory scanner.")
 	if source.find("if _pending_refresh:") == -1 or source.find("now_msec - _last_scan_msec >= _RELOAD_DEBOUNCE_MSEC") == -1:
 		return _failure("User tool executor should keep the short debounce only for explicit pending refreshes.")
 	if source.find("now_msec - _last_scan_msec >= _INVENTORY_RESCAN_INTERVAL_MSEC") == -1:

@@ -3,6 +3,7 @@ extends RefCounted
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
+const UserToolScanService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_scan_service.gd")
 const _CUSTOM_TOOLS_DIR = "res://addons/godot_dotnet_mcp/custom_tools"
 const _CUSTOM_TOOLS_ENABLED_SETTING = "godot_dotnet_mcp/user_tools/enable_runtime_loading"
 const _CUSTOM_TOOLS_ENABLED_SETTING_LEGACY = "user_tools/enable_runtime_loading"
@@ -16,9 +17,11 @@ var _requested_missing_scripts: Dictionary = {}
 var _pending_refresh := false
 var _last_scan_msec := 0
 var _definitions_revision := 0
+var _scan_service := UserToolScanService.new()
 
 
 func _init() -> void:
+	_scan_service.configure(_CUSTOM_TOOLS_DIR, 256)
 	_request_full_refresh("initialize")
 
 
@@ -429,34 +432,22 @@ func _unload_slot(script_path: String, reason: String) -> void:
 
 
 func _scan_custom_tool_scripts() -> Array[String]:
+	var scan_result := _scan_service.begin_scan()
+	var guard := 0
+	while not bool(scan_result.get("complete", false)) and guard < 1024:
+		scan_result = _scan_service.continue_scan()
+		guard += 1
+	if not bool(scan_result.get("success", false)):
+		MCPDebugBuffer.record("warning", "user", "User tool scan failed: %s" % str(scan_result.get("error", "scan_failed")))
+		return []
+	var snapshot: Dictionary = scan_result.get("snapshot", {})
 	var script_paths: Array[String] = []
-	_collect_script_paths(_CUSTOM_TOOLS_DIR, script_paths)
+	for script_path in snapshot.keys():
+		var normalized_path := _normalize_script_path(str(script_path))
+		if not normalized_path.is_empty():
+			script_paths.append(normalized_path)
 	script_paths.sort()
 	return script_paths
-
-
-func _collect_script_paths(dir_path: String, output: Array[String]) -> void:
-	var global_path = ProjectSettings.globalize_path(dir_path)
-	if not DirAccess.dir_exists_absolute(global_path):
-		return
-	var dir = DirAccess.open(dir_path)
-	if dir == null:
-		return
-	dir.list_dir_begin()
-	while true:
-		var entry = dir.get_next()
-		if entry.is_empty():
-			break
-		if entry.begins_with("."):
-			continue
-		var child_path = "%s/%s" % [dir_path, entry]
-		if dir.current_is_dir():
-			_collect_script_paths(child_path, output)
-		elif entry.ends_with(".gd"):
-			var normalized_path = _normalize_script_path(child_path)
-			if not normalized_path.is_empty():
-				output.append(normalized_path)
-	dir.list_dir_end()
 
 
 func _normalize_script_path(script_path: String) -> String:
