@@ -3,10 +3,12 @@ extends RefCounted
 # {"name": "mcp_tool_loader_supervisor_contracts"}
 
 const SupervisorScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_loader_supervisor.gd")
+const ToolLoaderScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
 
 
 class TestSupervisor extends SupervisorScript:
 	var live_revision := 1
+	var refresh_calls := 0
 
 	func seed_summary() -> void:
 		_tool_loader_last_summary = {
@@ -19,6 +21,9 @@ class TestSupervisor extends SupervisorScript:
 
 	func _get_tool_loader_catalog_revision() -> int:
 		return live_revision
+
+	func refresh_status_from_loader() -> void:
+		refresh_calls += 1
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
@@ -34,6 +39,26 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var live_status: Dictionary = supervisor.get_light_status()
 	if int(live_status.get("catalog_revision", 0)) != 7:
 		return _failure("Supervisor light status should publish the live loader catalog revision, not stale summary data.")
+
+	var disabled_supervisor = TestSupervisor.new()
+	var real_loader = ToolLoaderScript.new()
+	disabled_supervisor.set("_tool_loader", real_loader)
+	disabled_supervisor.set_disabled_tools([" system_runtime_control ", "system_project_state", "system_project_state"])
+	disabled_supervisor.set_disabled_tools(["system_project_state", "system_runtime_control"])
+	var disabled_tools := disabled_supervisor.get_disabled_tools()
+	disabled_tools.sort()
+	if disabled_tools != ["system_project_state", "system_runtime_control"]:
+		return _failure("Supervisor should normalize, sort, and deduplicate disabled tools.")
+	var loader_disabled_tools := real_loader.get_disabled_tools()
+	loader_disabled_tools.sort()
+	if loader_disabled_tools != ["system_project_state", "system_runtime_control"]:
+		return _failure("Supervisor should forward normalized disabled tool sets to the loader.")
+	if disabled_supervisor.refresh_calls != 1:
+		return _failure("Supervisor should refresh status only for changed disabled tool sets.")
+	disabled_supervisor.set_disabled_tools(["system_project_state"])
+	if disabled_supervisor.refresh_calls != 2:
+		return _failure("Supervisor should forward changed disabled tool sets to the loader.")
+	real_loader.shutdown()
 
 	return {
 		"name": "mcp_tool_loader_supervisor_contracts",
