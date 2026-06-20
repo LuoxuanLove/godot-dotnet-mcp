@@ -88,6 +88,19 @@ class SyncReloadProbePlugin extends PluginScript:
 		sync_events.append("lifecycle_reload")
 		return {"success": true, "deferred": true, "data": {"source": source}}
 
+	func complete_archive_request(result: int, response_code: int, target: Dictionary, serial: int) -> void:
+		await _on_update_archive_sync_request_attempt_completed(
+			result,
+			response_code,
+			PackedStringArray(),
+			PackedByteArray(),
+			target,
+			serial,
+			[{"label": "test archive request", "url": "https://example.invalid/archive.zip"}],
+			0,
+			[]
+		)
+
 
 class SyncStartProbePlugin extends PluginScript:
 	var archive_requests: Array[Dictionary] = []
@@ -414,7 +427,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var archive_attempt_probe := ArchiveAttemptProbePlugin.new()
 	archive_attempt_probe._update_sync_request_serial = 21
 	var branch_body := JSON.stringify({"commit": {"sha": "resolved-sha"}}).to_utf8_buffer()
-	await archive_attempt_probe._on_update_archive_branch_ref_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), branch_body, {"kind": "branch", "ref": "refactor/v2.0.0", "commit": ""}, 21, null)
+	await archive_attempt_probe._on_update_archive_branch_ref_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), branch_body, {"kind": "branch", "ref": "refactor/v2.0.0", "commit": ""}, 21)
 	if archive_attempt_probe.attempt_requests.size() != 1:
 		archive_attempt_probe.free()
 		return _failure("plugin.gd should start archive attempts after resolving branch commit metadata.")
@@ -431,7 +444,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var archive_ref_failure_probe := ArchiveAttemptProbePlugin.new()
 	archive_ref_failure_probe._update_sync_request_serial = 22
-	await archive_ref_failure_probe._on_update_archive_branch_ref_request_completed(HTTPRequest.RESULT_CONNECTION_ERROR, 0, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "refactor/v2.0.0", "commit": ""}, 22, null)
+	await archive_ref_failure_probe._on_update_archive_branch_ref_request_completed(HTTPRequest.RESULT_CONNECTION_ERROR, 0, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "refactor/v2.0.0", "commit": ""}, 22)
 	if archive_ref_failure_probe.attempt_requests.size() != 1:
 		archive_ref_failure_probe.free()
 		return _failure("plugin.gd should still try ref archive fallback when branch ref metadata lookup fails.")
@@ -478,7 +491,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var reload_probe := SyncReloadProbePlugin.new()
 	reload_probe._update_sync_request_serial = 10
 	reload_probe._state.update_sync_state = "loading"
-	await reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 10, null)
+	await reload_probe.complete_archive_request(HTTPRequest.RESULT_SUCCESS, 200, {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 10)
 	var localized_refresh_status := LocalizationServiceScript.translate("settings_update_sync_refreshing_editor")
 	if reload_probe.reload_requests != ["settings_sync"] or reload_probe.sync_events != ["editor_refresh", "lifecycle_reload"] or reload_probe.editor_refresh_count != 1 or reload_probe.editor_refresh_state != "loading" or reload_probe.editor_refresh_status != localized_refresh_status or str(reload_probe._state.update_sync_state) != "success" or reload_probe.compare_refresh_count != 1 or reload_probe.dock_refresh_count < 2:
 		reload_probe.free()
@@ -489,7 +502,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	refresh_timeout_probe._update_sync_request_serial = 16
 	refresh_timeout_probe._state.update_sync_state = "loading"
 	refresh_timeout_probe.editor_refresh_result = {"success": false, "scan_requested": true, "scan_completed": false}
-	await refresh_timeout_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 16, null)
+	await refresh_timeout_probe.complete_archive_request(HTTPRequest.RESULT_SUCCESS, 200, {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 16)
 	var localized_refresh_timeout := LocalizationServiceScript.translate("settings_update_sync_refresh_timeout")
 	if refresh_timeout_probe.reload_requests != [] or refresh_timeout_probe.sync_events != ["editor_refresh"] or str(refresh_timeout_probe._state.update_sync_state) != "error" or str(refresh_timeout_probe._state.update_sync_error) != localized_refresh_timeout or refresh_timeout_probe.compare_refresh_count != 0:
 		refresh_timeout_probe.free()
@@ -498,7 +511,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var failed_sync_reload_probe := SyncReloadProbePlugin.new()
 	failed_sync_reload_probe._update_sync_request_serial = 11
-	await failed_sync_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_CONNECTION_ERROR, 500, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 11, null)
+	await failed_sync_reload_probe.complete_archive_request(HTTPRequest.RESULT_CONNECTION_ERROR, 500, {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 11)
 	if failed_sync_reload_probe.editor_refresh_count != 0 or not failed_sync_reload_probe.reload_requests.is_empty() or str(failed_sync_reload_probe._state.update_sync_state) != "error":
 		failed_sync_reload_probe.free()
 		return _failure("plugin.gd should not schedule a lifecycle reload when the update archive request fails.")
@@ -507,7 +520,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var failed_copy_reload_probe := SyncReloadProbePlugin.new()
 	failed_copy_reload_probe._update_sync_request_serial = 12
 	failed_copy_reload_probe.sync_result = {"success": false, "error": "copy failed"}
-	await failed_copy_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 12, null)
+	await failed_copy_reload_probe.complete_archive_request(HTTPRequest.RESULT_SUCCESS, 200, {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 12)
 	if failed_copy_reload_probe.editor_refresh_count != 0 or not failed_copy_reload_probe.reload_requests.is_empty() or str(failed_copy_reload_probe._state.update_sync_state) != "error":
 		failed_copy_reload_probe.free()
 		return _failure("plugin.gd should not schedule a lifecycle reload when archive files fail to sync into the addon.")
@@ -516,7 +529,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var stale_serial_reload_probe := SyncReloadProbePlugin.new()
 	stale_serial_reload_probe._update_sync_request_serial = 14
 	stale_serial_reload_probe._state.update_sync_state = "pending"
-	await stale_serial_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 13, null)
+	await stale_serial_reload_probe.complete_archive_request(HTTPRequest.RESULT_SUCCESS, 200, {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 13)
 	if stale_serial_reload_probe.editor_refresh_count != 0 or not stale_serial_reload_probe.reload_requests.is_empty() or str(stale_serial_reload_probe._state.update_sync_state) != "pending" or stale_serial_reload_probe.compare_refresh_count != 0 or stale_serial_reload_probe.dock_refresh_count != 0:
 		stale_serial_reload_probe.free()
 		return _failure("plugin.gd should ignore stale update archive callbacks without scheduling a lifecycle reload.")
@@ -525,7 +538,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var marker_failure_reload_probe := SyncReloadProbePlugin.new()
 	marker_failure_reload_probe._update_sync_request_serial = 15
 	marker_failure_reload_probe.marker_error = ERR_CANT_CREATE
-	await marker_failure_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 15, null)
+	await marker_failure_reload_probe.complete_archive_request(HTTPRequest.RESULT_SUCCESS, 200, {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 15)
 	if marker_failure_reload_probe.editor_refresh_count != 0 or not marker_failure_reload_probe.reload_requests.is_empty() or str(marker_failure_reload_probe._state.update_sync_state) != "error":
 		marker_failure_reload_probe.free()
 		return _failure("plugin.gd should not schedule a lifecycle reload when sync marker writing fails.")
@@ -535,7 +548,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	pending_reload_probe._update_sync_request_serial = 13
 	pending_reload_probe._state.update_sync_state = "loading"
 	pending_reload_probe._plugin_reenable_pending = true
-	await pending_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 13, null)
+	await pending_reload_probe.complete_archive_request(HTTPRequest.RESULT_SUCCESS, 200, {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 13)
 	if pending_reload_probe.editor_refresh_count != 1 or not pending_reload_probe.reload_requests.is_empty() or str(pending_reload_probe._state.update_sync_state) != "success":
 		pending_reload_probe.free()
 		return _failure("plugin.gd should keep sync success state without scheduling a duplicate lifecycle reload when one is already pending.")
