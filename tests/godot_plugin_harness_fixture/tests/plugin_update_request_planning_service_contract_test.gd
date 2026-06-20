@@ -25,6 +25,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	}, refs)
 	if branch_target != {"kind": "branch", "ref": "refactor/v2.0.0", "commit": "branch-sha"}:
 		return _failure("PluginUpdateRequestPlanningService should resolve custom branch targets.", {"target": branch_target})
+	var legacy_dev_target: Dictionary = service.resolve_sync_target({
+		"update_source": "latest_dev",
+		"update_custom_branch": ""
+	}, refs)
+	if legacy_dev_target != {"kind": "branch", "ref": "dev", "commit": ""}:
+		return _failure("PluginUpdateRequestPlanningService should preserve legacy latest_dev settings as dev custom-branch targets.", {"target": legacy_dev_target})
+	var legacy_branch_target: Dictionary = service.resolve_sync_target({
+		"update_source": "branch",
+		"update_custom_branch": "refactor/v2.0.0"
+	}, refs)
+	if legacy_branch_target != branch_target:
+		return _failure("PluginUpdateRequestPlanningService should preserve legacy branch settings as custom-branch targets.", {"target": legacy_branch_target})
 	if not service.should_resolve_branch_commit_before_archive({"kind": "branch", "ref": "feature/no-commit", "commit": ""}):
 		return _failure("PluginUpdateRequestPlanningService should request branch commit resolution when commit is missing.")
 	if service.should_resolve_branch_commit_before_archive({"kind": "tag", "ref": "v2.0.0", "commit": ""}):
@@ -109,7 +121,6 @@ func _verify_plugin_entrypoint_delegates_update_request_planning() -> String:
 			return "plugin.gd should delegate update request planning responsibility: %s" % required
 	for forbidden in [
 		"func _parse_update_branch_ref_response(",
-		"func _should_resolve_update_branch_commit_before_archive(",
 		"Branch response did not include commit.sha",
 		"return target_ref.strip_edges().uri_encode().replace(\"%2F\", \"/\")",
 		"source_repo_path\": \"https://github.com/LuoxuanLove/godot-dotnet-mcp\""

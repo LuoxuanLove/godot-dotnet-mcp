@@ -1056,7 +1056,7 @@ func _start_update_archive_sync_request(target: Dictionary, serial: int) -> void
 		return
 	var target_kind := str(target.get("kind", "branch"))
 	var target_ref := str(target.get("ref", "")).strip_edges()
-	if _ensure_plugin_update_request_planning_service().should_resolve_branch_commit_before_archive(target):
+	if _should_resolve_update_branch_commit_before_archive(target):
 		_state.update_sync_status = _get_localized_text("settings_update_sync_resolving_target")
 		_state.update_sync_progress = max(float(_state.update_sync_progress), 0.18)
 		_refresh_dock()
@@ -1067,6 +1067,10 @@ func _start_update_archive_sync_request(target: Dictionary, serial: int) -> void
 		_mark_update_sync_failed("Update sync target has no usable archive URL: %s" % target_ref, serial)
 		return
 	_start_update_archive_sync_request_attempt(target, serial, attempts, 0, [])
+
+
+func _should_resolve_update_branch_commit_before_archive(target: Dictionary) -> bool:
+	return _ensure_plugin_update_request_planning_service().should_resolve_branch_commit_before_archive(target)
 
 
 func _start_update_archive_branch_ref_request(target: Dictionary, serial: int) -> void:

@@ -132,7 +132,7 @@ func build_sync_marker(target: Dictionary, written: int, marker_context: Diction
 func _normalize_update_source(source: String) -> String:
 	if source == "latest_stable" or source == "latest_release" or source == "custom_branch":
 		return source
-	if source == "branch":
+	if source == "latest_dev" or source == "branch":
 		return "custom_branch"
 	if source == "release_tag":
 		return "latest_release"
