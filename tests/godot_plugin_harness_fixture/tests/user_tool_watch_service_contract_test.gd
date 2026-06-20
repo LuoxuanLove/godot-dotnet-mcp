@@ -21,7 +21,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("User tool watcher should keep a conservative polling interval to avoid idle editor stalls.")
 	if source.find("const SCAN_ENTRY_BUDGET_PER_TICK := 16") == -1:
 		return _failure("User tool watcher should keep a per-tick scan budget to avoid periodic editor stalls.")
-	if source.find("if not _scan_in_progress and not _initial_scan_pending:") == -1 or source.find("now_msec - _last_poll_msec < POLL_INTERVAL_MSEC") == -1:
+	if source.find("UserToolScanService") == -1:
+		return _failure("User tool watcher should delegate directory scanning to UserToolScanService.")
+	if source.find("_scan_service.begin_scan()") == -1 or source.find("_scan_service.continue_scan()") == -1:
+		return _failure("User tool watcher should drive the shared scan service instead of owning scan traversal.")
+	if source.find("func _continue_scan_snapshot") != -1 or source.find("func _make_scan_directory_job") != -1:
+		return _failure("User tool watcher should not keep private directory traversal helpers after scan service extraction.")
+	if source.find("if not _scan_service.is_scan_in_progress() and not _initial_scan_pending:") == -1 or source.find("now_msec - _last_poll_msec < POLL_INTERVAL_MSEC") == -1:
 		return _failure("User tool watcher should skip ProjectSettings reads until the next poll window when no scan is active.")
 	if source.find("func start() -> void:") == -1 or source.find("_initial_scan_pending = true") == -1:
 		return _failure("User tool watcher should schedule initial scans instead of doing synchronous startup scans.")
@@ -122,11 +128,6 @@ func _verify_scan_budget() -> Dictionary:
 		_restore_runtime_loading_setting(had_setting, previous_setting)
 		_cleanup_paths(created_paths)
 		return steady_state_result
-	var slice_result := _verify_incremental_slice_budget(service, created_paths)
-	if not bool(slice_result.get("success", false)):
-		_restore_runtime_loading_setting(had_setting, previous_setting)
-		_cleanup_paths(created_paths)
-		return slice_result
 	for _attempt in range(20):
 		service.tick()
 		if not bool(service.get_status().get("scan_in_progress", false)):
@@ -156,36 +157,6 @@ func _verify_steady_state_poll_starts_next_scan(service, created_paths: Array[St
 		service.tick()
 		if not bool(service.get_status().get("scan_in_progress", false)):
 			break
-	return {"success": true}
-
-
-func _verify_incremental_slice_budget(service, created_paths: Array[String]) -> Dictionary:
-	var entries: Array = []
-	for path in created_paths:
-		var file := FileAccess.open(path, FileAccess.WRITE)
-		if file != null:
-			file.store_string("extends Node\n")
-			file.close()
-		entries.append({
-			"name": path.get_file(),
-			"path": path,
-			"is_dir": false
-		})
-	service._scan_in_progress = true
-	service._scan_stack = [{
-		"path": UserToolWatchService.CUSTOM_TOOLS_DIR,
-		"entries": entries,
-		"index": 0
-	}]
-	service._scan_snapshot_data = {}
-	service._scan_entries_processed = 0
-	service._last_scan_slices = 0
-	var first_result: Dictionary = service._continue_scan_snapshot()
-	var first_status: Dictionary = service.get_status()
-	if bool(first_result.get("complete", false)) or not bool(first_status.get("scan_in_progress", false)):
-		return _failure("User tool watcher should leave large scans in progress after one budgeted slice.")
-	if int(first_status.get("scan_entries_processed", 0)) > 16:
-		return _failure("User tool watcher should not process more entries than the per-tick scan budget.")
 	return {"success": true}
 
 
