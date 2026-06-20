@@ -27,6 +27,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("User tool watcher should schedule initial scans instead of doing synchronous startup scans.")
 	if source.find("func get_status_snapshot() -> Dictionary:") == -1:
 		return _failure("User tool watcher should expose a cached status snapshot for idle Dock polling.")
+	if source.find("snapshot = (raw_snapshot as Dictionary).duplicate(true)") != -1:
+		return _failure("User tool watcher should consume completed scan snapshots without deep-copying the full watch table.")
+	if source.find("result[\"snapshot\"] = _scan_snapshot_data.duplicate(true)") != -1:
+		return _failure("User tool watcher should transfer completed incremental scan snapshots instead of duplicating them.")
 
 	var service = UserToolWatchService.new()
 	var recorder = Recorder.new()

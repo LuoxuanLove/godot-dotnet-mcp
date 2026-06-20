@@ -107,9 +107,9 @@ func _handle_scan_result(scan_result: Dictionary, now_msec: int) -> void:
 	var snapshot: Dictionary = {}
 	var raw_snapshot = scan_result.get("snapshot", {})
 	if raw_snapshot is Dictionary:
-		snapshot = (raw_snapshot as Dictionary).duplicate(true)
+		snapshot = raw_snapshot as Dictionary
 	if _initial_scan_pending:
-		_known_snapshot = snapshot.duplicate(true)
+		_known_snapshot = snapshot
 		_initial_scan_pending = false
 		_last_poll_msec = now_msec
 		_last_error = ""
@@ -120,8 +120,8 @@ func _handle_scan_result(scan_result: Dictionary, now_msec: int) -> void:
 		return
 
 	if not _snapshots_equal(snapshot, _pending_snapshot):
-		_pending_snapshot = snapshot.duplicate(true)
-		_pending_changes = changes.duplicate(true)
+		_pending_snapshot = snapshot
+		_pending_changes = changes
 		_pending_since_msec = now_msec
 		_last_change_reason = "external_watch_pending"
 		return
@@ -131,7 +131,7 @@ func _handle_scan_result(scan_result: Dictionary, now_msec: int) -> void:
 
 	var apply_result = _apply_pending_changes(_pending_changes)
 	if _as_bool(apply_result.get("success", false)):
-		_known_snapshot = snapshot.duplicate(true)
+		_known_snapshot = snapshot
 		_last_change_reason = str(apply_result.get("reason", "external_watch"))
 		_last_error = ""
 	else:
@@ -243,7 +243,7 @@ func _begin_incremental_scan() -> Dictionary:
 
 func _continue_scan_snapshot() -> Dictionary:
 	if not _scan_in_progress:
-		return {"success": true, "complete": true, "snapshot": _scan_snapshot_data.duplicate(true)}
+		return {"success": true, "complete": true, "snapshot": _scan_snapshot_data}
 	var started_usec := Time.get_ticks_usec()
 	var processed_this_slice := 0
 	_last_scan_slices += 1
@@ -279,10 +279,12 @@ func _continue_scan_snapshot() -> Dictionary:
 			}
 	_last_scan_duration_ms = maxf(float(Time.get_ticks_usec() - started_usec) / 1000.0, 0.0)
 	if _scan_stack.is_empty():
+		var completed_snapshot := _scan_snapshot_data
+		_scan_snapshot_data = {}
 		var result: Dictionary = {}
 		result["success"] = true
 		result["complete"] = true
-		result["snapshot"] = _scan_snapshot_data.duplicate(true)
+		result["snapshot"] = completed_snapshot
 		result["entries_processed"] = _scan_entries_processed
 		result["slices"] = _last_scan_slices
 		_reset_scan_state(false)
