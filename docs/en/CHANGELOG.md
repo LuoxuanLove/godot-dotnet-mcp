@@ -82,6 +82,7 @@ Target version: 2.0.0.
 - Moved plugin update tool status snapshots and maintenance response enrichment into a dedicated facade service, keeping archive download and file sync operations in the plugin runtime while reducing plugin entrypoint response-shaping debt.
 - Moved plugin runtime, evolution, and developer usage guides into a dedicated usage guide service so the plugin entrypoint no longer owns static guide payloads.
 - Moved plugin self-diagnostic health, error, timeline, and clear responses into a dedicated diagnostics service while preserving existing diagnostic store and Dock integration behavior.
+- Moved plugin tool-profile and config import/export tool responses into a dedicated profile config service while preserving existing settings storage, profile CRUD, and Dock refresh behavior.
 - Added release-policy, PR-policy, and merge-queue validation coverage for v2.0 branch integration, trusted `refactor/v2.0.0` to `dev` version metadata handoff, version metadata changes, BOM-prefixed PR headings, and formal changelog section requirements.
 - Hardened tag-triggered plugin verification so manual branch runs cannot skip release preflight, release-note rendering, or release-note artifact validation.
 - Added safe-write and clean-install validation scripts for the DotnetBridge write surface, isolated Roslyn runtime bundle, and exported Asset Library addon shape.
