@@ -11,6 +11,7 @@ var _tool_loader_healthy := false
 var _tool_loader_status: String = "uninitialized"
 var _tool_loader_last_summary: Dictionary = {}
 var _disabled_tools: Dictionary = {}
+var _disabled_tools_signature := ""
 var _log := Callable()
 var _record_registration_issue := Callable()
 var _tool_activity_registry = null
@@ -56,11 +57,16 @@ func register_tools(reason: String = "initialize", force_reload_scripts: bool = 
 
 
 func set_disabled_tools(disabled: Array) -> void:
+	var normalized := _normalize_disabled_tools(disabled)
+	var next_signature := "|".join(normalized)
+	if next_signature == _disabled_tools_signature:
+		return
 	_disabled_tools.clear()
-	for name in disabled:
-		_disabled_tools[str(name)] = true
+	for name in normalized:
+		_disabled_tools[name] = true
+	_disabled_tools_signature = next_signature
 	if _tool_loader != null:
-		_tool_loader.set_disabled_tools(disabled)
+		_tool_loader.set_disabled_tools(normalized)
 		refresh_status_from_loader()
 
 
@@ -138,6 +144,7 @@ func dispose() -> void:
 	_tool_loader_status = "disposed"
 	_tool_loader_last_summary = {}
 	_disabled_tools.clear()
+	_disabled_tools_signature = ""
 	_log = Callable()
 	_record_registration_issue = Callable()
 	_tool_activity_registry = null
@@ -165,6 +172,20 @@ func _replace_tool_loader() -> void:
 		_tool_loader.set_tool_activity_registry(_tool_activity_registry)
 	if not _disabled_tools.is_empty():
 		_tool_loader.set_disabled_tools(get_disabled_tools())
+
+
+func _normalize_disabled_tools(disabled: Array) -> Array[String]:
+	var unique := {}
+	for name in disabled:
+		var normalized := str(name).strip_edges()
+		if normalized.is_empty():
+			continue
+		unique[normalized] = true
+	var result: Array[String] = []
+	for name in unique.keys():
+		result.append(str(name))
+	result.sort()
+	return result
 
 
 func _should_recover_tool_loader(summary: Dictionary) -> bool:

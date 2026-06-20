@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to this project will be documented in this file.
 
@@ -80,6 +80,8 @@ Target version: 2.0.0.
 - Clarified legacy `system_help` guidance so clients start from MCP Resources for passive context, Prompts for planning, and Tools for actions or computed workflow results.
 
 ### Internal
+
+- Normalized disabled-tool sets in the MCP tool loader supervisor so unchanged profile/tool-filter writes skip redundant loader forwarding and status refresh work.
 
 - Added aggregate v2.0 conformance and guardrail coverage for lifecycle, JSON-RPC, Tools, Resources, Prompts, schema metadata, Streamable HTTP, stdio, Dock metadata, public-tool removals, root monolith closure, catalog facts, optional capabilities, release-facing install guidance, changelog section order, and Roslyn runtime bundle shape.
 - Moved plugin config/reload callback context construction into a dedicated context service so the plugin entrypoint keeps less wiring state while preserving existing reload, client setup, and User-tool watcher behavior.
