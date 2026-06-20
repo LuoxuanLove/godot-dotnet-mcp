@@ -39,6 +39,7 @@ Target version: 2.0.0.
 - Changed User-tool runtime fallback rescans so the executor keeps fast explicit reload handling but no longer duplicates the watcher loop with 300 ms idle inventory scans.
 - Changed root domain implementations to split executors for audio, animation, signal, TileMap, UI, filesystem, node, project, resource, scene, group, geometry, material, lighting, navigation, particle, physics, shader, debug, and editor domains, with debug/editor kept as thin compatibility wrappers.
 - Changed AtomicBridge, `MCPToolLoader`, stdio routing, plugin lifecycle wiring, reload handling, runtime context wiring, status/query projections, and User-tool maintenance to use dedicated services while preserving their public facades.
+- Changed plugin update state transitions for refs, sync, and compare workflows to use a dedicated transition service while preserving the Dock and MCP update status fields.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v2.0 line.
 
 ### Fixed

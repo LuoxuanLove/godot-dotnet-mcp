@@ -32,6 +32,7 @@ const PluginUpdateSyncMirrorServiceScript = preload("res://addons/godot_dotnet_m
 const PluginUpdateRequestPlanningServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_request_planning_service.gd")
 const PluginUpdateRefsDiscoveryServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_refs_discovery_service.gd")
 const PluginUpdateCompareServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_compare_service.gd")
+const PluginUpdateStateTransitionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_state_transition_service.gd")
 const PluginUsageGuideServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_usage_guide_service.gd")
 const PluginSelfDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostics_service.gd")
 const PluginProfileConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_profile_config_service.gd")
@@ -87,6 +88,7 @@ var _plugin_update_sync_mirror_service := PluginUpdateSyncMirrorServiceScript.ne
 var _plugin_update_request_planning_service := PluginUpdateRequestPlanningServiceScript.new()
 var _plugin_update_refs_discovery_service := PluginUpdateRefsDiscoveryServiceScript.new()
 var _plugin_update_compare_service := PluginUpdateCompareServiceScript.new()
+var _plugin_update_state_transition_service := PluginUpdateStateTransitionServiceScript.new()
 var _plugin_usage_guide_service := PluginUsageGuideServiceScript.new()
 var _plugin_self_diagnostics_service := PluginSelfDiagnosticsServiceScript.new()
 var _plugin_profile_config_service := PluginProfileConfigServiceScript.new()
@@ -284,6 +286,7 @@ func _dispose_lifecycle_services() -> void:
 	_plugin_update_request_planning_service = null
 	_plugin_update_refs_discovery_service = null
 	_plugin_update_compare_service = null
+	_plugin_update_state_transition_service = null
 	_plugin_usage_guide_service = null
 	_plugin_self_diagnostics_service = null
 	_plugin_profile_config_service = null
@@ -1322,20 +1325,13 @@ func _mark_update_refs_request_failed(kind: String, message: String, serial: int
 func _fail_pending_update_sync_after_refs_discovery(message: String) -> void:
 	if not _update_sync_after_refs_discovery_pending or _state == null:
 		return
-	_update_sync_after_refs_discovery_pending = false
-	_state.update_sync_state = "error"
-	_state.update_sync_error = message
-	_state.update_sync_status = ""
-	_state.update_sync_progress = 0.0
+	_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_pending_sync_failure(message))
 
 
 func _mark_update_sync_failed(message: String, serial: int) -> void:
 	if _state == null or serial != _update_sync_request_serial:
 		return
-	_state.update_sync_state = "error"
-	_state.update_sync_error = message
-	_state.update_sync_status = ""
-	_state.update_sync_progress = 0.0
+	_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_sync_failure(message))
 	_refresh_dock()
 
 
@@ -1409,10 +1405,11 @@ func _complete_update_sync_after_editor_refresh(target_ref: String, sync_result:
 	if not bool(refresh_result.get("success", false)):
 		_mark_update_sync_failed(_get_localized_text("settings_update_sync_refresh_timeout"), serial)
 		return
-	_state.update_sync_state = "success"
-	_state.update_sync_error = ""
-	_state.update_sync_status = _get_localized_text("settings_update_sync_success") % [target_ref, int(sync_result.get("written", 0))]
-	_state.update_sync_progress = 1.0
+	_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_sync_success(
+		target_ref,
+		int(sync_result.get("written", 0)),
+		_get_localized_text("settings_update_sync_success")
+	))
 	_refresh_update_compare_for_current_target()
 	_refresh_dock()
 	_request_update_sync_lifecycle_reload()
@@ -1548,15 +1545,12 @@ func _finalize_update_refs_discovery_if_ready(serial: int) -> void:
 	_state.update_ref_latest_stable_release = str(snapshot.get("latest_stable_release", ""))
 	_state.update_refs_release_source = str(snapshot.get("release_source", ""))
 	if errors.is_empty() or not _state.update_ref_branches.is_empty() or not _state.update_ref_releases.is_empty():
-		_state.update_refs_state = "success"
-		_state.update_refs_error = ""
-		_state.update_refs_status = _localization.get_text("settings_update_refs_success") if _localization != null else "Update refs loaded."
-		_update_refs_discovery_loaded = true
+		_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_refs_success(
+			_localization.get_text("settings_update_refs_success") if _localization != null else "Update refs loaded."
+		))
 		_refresh_update_compare_for_current_target()
 	else:
-		_state.update_refs_state = "error"
-		_state.update_refs_error = "; ".join(errors)
-		_state.update_refs_status = ""
+		_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_refs_failure(errors))
 		_reset_update_compare_state()
 		_fail_pending_update_sync_after_refs_discovery("Update target discovery failed before sync: %s" % _state.update_refs_error)
 	var continued_sync := _continue_pending_update_sync_after_refs_discovery()
@@ -1573,10 +1567,9 @@ func _continue_pending_update_sync_after_refs_discovery() -> bool:
 	var target := _resolve_update_sync_target()
 	var target_ref := str(target.get("ref", "")).strip_edges()
 	if target_ref.is_empty():
-		_update_sync_after_refs_discovery_pending = false
-		_state.update_sync_state = "error"
-		_state.update_sync_error = _localization.get_text("settings_update_sync_no_target") if _localization != null else "Select an update target before syncing."
-		_state.update_sync_status = ""
+		_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_pending_sync_failure(
+			_localization.get_text("settings_update_sync_no_target") if _localization != null else "Select an update target before syncing."
+		))
 		return false
 	_update_sync_after_refs_discovery_pending = false
 	return _request_update_sync(target, "refs_discovery")
@@ -1623,13 +1616,7 @@ func _reset_update_compare_state() -> void:
 	if _state == null:
 		return
 	_update_compare_request_serial += 1
-	_state.update_compare_state = "idle"
-	_state.update_compare_error = ""
-	_state.update_compare_base_commit = ""
-	_state.update_compare_target_ref = ""
-	_state.update_compare_target_commit = ""
-	_state.update_compare_ahead_by = -1
-	_state.update_compare_behind_by = -1
+	_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_compare_reset())
 
 
 func _start_update_compare_request(base_commit: String, compare_head: String, target_commit: String = "") -> void:
@@ -1665,22 +1652,14 @@ func _on_update_compare_request_completed(result: int, response_code: int, _head
 	if not bool(parse_result.get("success", false)):
 		_mark_update_compare_failed(str(parse_result.get("error", "Invalid JSON response")), serial)
 		return
-	_state.update_compare_state = "success"
-	_state.update_compare_error = ""
-	_state.update_compare_base_commit = base_commit
-	_state.update_compare_target_commit = target_commit
-	_state.update_compare_ahead_by = int(parse_result.get("ahead_by", -1))
-	_state.update_compare_behind_by = int(parse_result.get("behind_by", -1))
+	_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_compare_success(base_commit, target_commit, parse_result))
 	_refresh_dock()
 
 
 func _mark_update_compare_failed(message: String, serial: int) -> void:
 	if _state == null or serial != _update_compare_request_serial:
 		return
-	_state.update_compare_state = "error"
-	_state.update_compare_error = message
-	_state.update_compare_ahead_by = -1
-	_state.update_compare_behind_by = -1
+	_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_compare_failure(message))
 	_refresh_dock()
 
 
@@ -1879,6 +1858,12 @@ func _ensure_plugin_update_compare_service():
 	return _plugin_update_compare_service
 
 
+func _ensure_plugin_update_state_transition_service():
+	if _plugin_update_state_transition_service == null:
+		_plugin_update_state_transition_service = PluginUpdateStateTransitionServiceScript.new()
+	return _plugin_update_state_transition_service
+
+
 func _build_plugin_update_tool_context(target: Dictionary = {}) -> Dictionary:
 	if target.is_empty():
 		target = _resolve_update_sync_target()
@@ -1940,6 +1925,45 @@ func _build_plugin_update_compare_status() -> Dictionary:
 
 func _build_plugin_update_sync_status() -> Dictionary:
 	return _ensure_plugin_update_tool_facade().build_sync_status(_build_plugin_update_tool_context())
+
+
+func _apply_update_state_patch(patch: Dictionary) -> void:
+	if _state == null:
+		return
+	for key in patch.keys():
+		match str(key):
+			"pending_sync_after_refs_discovery":
+				_update_sync_after_refs_discovery_pending = bool(patch[key])
+			"refs_discovery_loaded":
+				_update_refs_discovery_loaded = bool(patch[key])
+			"refs_state":
+				_state.update_refs_state = str(patch[key])
+			"refs_error":
+				_state.update_refs_error = str(patch[key])
+			"refs_status":
+				_state.update_refs_status = str(patch[key])
+			"sync_state":
+				_state.update_sync_state = str(patch[key])
+			"sync_error":
+				_state.update_sync_error = str(patch[key])
+			"sync_status":
+				_state.update_sync_status = str(patch[key])
+			"sync_progress":
+				_state.update_sync_progress = float(patch[key])
+			"compare_state":
+				_state.update_compare_state = str(patch[key])
+			"compare_error":
+				_state.update_compare_error = str(patch[key])
+			"compare_base_commit":
+				_state.update_compare_base_commit = str(patch[key])
+			"compare_target_ref":
+				_state.update_compare_target_ref = str(patch[key])
+			"compare_target_commit":
+				_state.update_compare_target_commit = str(patch[key])
+			"compare_ahead_by":
+				_state.update_compare_ahead_by = int(patch[key])
+			"compare_behind_by":
+				_state.update_compare_behind_by = int(patch[key])
 
 
 func _resolve_plugin_update_overall_status() -> String:
