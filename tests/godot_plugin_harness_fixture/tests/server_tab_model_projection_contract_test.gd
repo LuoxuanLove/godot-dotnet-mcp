@@ -125,6 +125,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var empty_projection = service.project(_build_fallback_model())
 	if not ((empty_projection.get("overview", {}) as Dictionary).get("service_risk", {}) as Dictionary).is_empty():
 		return _failure("Server tab projection should not flag the default loopback host as a service bind risk.")
+	var blank_host_projection = service.project(_build_blank_host_model())
+	if not ((blank_host_projection.get("overview", {}) as Dictionary).get("service_risk", {}) as Dictionary).is_empty():
+		return _failure("Server tab projection should normalize blank service hosts before computing bind risk.")
+	if str((blank_host_projection.get("overview", {}) as Dictionary).get("service_text", "")).find("127.0.0.1") == -1:
+		return _failure("Server tab projection should display the default loopback endpoint for blank service hosts.")
 	var empty_self_diagnostics: Dictionary = empty_projection.get("self_diagnostics", {})
 	if str(empty_self_diagnostics.get("badge_text", "")) != "":
 		return _failure("Server tab projection should hide the badge when there are no diagnostics.")
@@ -261,6 +266,15 @@ func _build_wildcard_host_model() -> Dictionary:
 		"port": 3000
 	}
 	model["is_running"] = true
+	return model
+
+
+func _build_blank_host_model() -> Dictionary:
+	var model := _build_fallback_model()
+	model["settings"] = {
+		"host": "   ",
+		"port": 3000
+	}
 	return model
 
 

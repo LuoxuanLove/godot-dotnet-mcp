@@ -15,12 +15,13 @@ func project(model: Dictionary) -> Dictionary:
 	var stats: Dictionary = model.get("stats", {})
 	var self_diagnostics: Dictionary = model.get("self_diagnostics", {})
 	var is_running := bool(model.get("is_running", false))
+	var service_host := _normalize_service_host(str(settings.get("host", DEFAULT_HOST)))
 
 	return {
 		"overview": {
 			"health_text": _build_overview_health_text(self_diagnostics, localization),
-			"service_text": _build_overview_service_text(is_running, settings, localization),
-			"service_risk": _build_service_bind_risk(str(settings.get("host", DEFAULT_HOST)), localization),
+			"service_text": _build_overview_service_text(is_running, settings, service_host, localization),
+			"service_risk": _build_service_bind_risk(service_host, localization),
 			"connections_text": _build_overview_connections_text(stats),
 			"config_text": _build_overview_config_text(model, localization),
 			"activity_text": _build_overview_activity_text(stats, localization)
@@ -43,17 +44,21 @@ func _build_overview_health_text(self_diagnostics: Dictionary, localization) -> 
 	return "%s · %s" % [status_text, summary]
 
 
-func _build_overview_service_text(is_running: bool, settings: Dictionary, localization) -> String:
+func _build_overview_service_text(is_running: bool, settings: Dictionary, host: String, localization) -> String:
 	var service_state_key := "status_running" if is_running else "status_stopped"
 	var service_state := _get_localized_text(localization, service_state_key, service_state_key.capitalize())
-	var host := str(settings.get("host", DEFAULT_HOST)).strip_edges()
-	if host.is_empty():
-		host = DEFAULT_HOST
 	var endpoint = "http://%s:%d/mcp" % [host, int(settings.get("port", DEFAULT_PORT))]
 	var risk := _build_service_bind_risk(host, localization)
 	if not risk.is_empty():
 		return "%s · %s · %s" % [service_state, endpoint, str(risk.get("summary_text", ""))]
 	return "%s · %s" % [service_state, endpoint]
+
+
+func _normalize_service_host(host: String) -> String:
+	var normalized := host.strip_edges()
+	if normalized.is_empty():
+		return DEFAULT_HOST
+	return normalized
 
 
 func _build_service_bind_risk(host: String, localization) -> Dictionary:
