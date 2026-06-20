@@ -19,6 +19,7 @@ const PluginDockCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugi
 const ClientConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd")
 const UserToolServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
 const PluginRuntimeReloadRequestServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_reload_request_service.gd")
+const PluginRuntimeReloadCompletionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_reload_completion_service.gd")
 const MCPEditorDebuggerBridge = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_debugger_bridge.gd")
 const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
@@ -77,6 +78,7 @@ var _plugin_lifecycle_context_service := PluginLifecycleContextServiceScript.new
 var _config_reload_wiring_service := PluginConfigReloadWiringServiceScript.new()
 var _config_reload_context_service := PluginConfigReloadContextServiceScript.new()
 var _runtime_reload_request_service := PluginRuntimeReloadRequestServiceScript.new()
+var _runtime_reload_completion_service := PluginRuntimeReloadCompletionServiceScript.new()
 var _plugin_update_tool_facade := PluginUpdateToolFacadeServiceScript.new()
 var _plugin_update_sync_mirror_service := PluginUpdateSyncMirrorServiceScript.new()
 var _plugin_usage_guide_service := PluginUsageGuideServiceScript.new()
@@ -269,6 +271,7 @@ func _dispose_lifecycle_services() -> void:
 		_mcp_catalog_preview_service.dispose()
 	_mcp_catalog_preview_service = null
 	_runtime_coordinator = null
+	_runtime_reload_completion_service = null
 	_config_reload_context_service = null
 	_plugin_update_tool_facade = null
 	_plugin_update_sync_mirror_service = null
@@ -2505,10 +2508,7 @@ func _schedule_runtime_reload(method_name: String, bound_args: Array = []) -> vo
 
 
 func _complete_runtime_server_restart(operation_id: String) -> void:
-	var success := false
-	if _state != null and _server_controller != null:
-		success = _server_controller.start(_state.settings, "tool_runtime_restart")
-		_refresh_dock()
+	var success := _ensure_runtime_reload_completion_service().complete_server_restart(_build_runtime_reload_completion_context())
 	_pending_runtime_reload_action = ""
 	_finish_self_operation(
 		{"operation_id": operation_id},
@@ -2519,21 +2519,7 @@ func _complete_runtime_server_restart(operation_id: String) -> void:
 
 
 func _complete_runtime_soft_reload(operation_id: String, was_running: bool, focus_snapshot: Dictionary = {}) -> void:
-	var success := false
-	if _state != null and _server_controller != null:
-		_refresh_service_instances()
-		_recreate_server_controller()
-		LocalizationService.reset_instance()
-		_localization = LocalizationService.get_instance()
-		_localization.set_language(str(_state.settings.get("language", "")))
-		MCPDebugBuffer.set_minimum_level(str(_state.settings.get("log_level", "info")))
-		if was_running:
-			success = _server_controller.start(_state.settings, "tool_soft_reload")
-		else:
-			success = _server_controller.reinitialize(_state.settings, "tool_soft_reload")
-		_recreate_dock()
-		_refresh_dock()
-		_restore_runtime_dock_focus_snapshot(focus_snapshot)
+	var success := _ensure_runtime_reload_completion_service().complete_soft_reload(_build_runtime_reload_completion_context(), was_running, focus_snapshot)
 	_pending_runtime_reload_action = ""
 	_finish_self_operation(
 		{"operation_id": operation_id},
@@ -2544,21 +2530,7 @@ func _complete_runtime_soft_reload(operation_id: String, was_running: bool, focu
 
 
 func _complete_runtime_full_reload(operation_id: String, was_running: bool, focus_snapshot: Dictionary = {}) -> void:
-	var success := false
-	if _state != null and _server_controller != null:
-		_refresh_service_instances()
-		_recreate_server_controller()
-		LocalizationService.reset_instance()
-		_localization = LocalizationService.get_instance()
-		_localization.set_language(str(_state.settings.get("language", "")))
-		MCPDebugBuffer.set_minimum_level(str(_state.settings.get("log_level", "info")))
-		if was_running:
-			success = _server_controller.start(_state.settings, "tool_full_reload")
-		else:
-			success = _server_controller.reinitialize(_state.settings, "tool_full_reload")
-		_recreate_dock()
-		_refresh_dock()
-		_restore_runtime_dock_focus_snapshot(focus_snapshot)
+	var success := _ensure_runtime_reload_completion_service().complete_full_reload(_build_runtime_reload_completion_context(), was_running, focus_snapshot)
 	_pending_runtime_reload_action = ""
 	_finish_self_operation(
 		{"operation_id": operation_id},
@@ -2569,24 +2541,44 @@ func _complete_runtime_full_reload(operation_id: String, was_running: bool, focu
 
 
 func _capture_dock_focus_snapshot() -> Dictionary:
-	if _dock and is_instance_valid(_dock) and _dock.has_method("capture_focus_snapshot"):
-		return _dock.capture_focus_snapshot()
-	return {"tab_index": _state.current_tab, "focus_path": ""}
+	return _ensure_runtime_reload_completion_service().capture_dock_focus_snapshot(_dock, _state)
 
 
 func _restore_runtime_dock_focus_snapshot(snapshot: Dictionary) -> void:
-	if _dock == null or not is_instance_valid(_dock):
-		return
+	_ensure_runtime_reload_completion_service().restore_dock_focus_snapshot(_build_runtime_reload_completion_context(), snapshot)
+
+
+func _build_runtime_reload_completion_context() -> Dictionary:
+	return {
+		"state": _state,
+		"dock": _dock,
+		"server_controller": _server_controller,
+		"get_server_controller": Callable(self, "_get_server_controller"),
+		"refresh_service_instances": Callable(self, "_refresh_service_instances"),
+		"recreate_server_controller": Callable(self, "_recreate_server_controller"),
+		"reset_localization": Callable(self, "_reset_runtime_reload_localization"),
+		"recreate_dock": Callable(self, "_recreate_dock"),
+		"refresh_dock": Callable(self, "_refresh_dock"),
+		"ensure_update_refs_discovery_requested": Callable(self, "_ensure_update_refs_discovery_requested")
+	}
+
+
+func _get_server_controller():
+	return _server_controller
+
+
+func _reset_runtime_reload_localization() -> void:
+	LocalizationService.reset_instance()
+	_localization = LocalizationService.get_instance()
 	if _state != null:
-		_state.current_tab = int(snapshot.get("tab_index", _state.current_tab))
-	if _dock.has_method("activate_editor_dock_tab"):
-		_dock.activate_editor_dock_tab()
-	if _dock.has_method("restore_focus_snapshot"):
-		_dock.restore_focus_snapshot(snapshot)
-	if _dock.has_method("focus_active_panel"):
-		_dock.call_deferred("focus_active_panel")
-	if _state != null and _state.current_tab == 5:
-		_ensure_update_refs_discovery_requested()
+		_localization.set_language(str(_state.settings.get("language", "")))
+		MCPDebugBuffer.set_minimum_level(str(_state.settings.get("log_level", "info")))
+
+
+func _ensure_runtime_reload_completion_service():
+	if _runtime_reload_completion_service == null:
+		_runtime_reload_completion_service = PluginRuntimeReloadCompletionServiceScript.new()
+	return _runtime_reload_completion_service
 
 
 func _sync_current_tab_from_dock() -> void:
