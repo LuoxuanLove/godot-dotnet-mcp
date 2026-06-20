@@ -189,6 +189,14 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if not bool(sse_bounded_cursor_check.get("success", false)):
 		return sse_bounded_cursor_check
 
+	var sse_copy_boundary_check: Dictionary = _run_sse_event_queue_copy_boundary_contract()
+	if not bool(sse_copy_boundary_check.get("success", false)):
+		return sse_copy_boundary_check
+
+	var pending_copy_boundary_check: Dictionary = _run_pending_buffer_copy_boundary_contract()
+	if not bool(pending_copy_boundary_check.get("success", false)):
+		return pending_copy_boundary_check
+
 	var invalid_length_check: Dictionary = await _run_bad_content_length_contract(
 		tree,
 		"POST /mcp HTTP/1.1\r\nContent-Length: nope\r\n\r\n{}",
@@ -923,6 +931,59 @@ func _run_sse_event_queue_bounded_cursor_contract() -> Dictionary:
 		queue.dispose()
 		return _failure("SSE event queue should not repeat retained-window events after the true next cursor is acknowledged.")
 	queue.dispose()
+	return {"success": true, "error": ""}
+
+
+func _run_sse_event_queue_copy_boundary_contract() -> Dictionary:
+	var queue = HttpSseEventQueueScript.new()
+	var appended: Dictionary = queue.append_event("copy-boundary-stream", "message", {"nested": {"value": 1}}, "copy")
+	var returned_data: Dictionary = appended.get("data", {})
+	var returned_nested: Dictionary = returned_data.get("nested", {})
+	returned_nested["value"] = 99
+	returned_data["extra"] = true
+
+	var first_read: Array = queue.events_since_index("copy-boundary-stream", 0)
+	if first_read.size() != 1:
+		queue.dispose()
+		return _failure("SSE event queue should return the appended event after copy-boundary append.")
+	var first_event: Dictionary = first_read[0]
+	var first_data: Dictionary = first_event.get("data", {})
+	if int((first_data.get("nested", {}) as Dictionary).get("value", 0)) != 1 or first_data.has("extra"):
+		queue.dispose()
+		return _failure("SSE event queue append should not expose internal event payloads through returned event dictionaries.")
+
+	first_data["nested"] = {"value": 42}
+	first_data["extra"] = true
+	var second_read: Array = queue.events_since_index("copy-boundary-stream", 0)
+	var second_event: Dictionary = second_read[0]
+	var second_data: Dictionary = second_event.get("data", {})
+	if int((second_data.get("nested", {}) as Dictionary).get("value", 0)) != 1 or second_data.has("extra"):
+		queue.dispose()
+		return _failure("SSE event queue read APIs should return copies that cannot mutate retained events.")
+	queue.dispose()
+	return {"success": true, "error": ""}
+
+
+func _run_pending_buffer_copy_boundary_contract() -> Dictionary:
+	var connection_state = HttpConnectionStateScript.new()
+	var client := StreamPeerTCP.new()
+	connection_state.add_client(client)
+	var first := "abc".to_utf8_buffer()
+	var size_after_first := connection_state.append_pending_bytes(client, first)
+	if size_after_first != 3:
+		return _failure("HTTP connection state should report pending byte size after first append.")
+	first.append_array("MUTATED".to_utf8_buffer())
+	if connection_state.get_pending_data(client) != "abc":
+		return _failure("HTTP connection state append should not retain caller-owned PackedByteArray aliases.")
+
+	var external_copy := connection_state.get_pending_bytes(client)
+	external_copy.append_array("DEF".to_utf8_buffer())
+	if connection_state.get_pending_data(client) != "abc":
+		return _failure("HTTP connection state get_pending_bytes should return a copy, not an internal pending buffer reference.")
+	var second_size := connection_state.append_pending_bytes(client, "def".to_utf8_buffer())
+	if second_size != 6 or connection_state.get_pending_data(client) != "abcdef":
+		return _failure("HTTP connection state should append pending bytes without corrupting existing content.")
+	connection_state.clear_pending_data(client)
 	return {"success": true, "error": ""}
 
 
