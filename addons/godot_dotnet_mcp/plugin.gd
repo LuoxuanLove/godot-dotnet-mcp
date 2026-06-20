@@ -27,6 +27,7 @@ const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/ru
 const MCPMaintenanceContract = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_maintenance_contract.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const PluginPerformanceMonitorScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_performance_monitor.gd")
+const PluginUpdateToolFacadeServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_tool_facade_service.gd")
 const MCP_DOCK_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.tscn"
 const MCP_DOCK_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.gd"
 const PLUGIN_ID := "godot_dotnet_mcp"
@@ -112,6 +113,7 @@ var _plugin_lifecycle_context_service := PluginLifecycleContextServiceScript.new
 var _config_reload_wiring_service := PluginConfigReloadWiringServiceScript.new()
 var _config_reload_context_service := PluginConfigReloadContextServiceScript.new()
 var _runtime_reload_request_service := PluginRuntimeReloadRequestServiceScript.new()
+var _plugin_update_tool_facade := PluginUpdateToolFacadeServiceScript.new()
 var _client_install_detection_service = null
 var _user_tool_service = null
 var _user_tool_watch_service = null
@@ -301,6 +303,7 @@ func _dispose_lifecycle_services() -> void:
 	_mcp_catalog_preview_service = null
 	_runtime_coordinator = null
 	_config_reload_context_service = null
+	_plugin_update_tool_facade = null
 	_client_install_detection_service = null
 	_tool_catalog = null
 	_settings_store = null
@@ -2156,27 +2159,11 @@ func request_plugin_lifecycle_reload_from_tools() -> Dictionary:
 
 
 func get_plugin_update_current_from_tools() -> Dictionary:
-	var data := _build_plugin_update_current_snapshot()
-	var maintenance := MCPMaintenanceContract.build_from_freshness(PluginInstanceFreshness.get_freshness_snapshot())
-	data["maintenance"] = maintenance
-	data["maintenance_window"] = maintenance
-	return MCPMaintenanceContract.enrich_response({
-		"success": true,
-		"data": data,
-		"message": "Plugin update current fetched"
-	}, maintenance)
+	return _ensure_plugin_update_tool_facade().build_current_response()
 
 
 func get_plugin_update_status_from_tools() -> Dictionary:
-	var data := _build_plugin_update_status_snapshot()
-	var maintenance := MCPMaintenanceContract.build_update_sync_maintenance(data)
-	data["maintenance"] = maintenance
-	data["maintenance_window"] = maintenance
-	return MCPMaintenanceContract.enrich_response({
-		"success": true,
-		"data": data,
-		"message": "Plugin update status fetched"
-	}, maintenance)
+	return _ensure_plugin_update_tool_facade().build_status_response(_build_plugin_update_status_snapshot())
 
 
 func set_plugin_update_source_from_tools(source: String, custom_branch: String = "", release_tag: String = "") -> Dictionary:
@@ -2295,42 +2282,17 @@ func _should_discover_update_target_before_sync() -> bool:
 	return source == "latest_stable" or source == "latest_release"
 
 
-func _build_plugin_update_current_snapshot() -> Dictionary:
-	var freshness := PluginInstanceFreshness.get_freshness_snapshot()
-	var running_instance: Dictionary = freshness.get("running_instance", {})
-	var disk_source: Dictionary = freshness.get("disk_source", {})
-	var sync_snapshot: Dictionary = freshness.get("sync", {})
-	var source_snapshot := disk_source if not disk_source.is_empty() else running_instance
-	var source_fingerprint := str(source_snapshot.get("source_fingerprint", running_instance.get("source_fingerprint", "")))
-	var short_fingerprint := _shorten_plugin_update_fingerprint(source_fingerprint)
-	return {
-		"status": str(freshness.get("status", "unknown")),
-		"needs_lifecycle_reload": bool(freshness.get("needs_lifecycle_reload", false)),
-		"source_version": str(source_snapshot.get("source_version", running_instance.get("source_version", ""))),
-		"server_version": str(source_snapshot.get("server_version", running_instance.get("server_version", ""))),
-		"protocol_version": str(source_snapshot.get("protocol_version", running_instance.get("protocol_version", ""))),
-		"tool_schema_version": str(source_snapshot.get("tool_schema_version", running_instance.get("tool_schema_version", ""))),
-		"source_fingerprint": source_fingerprint,
-		"source_fingerprint_short": short_fingerprint,
-		"short_source_fingerprint": short_fingerprint,
-		"source_git_commit": str(sync_snapshot.get("source_git_commit", "")),
-		"source_ref_kind": str(sync_snapshot.get("source_ref_kind", "")),
-		"source_ref": str(sync_snapshot.get("source_ref", "")),
-		"written_files": int(sync_snapshot.get("written_files", 0)),
-		"running_instance": running_instance,
-		"disk_source": disk_source,
-		"sync": sync_snapshot,
-		"lifecycle_reload": freshness.get("lifecycle_reload", {}),
-		"comparison": freshness.get("comparison", {})
-	}
+func _ensure_plugin_update_tool_facade():
+	if _plugin_update_tool_facade == null:
+		_plugin_update_tool_facade = PluginUpdateToolFacadeServiceScript.new()
+	return _plugin_update_tool_facade
 
 
-func _build_plugin_update_status_snapshot() -> Dictionary:
-	var target := _resolve_update_sync_target()
+func _build_plugin_update_tool_context(target: Dictionary = {}) -> Dictionary:
+	if target.is_empty():
+		target = _resolve_update_sync_target()
 	var source := _normalize_update_source(str(_state.settings.get("update_source", "latest_stable")))
 	return {
-		"status": _resolve_plugin_update_overall_status(),
-		"current": _build_plugin_update_current_snapshot(),
 		"source": source,
 		"custom_branch": str(_state.settings.get("update_custom_branch", "")),
 		"release_tag": str(_state.settings.get("update_release_tag", "")),
@@ -2339,93 +2301,66 @@ func _build_plugin_update_status_snapshot() -> Dictionary:
 		"request_host_available": _get_update_request_parent() != null,
 		"discovery_retry_pending": _update_refs_discovery_retry_pending,
 		"pending_sync_after_refs_discovery": _update_sync_after_refs_discovery_pending,
-		"next_action": "poll_update_status" if _update_sync_after_refs_discovery_pending else "",
-		"refs": _build_plugin_update_refs_status(),
-		"compare": _build_plugin_update_compare_status(),
-		"sync": _build_plugin_update_sync_status(),
-		"lifecycle_reload": PluginInstanceFreshness.get_freshness_snapshot().get("lifecycle_reload", {})
-	}
-
-
-func _build_plugin_update_tool_response(response: Dictionary) -> Dictionary:
-	var data = response.get("data", {})
-	if not (data is Dictionary):
-		data = {}
-	var data_dict: Dictionary = (data as Dictionary).duplicate(true)
-	var maintenance := MCPMaintenanceContract.build_update_sync_maintenance(data_dict)
-	data_dict["maintenance"] = maintenance
-	data_dict["maintenance_window"] = maintenance
-	response["data"] = data_dict
-	return MCPMaintenanceContract.enrich_response(response, maintenance)
-
-
-func _build_plugin_update_refs_status() -> Dictionary:
-	return {
-		"state": str(_state.update_refs_state),
-		"status": str(_state.update_refs_status),
-		"error": str(_state.update_refs_error),
-		"branches": _state.update_ref_branches.duplicate(),
-		"releases": _state.update_ref_releases.duplicate(),
+		"refs_state": str(_state.update_refs_state),
+		"refs_status": str(_state.update_refs_status),
+		"refs_error": str(_state.update_refs_error),
+		"branches": _state.update_ref_branches,
+		"releases": _state.update_ref_releases,
 		"latest_stable_release": str(_state.update_ref_latest_stable_release),
 		"latest_release": str(_state.update_ref_latest_release),
 		"release_source": str(_state.update_refs_release_source),
-		"commits": _state.update_ref_commits.duplicate(true),
-		"versions": _state.update_ref_versions.duplicate(true)
+		"commits": _state.update_ref_commits,
+		"versions": _state.update_ref_versions,
+		"compare_state": str(_state.update_compare_state),
+		"compare_error": str(_state.update_compare_error),
+		"compare_base_commit": str(_state.update_compare_base_commit),
+		"compare_target_ref": str(_state.update_compare_target_ref),
+		"compare_target_commit": str(_state.update_compare_target_commit),
+		"compare_ahead_by": int(_state.update_compare_ahead_by),
+		"compare_behind_by": int(_state.update_compare_behind_by),
+		"sync_state": str(_state.update_sync_state),
+		"sync_status": str(_state.update_sync_status),
+		"sync_error": str(_state.update_sync_error),
+		"sync_target_ref": str(_state.update_sync_target_ref),
+		"sync_target_kind": str(_state.update_sync_target_kind)
 	}
+
+
+func _build_plugin_update_current_snapshot() -> Dictionary:
+	return _ensure_plugin_update_tool_facade().build_current_snapshot()
+
+
+func _build_plugin_update_status_snapshot() -> Dictionary:
+	var target := _resolve_update_sync_target()
+	return _ensure_plugin_update_tool_facade().build_status_snapshot(_build_plugin_update_tool_context(target))
+
+
+func _build_plugin_update_tool_response(response: Dictionary) -> Dictionary:
+	return _ensure_plugin_update_tool_facade().enrich_tool_response(response)
+
+
+func _build_plugin_update_refs_status() -> Dictionary:
+	return _ensure_plugin_update_tool_facade().build_refs_status(_build_plugin_update_tool_context())
 
 
 func _build_plugin_update_compare_status() -> Dictionary:
-	return {
-		"state": str(_state.update_compare_state),
-		"error": str(_state.update_compare_error),
-		"base_commit": str(_state.update_compare_base_commit),
-		"target_ref": str(_state.update_compare_target_ref),
-		"target_commit": str(_state.update_compare_target_commit),
-		"ahead_by": int(_state.update_compare_ahead_by),
-		"behind_by": int(_state.update_compare_behind_by)
-	}
+	return _ensure_plugin_update_tool_facade().build_compare_status(_build_plugin_update_tool_context())
 
 
 func _build_plugin_update_sync_status() -> Dictionary:
-	return {
-		"state": str(_state.update_sync_state),
-		"status": str(_state.update_sync_status),
-		"error": str(_state.update_sync_error),
-		"target_ref": str(_state.update_sync_target_ref),
-		"target_kind": str(_state.update_sync_target_kind),
-		"pending_after_refs_discovery": _update_sync_after_refs_discovery_pending
-	}
+	return _ensure_plugin_update_tool_facade().build_sync_status(_build_plugin_update_tool_context())
 
 
 func _resolve_plugin_update_overall_status() -> String:
-	if str(_state.update_sync_state) == "loading":
-		return "syncing"
-	if _update_sync_after_refs_discovery_pending:
-		return "preparing_sync"
-	if str(_state.update_refs_state) == "loading" or str(_state.update_compare_state) == "loading":
-		return "loading"
-	if str(_state.update_sync_state) == "error" or str(_state.update_refs_state) == "error" or str(_state.update_compare_state) == "error":
-		return "error"
-	if _update_refs_discovery_retry_pending:
-		return "pending"
-	return "ready"
+	return _ensure_plugin_update_tool_facade().resolve_overall_status(_build_plugin_update_tool_context())
 
 
 func _resolve_plugin_update_request_status(kind: String, accepted: bool) -> String:
-	if accepted:
-		return "accepted"
-	if _get_update_request_parent() == null and (kind == "refs" or kind == "sync"):
-		return "pending" if _update_refs_discovery_retry_pending else "unavailable"
-	if kind == "sync":
-		return str(_state.update_sync_state)
-	return str(_state.update_refs_state)
+	return _ensure_plugin_update_tool_facade().resolve_request_status(kind, accepted, _build_plugin_update_tool_context())
 
 
 func _shorten_plugin_update_fingerprint(source_fingerprint: String) -> String:
-	var normalized := source_fingerprint.strip_edges()
-	if normalized.length() <= 16:
-		return normalized
-	return normalized.substr(0, 16)
+	return _ensure_plugin_update_tool_facade().shorten_fingerprint(source_fingerprint)
 
 
 func _request_plugin_lifecycle_reload(source: String = "unknown") -> Dictionary:
