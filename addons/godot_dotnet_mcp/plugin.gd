@@ -17,7 +17,6 @@ const DockMcpCatalogPreviewServiceScript = preload("res://addons/godot_dotnet_mc
 const PluginActionRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_action_router.gd")
 const PluginDockCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_dock_coordinator.gd")
 const ClientConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_service.gd")
-const ClientInstallDetectionServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_install_detection_service.gd")
 const UserToolServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_service.gd")
 const PluginRuntimeReloadRequestServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_reload_request_service.gd")
 const MCPEditorDebuggerBridge = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_editor_debugger_bridge.gd")
@@ -33,6 +32,7 @@ const PluginUsageGuideServiceScript = preload("res://addons/godot_dotnet_mcp/plu
 const PluginSelfDiagnosticsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostics_service.gd")
 const PluginProfileConfigServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_profile_config_service.gd")
 const PluginDeveloperSettingsServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_developer_settings_service.gd")
+const PluginClientConfigStateServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_client_config_state_service.gd")
 const MCP_DOCK_SCENE_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.tscn"
 const MCP_DOCK_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/ui/mcp_dock.gd"
 const PLUGIN_ID := "godot_dotnet_mcp"
@@ -83,7 +83,7 @@ var _plugin_usage_guide_service := PluginUsageGuideServiceScript.new()
 var _plugin_self_diagnostics_service := PluginSelfDiagnosticsServiceScript.new()
 var _plugin_profile_config_service := PluginProfileConfigServiceScript.new()
 var _plugin_developer_settings_service := PluginDeveloperSettingsServiceScript.new()
-var _client_install_detection_service = null
+var _plugin_client_config_state_service := PluginClientConfigStateServiceScript.new()
 var _user_tool_service = null
 var _user_tool_watch_service = null
 var _action_router := PluginActionRouterScript.new()
@@ -91,8 +91,6 @@ var _dock_coordinator := PluginDockCoordinatorScript.new()
 var _performance_monitor := PluginPerformanceMonitorScript.new()
 var _localization: LocalizationService
 var _dock: Control
-var _client_executable_dialog: FileDialog
-var _pending_client_path_request := {}
 var _status_poll_accumulator := 0.0
 var _user_tool_watch_tick_accumulator := 0.0
 var _editor_debugger_bridge: EditorDebuggerPlugin
@@ -180,7 +178,7 @@ func _build_config_reload_wiring_context() -> Dictionary:
 		"state": _state,
 		"localization": _localization,
 		"config_service": _config_service,
-		"client_install_detection_service": _client_install_detection_service,
+		"client_install_detection_service": _get_client_install_detection_service(),
 		"user_tool_service": _user_tool_service
 	})
 
@@ -278,7 +276,9 @@ func _dispose_lifecycle_services() -> void:
 	_plugin_self_diagnostics_service = null
 	_plugin_profile_config_service = null
 	_plugin_developer_settings_service = null
-	_client_install_detection_service = null
+	if _plugin_client_config_state_service != null:
+		_plugin_client_config_state_service.dispose()
+	_plugin_client_config_state_service = null
 	_tool_catalog = null
 	_settings_store = null
 	_state = null
@@ -586,41 +586,18 @@ func _remove_dock() -> void:
 
 
 func _configure_client_executable_dialog() -> void:
-	if _client_executable_dialog != null and is_instance_valid(_client_executable_dialog):
-		return
-
-	var editor_interface = get_editor_interface()
-	if editor_interface == null:
-		return
-	var base_control = editor_interface.get_base_control()
-	if base_control == null:
-		return
-
-	_client_executable_dialog = FileDialog.new()
-	_client_executable_dialog.name = "ClientExecutableDialog"
-	_client_executable_dialog.access = FileDialog.ACCESS_FILESYSTEM
-	_client_executable_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-	_client_executable_dialog.filters = PackedStringArray([
-		"*.exe ; Executable",
-		"*.cmd ; Command Script",
-		"*.bat ; Batch Script",
-		"* ; All Files"
-	])
-	_client_executable_dialog.file_selected.connect(_on_client_executable_file_selected)
-	base_control.add_child(_client_executable_dialog)
+	_ensure_plugin_client_config_state_service().configure_client_executable_dialog(
+		get_editor_interface(),
+		Callable(self, "_on_client_executable_file_selected")
+	)
 
 
 func _remove_client_executable_dialog() -> void:
-	if _client_executable_dialog == null:
-		return
-	if is_instance_valid(_client_executable_dialog):
-		_client_executable_dialog.queue_free()
-	_client_executable_dialog = null
-	_pending_client_path_request = {}
+	_ensure_plugin_client_config_state_service().remove_client_executable_dialog()
 
 
 func _get_client_executable_dialog():
-	return _client_executable_dialog
+	return _ensure_plugin_client_config_state_service().get_client_executable_dialog()
 
 
 func _on_clear_self_diagnostics_requested() -> void:
@@ -685,7 +662,7 @@ func _refresh_dock() -> void:
 		_config_service,
 		null,
 		_user_tool_service,
-		_client_install_detection_service,
+		_get_client_install_detection_service(),
 		_user_tool_watch_service,
 		Callable(self, "_get_editor_scale")
 	)
@@ -819,22 +796,23 @@ func _apply_initial_tool_profile_if_needed() -> void:
 
 
 func _get_client_install_statuses() -> Dictionary:
-	if _client_install_detection_service == null:
-		_client_install_detection_service = ClientInstallDetectionServiceScript.new()
-	_configure_client_install_detection_service()
-	return _client_install_detection_service.detect_all()
+	if _state == null:
+		return {}
+	return _ensure_plugin_client_config_state_service().get_client_install_statuses(_state.settings)
 
 
 func _invalidate_client_install_status_cache() -> void:
-	if _client_install_detection_service == null:
-		return
-	_client_install_detection_service.invalidate_cache()
+	_ensure_plugin_client_config_state_service().invalidate_client_install_status_cache()
 
 
 func _configure_client_install_detection_service() -> void:
-	if _client_install_detection_service == null or _state == null:
+	if _state == null:
 		return
-	_client_install_detection_service.configure(_state.settings)
+	_ensure_plugin_client_config_state_service().configure_client_install_detection_service(_state.settings)
+
+
+func _get_client_install_detection_service():
+	return _ensure_plugin_client_config_state_service().get_client_install_detection_service()
 
 
 func _on_current_tab_changed(index: int) -> void:
@@ -2807,6 +2785,12 @@ func _ensure_plugin_developer_settings_service():
 	return _plugin_developer_settings_service
 
 
+func _ensure_plugin_client_config_state_service():
+	if _plugin_client_config_state_service == null:
+		_plugin_client_config_state_service = PluginClientConfigStateServiceScript.new()
+	return _plugin_client_config_state_service
+
+
 func _record_self_incident(
 	severity: String,
 	category: String,
@@ -3017,7 +3001,7 @@ func _refresh_service_instances() -> void:
 	_config_service = ClientConfigServiceScript.new()
 	if _dock_model_service == null:
 		_dock_model_service = DockModelServiceScript.new()
-	_client_install_detection_service = ClientInstallDetectionServiceScript.new()
+	_plugin_client_config_state_service = PluginClientConfigStateServiceScript.new()
 	_user_tool_service = UserToolServiceScript.new()
 
 
