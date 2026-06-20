@@ -91,8 +91,6 @@ func set_tool_activity_registry(registry) -> void:
 
 
 func tick(delta: float) -> void:
-	if _tool_activity_registry != null and _tool_activity_registry.has_method("sweep_stale"):
-		_tool_activity_registry.sweep_stale()
 	if _tool_loader != null and _tool_loader.has_method("tick"):
 		_tool_loader.tick(delta)
 
