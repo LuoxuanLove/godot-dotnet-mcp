@@ -73,6 +73,10 @@ class CopyRecorder extends RefCounted:
 
 
 func run_case(tree: SceneTree) -> Dictionary:
+	var source_guard := _verify_catalog_tab_uses_lightweight_signatures()
+	if not source_guard.is_empty():
+		return _failure(source_guard)
+
 	var resources_tab = await _instantiate_tab(tree, "resources")
 	if resources_tab == null:
 		return _failure("MCP catalog rendering test could not instantiate the Resources tab.")
@@ -294,6 +298,29 @@ func _assert_icon_texture_cache_is_bounded(instance, label: String) -> String:
 	instance.call("_store_icon_texture", "%s-new" % prefix, ImageTexture.create_from_image(Image.create(1, 1, false, Image.FORMAT_RGBA8)))
 	if not instance._icon_texture_cache.has(refreshed_key):
 		return "%s tab protocol icon texture cache hits should refresh LRU order." % label
+	return ""
+
+
+func _verify_catalog_tab_uses_lightweight_signatures() -> String:
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/ui/mcp_catalog_tab.gd")
+	if source.is_empty():
+		return "MCP catalog tab source should be readable for rendering contract guards."
+	var signature_start := source.find("func _build_signature")
+	var scale_start := source.find("func _apply_editor_scale")
+	if signature_start == -1 or scale_start == -1 or scale_start <= signature_start:
+		return "MCP catalog tab should keep signature helpers before editor-scale rendering."
+	var signature_section := source.substr(signature_start, scale_start - signature_start)
+	if signature_section.find("JSON.stringify") != -1:
+		return "MCP catalog tab signatures should avoid JSON serialization on refresh paths."
+	for required in [
+		"func _signature_value",
+		"func _signature_scalar",
+		"resources=%s",
+		"prompt_presentation=%s",
+		"argument_values=%s"
+	]:
+		if signature_section.find(required) == -1:
+			return "MCP catalog tab signatures should cover protocol model inputs with lightweight deterministic parts: %s" % required
 	return ""
 
 
