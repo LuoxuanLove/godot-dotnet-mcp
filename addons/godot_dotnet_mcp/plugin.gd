@@ -997,7 +997,7 @@ func _should_refresh_update_refs_in_background() -> bool:
 func _should_refresh_update_compare_in_background() -> bool:
 	if _state == null:
 		return false
-	if str(_state.update_refs_state) != "success" or str(_state.update_compare_refresh_state) == "loading":
+	if str(_state.update_refs_state) != "success" or str(_state.update_compare_state) == "loading" or str(_state.update_compare_refresh_state) == "loading":
 		return false
 	var last_checked := int(_state.update_compare_last_checked_unix)
 	if last_checked <= 0:

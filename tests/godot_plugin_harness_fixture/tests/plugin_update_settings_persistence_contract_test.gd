@@ -570,6 +570,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	tick_background_probe.free()
 	tick_background_dock.queue_free()
 
+	var foreground_compare_probe := RefreshProbePlugin.new()
+	foreground_compare_probe._state.update_refs_state = "success"
+	foreground_compare_probe._state.update_compare_state = "loading"
+	foreground_compare_probe._state.update_compare_last_checked_unix = 0
+	if foreground_compare_probe._should_refresh_update_compare_in_background():
+		foreground_compare_probe.free()
+		return _failure("plugin.gd should not start a background compare refresh while a foreground compare request is loading.")
+	foreground_compare_probe.free()
+
 	var background_failure_probe := PluginScript.new()
 	background_failure_probe._state.update_refs_state = "success"
 	var old_branches: Array[String] = ["old/branch"]
