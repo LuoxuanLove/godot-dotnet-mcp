@@ -8,6 +8,9 @@ const JSON_SCHEMA_2020_12_URI := "https://json-schema.org/draft/2020-12/schema"
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	var source_guard := _assert_presentation_signatures_are_lightweight()
+	if not source_guard.is_empty():
+		return _failure(source_guard)
 	var exposed_tools := [{
 		"name": "system_project_state",
 		"description": "Inspect project state",
@@ -110,6 +113,28 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var presentation_signature := str(presentation.get("signature", ""))
 	if presentation_signature.is_empty():
 		return _failure("Presentation service should expose a reusable presentation signature for UI refresh checks.")
+	var presentation_with_reordered_metadata := ToolPresentationService.build_presentation_signature(
+		"agent_tools",
+		[{"kind": "tool", "key": "system_runtime_control", "inputSchema": {"properties": {"action": {"enum": ["status", "enable"]}}}}],
+		[{"rank": 1, "key": "core"}],
+		{"system_runtime_control": {"presentation": {"rank": 1, "group": "Runtime"}, "icons": [{"src": "codicon:play"}]}}
+	)
+	var presentation_with_equivalent_metadata := ToolPresentationService.build_presentation_signature(
+		"agent_tools",
+		[{"inputSchema": {"properties": {"action": {"enum": ["status", "enable"]}}}, "key": "system_runtime_control", "kind": "tool"}],
+		[{"key": "core", "rank": 1}],
+		{"system_runtime_control": {"icons": [{"src": "codicon:play"}], "presentation": {"group": "Runtime", "rank": 1}}}
+	)
+	if presentation_with_reordered_metadata != presentation_with_equivalent_metadata:
+		return _failure("Presentation signature should stay stable when dictionary keys are reordered.")
+	var presentation_with_nested_change := ToolPresentationService.build_presentation_signature(
+		"agent_tools",
+		[{"kind": "tool", "key": "system_runtime_control", "inputSchema": {"properties": {"action": {"enum": ["status", "disable"]}}}}],
+		[{"rank": 1, "key": "core"}],
+		{"system_runtime_control": {"presentation": {"rank": 1, "group": "Runtime"}, "icons": [{"src": "codicon:play"}]}}
+	)
+	if presentation_with_reordered_metadata == presentation_with_nested_change:
+		return _failure("Presentation signature should detect nested schema and metadata changes without JSON serialization.")
 	var tool_tree: Array = presentation.get("toolTree", [])
 	var core_domain := _find_node(tool_tree, "domain", "core")
 	if core_domain.is_empty():
@@ -261,3 +286,15 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _assert_presentation_signatures_are_lightweight() -> String:
+	var source_path := "res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd"
+	if not FileAccess.file_exists(source_path):
+		return "Tool presentation service source should exist for signature guard."
+	var source := FileAccess.get_file_as_string(source_path)
+	if source.find("node|%s\" % JSON.stringify") != -1 or source.find("group|%s\" % JSON.stringify") != -1 or source.find("JSON.stringify(metadata)") != -1:
+		return "Presentation signatures should not JSON-serialize nodes, groups, or metadata maps."
+	if source.find("static func _signature_value") == -1 or source.find("static func _signature_scalar") == -1:
+		return "Presentation signatures should use lightweight deterministic value signatures."
+	return ""
