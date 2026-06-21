@@ -73,6 +73,7 @@ Target version: 2.0.0.
 - Fixed MCP tool discovery recovery after update or hot reload so `tools/list` / `tools/call` lazily reinitialize empty registries, overlapping editor automation calls fail fast with `editor_automation_busy`, and idle GDScript LSP tick logs no longer make the editor or MCP clients appear stuck.
 - Fixed idle runtime ticking so HTTP/stdio transports no longer drive loaded tool executors and GDScript LSP diagnostics every editor frame, while exposing lifecycle tick timing in performance diagnostics.
 - Fixed long-running stability gaps by refreshing User-tool definitions only after explicit invalidation, closing partial idle HTTP requests after the timeout window, and clearing stopped debugger sessions from the live bridge map immediately.
+- Fixed plugin disable lifecycle cleanup so runtime-owned services, watcher polling, client dialogs, debugger hooks, performance monitors, and static self-diagnostic state are released when the plugin is disabled without uninstalling the runtime bridge autoload.
 
 ### Documentation
 

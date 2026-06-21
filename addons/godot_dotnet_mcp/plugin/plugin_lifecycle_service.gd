@@ -65,6 +65,18 @@ func exit_tree(context: Dictionary) -> void:
 
 func disable_plugin(context: Dictionary) -> void:
 	var operation = PluginSelfDiagnosticStore.begin_operation("plugin_disable", "_disable_plugin")
+	_call_void(context.get("set_process_enabled", Callable()), [false])
+	for step in [
+		"save_settings",
+		"stop_user_tool_watch_service",
+		"remove_client_executable_dialog",
+		"uninstall_editor_debugger_bridge",
+		"remove_performance_monitors",
+		"dispose_action_router",
+		"dispose_server_controller",
+		"dispose_lifecycle_services"
+	]:
+		_call_void(context.get(step, Callable()))
 	MCPRuntimeDebugStore.set_bridge_status(
 		_call_bool(context.get("is_runtime_bridge_currently_owned", Callable()), false),
 		str(context.get("runtime_bridge_autoload_name", "")),
@@ -72,6 +84,7 @@ func disable_plugin(context: Dictionary) -> void:
 		"Plugin disabled without removing runtime bridge autoload"
 	)
 	_finish_operation(context, operation, true, "plugin", "_disable_plugin")
+	PluginSelfDiagnosticStore.clear()
 
 
 func process(delta: float, status_poll_accumulator: float, update_refs_retry_pending: bool, context: Dictionary) -> float:
