@@ -83,30 +83,94 @@ func _tool_definitions_match(left: Array, right: Array) -> bool:
 	if left.size() != right.size():
 		return false
 	for index in range(left.size()):
-		if _tool_definition_signature(left[index]) != _tool_definition_signature(right[index]):
+		if not _tool_definitions_equal(left[index], right[index]):
 			return false
 	return true
 
 
-func _tool_definition_signature(tool) -> String:
-	if not (tool is Dictionary):
-		return str(typeof(tool))
-	var tool_def := tool as Dictionary
-	return JSON.stringify([
-		str(tool_def.get("name", "")),
-		str(tool_def.get("full_name", tool_def.get("fullName", ""))),
-		str(tool_def.get("description", "")),
-		str(tool_def.get("source", "")),
-		str(tool_def.get("load_state", tool_def.get("loadState", ""))),
-		str(tool_def.get("script_path", tool_def.get("scriptPath", ""))),
-		bool(tool_def.get("enabled", true)),
-		bool(tool_def.get("compatibility_alias", false)),
-		tool_def.get("inputSchema", tool_def.get("parameters", {})),
-		tool_def.get("outputSchema", {}),
-		tool_def.get("annotations", {}),
-		tool_def.get("presentation", {}),
-		tool_def.get("icons", [])
-	])
+func _tool_definitions_equal(left, right) -> bool:
+	if not (left is Dictionary) or not (right is Dictionary):
+		return _variants_equal(left, right)
+	var left_def := left as Dictionary
+	var right_def := right as Dictionary
+	for field in [
+		"name",
+		"description",
+		"source"
+	]:
+		if str(left_def.get(field, "")) != str(right_def.get(field, "")):
+			return false
+	for field in [
+		"enabled",
+		"compatibility_alias"
+	]:
+		if bool(left_def.get(field, field == "enabled")) != bool(right_def.get(field, field == "enabled")):
+			return false
+	for field in [
+		"outputSchema",
+		"annotations",
+		"presentation"
+	]:
+		if not _variants_equal(left_def.get(field, {}), right_def.get(field, {})):
+			return false
+	if not _variants_equal(left_def.get("icons", []), right_def.get("icons", [])):
+		return false
+	for field_pair in [
+		["full_name", "fullName", ""],
+		["load_state", "loadState", ""],
+		["script_path", "scriptPath", ""]
+	]:
+		if str(_get_alias_field(left_def, str(field_pair[0]), str(field_pair[1]), field_pair[2])) != str(_get_alias_field(right_def, str(field_pair[0]), str(field_pair[1]), field_pair[2])):
+			return false
+	for field_pair in [
+		["inputSchema", "parameters", {}]
+	]:
+		if not _variants_equal(
+			_get_alias_field(left_def, str(field_pair[0]), str(field_pair[1]), field_pair[2]),
+			_get_alias_field(right_def, str(field_pair[0]), str(field_pair[1]), field_pair[2])
+		):
+			return false
+	return true
+
+
+func _get_alias_field(tool_def: Dictionary, primary_key: String, fallback_key: String, default_value):
+	if tool_def.has(primary_key):
+		return tool_def.get(primary_key)
+	return tool_def.get(fallback_key, default_value)
+
+
+func _variants_equal(left, right) -> bool:
+	if left is Dictionary and right is Dictionary:
+		return _dictionaries_equal(left as Dictionary, right as Dictionary)
+	if left is Array and right is Array:
+		return _arrays_equal(left as Array, right as Array)
+	return left == right
+
+
+func _dictionaries_equal(left: Dictionary, right: Dictionary) -> bool:
+	if left.size() != right.size():
+		return false
+	var left_keys := left.keys()
+	left_keys.sort()
+	var right_keys := right.keys()
+	right_keys.sort()
+	for index in range(left_keys.size()):
+		var left_key = left_keys[index]
+		var right_key = right_keys[index]
+		if left_key != right_key:
+			return false
+		if not _variants_equal(left.get(left_key), right.get(right_key)):
+			return false
+	return true
+
+
+func _arrays_equal(left: Array, right: Array) -> bool:
+	if left.size() != right.size():
+		return false
+	for index in range(left.size()):
+		if not _variants_equal(left[index], right[index]):
+			return false
+	return true
 
 
 func _get_user_definitions_revision(executor) -> int:
