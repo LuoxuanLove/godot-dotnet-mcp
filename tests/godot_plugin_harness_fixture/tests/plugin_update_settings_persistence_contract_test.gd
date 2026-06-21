@@ -659,6 +659,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	for forbidden_plugin_body in [
 		"var reader := ZIPReader.new()",
 		"func _delete_update_sync_stale_paths_recursive(",
+		"func _resolve_update_ref_commit(",
+		"func _encode_update_archive_ref_path(",
 		"const UPDATE_SYNC_STALE_ADDON_FILES := [",
 		"const UPDATE_SYNC_ADDON_PREFIX :="
 	]:

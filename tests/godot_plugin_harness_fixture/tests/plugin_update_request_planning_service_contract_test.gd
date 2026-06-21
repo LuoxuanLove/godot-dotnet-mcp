@@ -110,7 +110,6 @@ func _verify_plugin_entrypoint_delegates_update_request_planning() -> String:
 	for required in [
 		"PluginUpdateRequestPlanningServiceScript.new()",
 		"_ensure_plugin_update_request_planning_service().resolve_sync_target(",
-		"_ensure_plugin_update_request_planning_service().resolve_ref_commit(",
 		"_ensure_plugin_update_request_planning_service().should_resolve_branch_commit_before_archive(",
 		"_ensure_plugin_update_request_planning_service().get_branch_ref_url(",
 		"_ensure_plugin_update_request_planning_service().parse_branch_ref_response(",
@@ -120,6 +119,8 @@ func _verify_plugin_entrypoint_delegates_update_request_planning() -> String:
 		if plugin_source.find(required) == -1:
 			return "plugin.gd should delegate update request planning responsibility: %s" % required
 	for forbidden in [
+		"func _resolve_update_ref_commit(",
+		"func _encode_update_archive_ref_path(",
 		"func _parse_update_branch_ref_response(",
 		"Branch response did not include commit.sha",
 		"return target_ref.strip_edges().uri_encode().replace(\"%2F\", \"/\")",
@@ -129,6 +130,8 @@ func _verify_plugin_entrypoint_delegates_update_request_planning() -> String:
 			return "plugin.gd should not retain update request planning internals: %s" % forbidden
 	for required_service in [
 		"func resolve_sync_target(settings: Dictionary, refs_context: Dictionary)",
+		"func resolve_ref_commit(target_ref: String, commits_value)",
+		"func encode_archive_ref_path(target_ref: String)",
 		"func parse_branch_ref_response(body: PackedByteArray)",
 		"func build_archive_request_attempts(target: Dictionary, url_prefixes: Dictionary)",
 		"func build_sync_marker(target: Dictionary, written: int, marker_context: Dictionary)"

@@ -87,6 +87,7 @@ func _verify_plugin_entrypoint_delegates_update_refs_discovery() -> String:
 			return "plugin.gd should delegate update refs discovery responsibility: %s" % required
 	for forbidden in [
 		"func _extract_update_ref_commit(item: Dictionary) -> String:\n\tvar commit_value",
+		"func _append_unique_update_ref(",
 		"func _parse_update_refs_json_array(body: PackedByteArray) -> Dictionary:\n\tvar json := JSON.new()",
 		"func _extract_update_refs_next_url(headers: PackedStringArray) -> String:\n\tfor header in headers:",
 		"func _extract_update_stable_release_names(items: Array) -> Array[String]:\n\tvar names"
@@ -97,7 +98,8 @@ func _verify_plugin_entrypoint_delegates_update_refs_discovery() -> String:
 		"func parse_refs_json_array(body: PackedByteArray)",
 		"func extract_next_url(headers: PackedStringArray)",
 		"func build_final_snapshot(pending: Dictionary)",
-		"func collect_stable_release_names(items: Array)"
+		"func collect_stable_release_names(items: Array)",
+		"func append_unique_ref(values: Array[String], value: String)"
 	]:
 		if service_source.find(required_service) == -1:
 			return "PluginUpdateRefsDiscoveryService should own update refs method: %s" % required_service
