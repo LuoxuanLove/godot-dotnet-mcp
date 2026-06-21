@@ -579,6 +579,33 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("plugin.gd should not start a background compare refresh while a foreground compare request is loading.")
 	foreground_compare_probe.free()
 
+	var refs_completion_compare_probe := RefreshProbePlugin.new()
+	refs_completion_compare_probe._state.settings["update_source"] = "custom_branch"
+	refs_completion_compare_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
+	refs_completion_compare_probe._state.update_refs_state = "success"
+	refs_completion_compare_probe._state.update_compare_state = "loading"
+	refs_completion_compare_probe._state.update_compare_last_checked_unix = 0
+	refs_completion_compare_probe._update_compare_request_serial = 5
+	refs_completion_compare_probe._update_refs_request_serial = 1
+	refs_completion_compare_probe._update_refs_pending = {
+		"serial": 1,
+		"background": true,
+		"branch_done": true,
+		"release_done": true,
+		"tag_done": true,
+		"errors": [],
+		"branches": ["refactor/v2.0.0"],
+		"releases": [],
+		"stable_releases": [],
+		"tags": [],
+		"commits": {"refactor/v2.0.0": "target-sha"}
+	}
+	refs_completion_compare_probe._finalize_update_refs_discovery_if_ready(1)
+	if not refs_completion_compare_probe.compare_requests.is_empty() or refs_completion_compare_probe._update_compare_request_serial != 5 or refs_completion_compare_probe._state.update_compare_state != "loading":
+		refs_completion_compare_probe.free()
+		return _failure("plugin.gd should not let background refs completion preempt a foreground compare request.")
+	refs_completion_compare_probe.free()
+
 	var background_failure_probe := PluginScript.new()
 	background_failure_probe._state.update_refs_state = "success"
 	var old_branches: Array[String] = ["old/branch"]

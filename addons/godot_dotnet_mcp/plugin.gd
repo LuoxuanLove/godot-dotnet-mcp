@@ -928,7 +928,7 @@ func _on_update_source_changed(source: String) -> void:
 	_save_settings()
 	_mark_update_selection_refresh_pending()
 	if not _start_background_update_refs_refresh() and not _is_update_selection_refresh_pending():
-		_refresh_update_compare_for_current_target(true)
+		_maybe_refresh_update_compare_in_background()
 	_refresh_dock()
 
 
@@ -968,9 +968,7 @@ func _maybe_start_background_update_info_refresh() -> bool:
 		return false
 	if _should_refresh_update_refs_in_background():
 		return _start_background_update_refs_refresh()
-	if _should_refresh_update_compare_in_background():
-		return _refresh_update_compare_for_current_target(true)
-	return false
+	return _maybe_refresh_update_compare_in_background()
 
 
 func _tick_background_update_info_refresh(delta: float) -> void:
@@ -1003,6 +1001,12 @@ func _should_refresh_update_compare_in_background() -> bool:
 	if last_checked <= 0:
 		return true
 	return int(Time.get_unix_time_from_system()) - last_checked >= UPDATE_COMPARE_BACKGROUND_REFRESH_TTL_SEC
+
+
+func _maybe_refresh_update_compare_in_background() -> bool:
+	if not _should_refresh_update_compare_in_background():
+		return false
+	return _refresh_update_compare_for_current_target(true)
 
 
 func _start_background_update_refs_refresh() -> bool:
@@ -1097,7 +1101,7 @@ func _on_update_custom_branch_changed(branch: String) -> void:
 	_save_settings()
 	_mark_update_selection_refresh_pending()
 	if not _start_background_update_refs_refresh() and not _is_update_selection_refresh_pending():
-		_refresh_update_compare_for_current_target(true)
+		_maybe_refresh_update_compare_in_background()
 	_refresh_dock()
 
 
@@ -1703,7 +1707,7 @@ func _finalize_update_refs_discovery_if_ready(serial: int) -> void:
 			_state.update_refs_refresh_error = ""
 			_state.update_refs_refresh_serial = serial
 			_update_refs_discovery_loaded = true
-			_refresh_update_compare_for_current_target(true)
+			_maybe_refresh_update_compare_in_background()
 		else:
 			_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_refs_success(
 				_localization.get_text("settings_update_refs_success") if _localization != null else "Update refs loaded."
@@ -1926,7 +1930,7 @@ func set_plugin_update_source_from_tools(source: String, custom_branch: String =
 		_save_settings()
 		_mark_update_selection_refresh_pending()
 		if not _start_background_update_refs_refresh() and not _is_update_selection_refresh_pending():
-			_refresh_update_compare_for_current_target(true)
+			_maybe_refresh_update_compare_in_background()
 		_refresh_dock()
 	var data := _build_plugin_update_status_snapshot()
 	data["accepted"] = false
