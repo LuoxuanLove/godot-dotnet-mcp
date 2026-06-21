@@ -1,7 +1,6 @@
 extends RefCounted
 
 const CASE_NAME := "plugin_roslyn_service_exported_runtime_contracts"
-const FACADE_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/roslyn/PluginRoslynRuntimeFacade.cs"
 const PluginRoslynServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_roslyn_service.gd")
 
 var _temp_paths: Array[String] = []
@@ -51,20 +50,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var snapshot_after: Dictionary = _service.get_debug_snapshot()
 	var load_mode := str(snapshot_after.get("load_mode", ""))
-	var facade_source_present := FileAccess.file_exists(FACADE_SCRIPT_PATH)
-	if facade_source_present:
-		if load_mode != "runtime_csharp" and load_mode != "isolated_runtime_process":
-			return _failure("Source-tree PluginRoslynService should use a semantic Roslyn runtime, got '%s'." % load_mode)
-	elif load_mode != "isolated_runtime_process":
+	if load_mode != "isolated_runtime_process":
 		return _failure("Exported PluginRoslynService should use isolated runtime process, got '%s'." % load_mode)
+	var metadata: Dictionary = _service.get_capabilities()
+	var metadata_data: Dictionary = metadata.get("data", {})
+	if str(metadata_data.get("transport", "")) != "process_json":
+		return _failure("Exported PluginRoslynService should report process_json transport.")
 
 	return {
 		"name": CASE_NAME,
 		"success": true,
 		"error": "",
 		"details": {
-			"facade_source_present": facade_source_present,
 			"load_mode": load_mode,
+			"transport": str(metadata_data.get("transport", "")),
 			"type_count": types.size(),
 			"export_count": exports.size(),
 			"patched": true

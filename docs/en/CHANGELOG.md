@@ -37,6 +37,7 @@ Target version: 2.0.0.
 - Changed Dock Tools refresh checks and User-tool runtime definition comparisons to use reusable lightweight signatures instead of repeatedly serializing full presentation trees, metadata maps, or tool definition arrays during idle refresh.
 - Changed Dock catalog model refresh checks to use deterministic lightweight signatures instead of serializing every tool entry, reducing repeated Dock refresh work while still detecting nested schema and presentation metadata changes.
 - Changed shared tool presentation signatures to avoid JSON serialization of presentation nodes, groups, and metadata maps while preserving nested metadata invalidation.
+- Changed C# semantic tooling to use the isolated Roslyn runtime process as the only production runtime path, so source-tree or direct-copy installs no longer auto-load the plugin's in-process C# facade inside the host project.
 - Changed User-tool polling to skip synchronous scans when runtime loading is disabled and to split large directory walks into budgeted slices so idle refresh stays responsive.
 - Changed User-tool watch and fallback runtime scanning to use a dedicated scan service, keeping file metadata traversal, slice budgets, and scan diagnostics separate from watch polling and reload coordination.
 - Changed User-tool runtime fallback rescans so the executor keeps fast explicit reload handling but no longer duplicates the watcher loop with 300 ms idle inventory scans.
