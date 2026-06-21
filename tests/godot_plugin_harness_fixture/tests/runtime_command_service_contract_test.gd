@@ -154,6 +154,55 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if str(non_numeric_position_result.get("error", "")) != "invalid_argument":
 		return _failure("Runtime mouse input should reject non-numeric coordinates.")
 
+	var too_many_capture_frames: Dictionary = await _service.execute_action_async(5, "capture", {
+		"frame_count": 25
+	})
+	if str(too_many_capture_frames.get("error", "")) != "invalid_argument":
+		return _failure("Runtime capture should reject frame_count values above the bounded automation budget.")
+	if int((too_many_capture_frames.get("data", {}) as Dictionary).get("max_frame_count", 0)) != 24:
+		return _failure("Runtime capture frame_count rejection should expose the maximum budget.")
+	var too_many_interval_frames: Dictionary = await _service.execute_action_async(5, "capture", {
+		"frame_count": 2,
+		"interval_frames": 301
+	})
+	if str(too_many_interval_frames.get("error", "")) != "invalid_argument":
+		return _failure("Runtime capture should reject interval_frames values above the bounded automation budget.")
+	if int((too_many_interval_frames.get("data", {}) as Dictionary).get("max_interval_frames", 0)) != 300:
+		return _failure("Runtime capture interval_frames rejection should expose the maximum budget.")
+	var too_many_step_wait_frames: Dictionary = await _service.execute_action_async(5, "step", {
+		"wait_frames": 301,
+		"capture": false,
+		"inputs": [{"kind": "key", "target": "A", "op": "press"}]
+	})
+	if str(too_many_step_wait_frames.get("error", "")) != "invalid_argument":
+		return _failure("Runtime step should reject wait_frames values above the bounded automation budget.")
+	if int((too_many_step_wait_frames.get("data", {}) as Dictionary).get("max_wait_frames", 0)) != 300:
+		return _failure("Runtime step wait_frames rejection should expose the maximum budget.")
+	if _input_events.size() != 3:
+		return _failure("Runtime step should reject wait_frames budget violations before dispatching input side effects.")
+	var too_many_inputs := []
+	for index in range(65):
+		too_many_inputs.append({"kind": "key", "target": "A", "op": "press"})
+	var too_many_inputs_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": too_many_inputs
+	})
+	if str(too_many_inputs_result.get("error", "")) != "invalid_argument":
+		return _failure("Runtime input should reject requests above the bounded input count.")
+	if int((too_many_inputs_result.get("data", {}) as Dictionary).get("max_inputs", 0)) != 64:
+		return _failure("Runtime input count rejection should expose the maximum budget.")
+	var too_long_input_duration: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [{"kind": "key", "target": "A", "op": "hold", "duration_ms": 5001}]
+	})
+	if str(too_long_input_duration.get("error", "")) != "invalid_argument":
+		return _failure("Runtime input should reject hold/tap/click duration values above the bounded wait budget.")
+	if int((too_long_input_duration.get("data", {}) as Dictionary).get("max_duration_ms", 0)) != 5000:
+		return _failure("Runtime input duration rejection should expose the maximum budget.")
+	var large_press_duration_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [{"kind": "key", "target": "A", "op": "press", "duration_ms": 999999}]
+	})
+	if not bool(large_press_duration_result.get("success", false)):
+		return _failure("Runtime input should ignore large duration_ms on non-waiting press operations.")
+
 	return {
 		"name": "runtime_command_service_contracts",
 		"success": true,
