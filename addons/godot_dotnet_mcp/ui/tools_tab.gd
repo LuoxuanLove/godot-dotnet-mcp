@@ -2198,13 +2198,14 @@ func _filter_empty_preview_lines(lines: Array[String]) -> Array[String]:
 
 func _build_tree_signature(model: Dictionary) -> String:
 	var tools_by_category = model.get("tools_by_category", {})
+	var settings: Dictionary = model.get("settings", {})
 	var parts: Array[String] = [
 		_active_tools_view,
 		_get_tree_language_signature(model),
 		_get_search_query(),
-		JSON.stringify(model.get("settings", {}).get("disabled_tools", [])),
-		JSON.stringify(TreeCollapseState.get_collapsed_nodes(model.get("settings", {}))),
-		JSON.stringify(model.get("tool_load_errors", []))
+		_build_sorted_string_array_signature(settings.get("disabled_tools", [])),
+		_build_collapsed_nodes_signature(TreeCollapseState.get_collapsed_nodes(settings)),
+		_build_tool_load_errors_signature(model.get("tool_load_errors", []))
 	]
 	if _has_presentation_tree(model):
 		var presentation = _active_tool_presentation()
@@ -2226,6 +2227,45 @@ func _build_tree_signature(model: Dictionary) -> String:
 				str(tool_dict.get("load_state", ""))
 			])
 	return "\n".join(parts)
+
+
+func _build_sorted_string_array_signature(value) -> String:
+	if not (value is Array):
+		return ""
+	var entries: Array[String] = []
+	for entry in value:
+		entries.append(str(entry))
+	entries.sort()
+	return "\u001f".join(entries)
+
+
+func _build_collapsed_nodes_signature(value: Dictionary) -> String:
+	var parts: Array[String] = []
+	var kinds: Array = value.keys()
+	kinds.sort()
+	for kind_value in kinds:
+		var kind := str(kind_value)
+		parts.append(kind)
+		parts.append(_build_sorted_string_array_signature(value.get(kind_value, [])))
+	return "\u001e".join(parts)
+
+
+func _build_tool_load_errors_signature(value) -> String:
+	if not (value is Array):
+		return ""
+	var entries: Array[String] = []
+	for item in value:
+		if item is Dictionary:
+			var error := item as Dictionary
+			entries.append("%s|%s|%s" % [
+				str(error.get("category", error.get("domain", ""))),
+				str(error.get("script_path", error.get("path", ""))),
+				str(error.get("message", error.get("error", "")))
+			])
+		else:
+			entries.append(str(item))
+	entries.sort()
+	return "\u001f".join(entries)
 
 
 func _get_presentation_signature(presentation: Dictionary) -> String:
