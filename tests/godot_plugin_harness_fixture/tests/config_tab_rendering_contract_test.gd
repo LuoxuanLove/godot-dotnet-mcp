@@ -209,6 +209,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if not rebuilt_copy_button.visible:
 		return _failure("Config tab content copy button should preserve hover visibility across a rendered model rebuild.")
 
+	_instance.apply_model(base_model)
+	await tree.process_frame
+	await tree.process_frame
 	var install_message_model: Dictionary = base_model.duplicate(true)
 	install_message_model["desktop_clients"][0]["install_message_text"] = "Config installed by the MCP plugin."
 	_instance.apply_model(install_message_model)
