@@ -29,27 +29,35 @@ class LoadingDiscoveryProbePlugin extends FocusRestoreProbePlugin:
 
 class RefreshProbePlugin extends PluginScript:
 	var discovery_request_count := 0
+	var discovery_background_flags: Array[bool] = []
 	var compare_requests: Array = []
 	var request_parent := Node.new()
 
 	func _get_update_request_parent() -> Node:
 		return request_parent
 
-	func _on_update_check_requested() -> void:
+	func _on_update_check_requested(background_refresh: bool = false) -> void:
 		discovery_request_count += 1
+		discovery_background_flags.append(background_refresh)
 
 	func _resolve_current_update_commit() -> String:
 		return "current-sync-sha"
 
-	func _start_update_compare_request(base_commit: String, compare_head: String, target_commit: String = "") -> void:
-		compare_requests.append({"base": base_commit, "head": compare_head, "target_commit": target_commit})
+	func _start_update_compare_request(base_commit: String, compare_head: String, target_commit: String = "", background_refresh: bool = false) -> void:
+		compare_requests.append({"base": base_commit, "head": compare_head, "target_commit": target_commit, "background": background_refresh})
+		if background_refresh:
+			_state.update_compare_refresh_state = "loading"
+		else:
+			_state.update_compare_state = "loading"
 
 
 class RequestParentProbePlugin extends PluginScript:
 	var update_check_count := 0
+	var update_check_background_flags: Array[bool] = []
 
-	func _on_update_check_requested() -> void:
+	func _on_update_check_requested(background_refresh: bool = false) -> void:
 		update_check_count += 1
+		update_check_background_flags.append(background_refresh)
 
 
 class SyncReloadProbePlugin extends PluginScript:
@@ -70,8 +78,9 @@ class SyncReloadProbePlugin extends PluginScript:
 	func _write_update_sync_marker(_target: Dictionary, _written: int) -> int:
 		return marker_error
 
-	func _refresh_update_compare_for_current_target() -> void:
+	func _refresh_update_compare_for_current_target(_background_refresh: bool = false) -> bool:
 		compare_refresh_count += 1
+		return true
 
 	func _refresh_dock() -> void:
 		dock_refresh_count += 1
@@ -116,12 +125,13 @@ class ToolPreparedSyncProbePlugin extends SyncStartProbePlugin:
 	var discovery_request_count := 0
 	var version_requests: Array[Dictionary] = []
 
-	func _on_update_check_requested() -> void:
+	func _on_update_check_requested(background_refresh: bool = false) -> void:
 		discovery_request_count += 1
 		_update_refs_request_serial += 1
 		_update_refs_discovery_loaded = false
 		_update_refs_pending = {
 			"serial": _update_refs_request_serial,
+			"background": background_refresh,
 			"branch_done": false,
 			"release_done": false,
 			"tag_done": false,
@@ -325,6 +335,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		if not status_data.has(required_status_field):
 			tool_facade_probe.free()
 			return _failure("plugin.gd update tool facade should include %s in status." % required_status_field)
+	var status_refs: Dictionary = status_data.get("refs", {})
+	var status_compare: Dictionary = status_data.get("compare", {})
+	for required_refresh_field in ["refresh_state", "refresh_error", "last_checked_unix", "refresh_serial"]:
+		if not status_refs.has(required_refresh_field):
+			tool_facade_probe.free()
+			return _failure("plugin.gd update tool facade refs status should include background refresh field %s." % required_refresh_field)
+		if not status_compare.has(required_refresh_field):
+			tool_facade_probe.free()
+			return _failure("plugin.gd update tool facade compare status should include background refresh field %s." % required_refresh_field)
 	var selected_result: Dictionary = tool_facade_probe.set_plugin_update_source_from_tools("latest_release", "", "v1.0.0")
 	if not bool(selected_result.get("success", false)):
 		tool_facade_probe.free()
@@ -463,17 +482,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	refresh_probe._state.update_refs_state = "success"
 	refresh_probe._update_refs_discovery_loaded = true
 	refresh_probe._on_update_source_changed("custom_branch")
-	if refresh_probe.discovery_request_count != 1:
+	if refresh_probe.discovery_request_count != 1 or refresh_probe.discovery_background_flags != [true]:
 		refresh_probe.request_parent.queue_free()
 		refresh_probe.free()
-		return _failure("plugin.gd should force-refresh update refs when the update source is selected again.")
+		return _failure("plugin.gd should background-refresh update refs when the update source is selected again.")
 	refresh_probe._state.update_refs_state = "success"
 	refresh_probe._update_refs_discovery_loaded = true
 	refresh_probe._on_update_custom_branch_changed("dev")
-	if refresh_probe.discovery_request_count != 2:
+	if refresh_probe.discovery_request_count != 2 or refresh_probe.discovery_background_flags != [true, true]:
 		refresh_probe.request_parent.queue_free()
 		refresh_probe.free()
-		return _failure("plugin.gd should force-refresh update refs when the selected branch is selected again.")
+		return _failure("plugin.gd should background-refresh update refs when the selected branch is selected again.")
 	refresh_probe._state.update_ref_commits = {"v1.0.0-pre3": "annotated-tag-object-sha"}
 	refresh_probe._state.update_ref_versions = {"v1.0.0-pre3": "1.0.0-pre3"}
 	refresh_probe._state.update_ref_latest_release = "v1.0.0-pre3"
@@ -487,6 +506,84 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("plugin.gd should compare release tags by ref name while preserving the displayed target commit hash.")
 	refresh_probe.request_parent.queue_free()
 	refresh_probe.free()
+
+	var no_host_background_probe := RequestParentProbePlugin.new()
+	no_host_background_probe._state.current_tab = 5
+	no_host_background_probe._state.update_refs_state = "success"
+	no_host_background_probe._state.update_refs_last_checked_unix = 1
+	no_host_background_probe._update_refs_discovery_loaded = true
+	if no_host_background_probe._maybe_start_background_update_info_refresh() or no_host_background_probe.update_check_count != 0 or no_host_background_probe._update_refs_discovery_retry_pending:
+		no_host_background_probe.free()
+		return _failure("plugin.gd should not convert background update refreshes into foreground retry/loading when no request host exists.")
+	no_host_background_probe.free()
+
+	var tick_background_probe := RequestParentProbePlugin.new()
+	var tick_background_dock := CurrentTabProbeDock.new()
+	_tree.root.add_child(tick_background_dock)
+	tick_background_probe._dock = tick_background_dock
+	tick_background_probe._state.current_tab = 5
+	tick_background_probe._state.update_refs_state = "success"
+	tick_background_probe._state.update_refs_last_checked_unix = 1
+	tick_background_probe._update_refs_discovery_loaded = true
+	tick_background_probe._tick_background_update_info_refresh(6.0)
+	if tick_background_probe.update_check_count != 1 or tick_background_probe.update_check_background_flags != [true] or tick_background_probe._state.update_refs_state != "success":
+		tick_background_probe.free()
+		tick_background_dock.queue_free()
+		return _failure("plugin.gd should revalidate stale Settings update refs on the editor tick using a background refresh.")
+	tick_background_probe.free()
+	tick_background_dock.queue_free()
+
+	var background_failure_probe := PluginScript.new()
+	background_failure_probe._state.update_refs_state = "success"
+	var old_branches: Array[String] = ["old/branch"]
+	var empty_string_array: Array[String] = []
+	background_failure_probe._state.update_ref_branches = old_branches
+	background_failure_probe._state.update_ref_commits = {"old/branch": "old-sha"}
+	background_failure_probe._state.update_refs_last_checked_unix = 100
+	background_failure_probe._update_refs_request_serial = 1
+	background_failure_probe._update_refs_pending = {
+		"serial": 1,
+		"background": true,
+		"branch_done": true,
+		"release_done": true,
+		"tag_done": true,
+		"errors": ["network unavailable"],
+		"branches": empty_string_array,
+		"releases": empty_string_array,
+		"stable_releases": empty_string_array,
+		"tags": empty_string_array,
+		"commits": {}
+	}
+	background_failure_probe._finalize_update_refs_discovery_if_ready(1)
+	if background_failure_probe._state.update_refs_state != "success" or background_failure_probe._state.update_ref_branches != old_branches or str(background_failure_probe._state.update_ref_commits.get("old/branch", "")) != "old-sha" or background_failure_probe._state.update_refs_refresh_state != "error" or background_failure_probe._state.update_refs_last_checked_unix != 100:
+		background_failure_probe.free()
+		return _failure("plugin.gd should preserve the last successful update refs snapshot when a background refresh fails.")
+	background_failure_probe.free()
+
+	var background_success_probe := PluginScript.new()
+	background_success_probe._state.settings["update_source"] = "custom_branch"
+	background_success_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
+	background_success_probe._state.update_refs_state = "idle"
+	background_success_probe._update_refs_request_serial = 1
+	var target_branches: Array[String] = ["refactor/v2.0.0"]
+	background_success_probe._update_refs_pending = {
+		"serial": 1,
+		"background": true,
+		"branch_done": true,
+		"release_done": true,
+		"tag_done": true,
+		"errors": [],
+		"branches": target_branches,
+		"releases": empty_string_array,
+		"stable_releases": empty_string_array,
+		"tags": empty_string_array,
+		"commits": {"refactor/v2.0.0": "target-sha"}
+	}
+	background_success_probe._finalize_update_refs_discovery_if_ready(1)
+	if background_success_probe._state.update_refs_state != "success" or background_success_probe._state.update_refs_refresh_state != "success" or background_success_probe._state.update_ref_branches != target_branches or str(background_success_probe._state.update_ref_commits.get("refactor/v2.0.0", "")) != "target-sha" or not background_success_probe._update_refs_discovery_loaded:
+		background_success_probe.free()
+		return _failure("plugin.gd should promote successful background update refs snapshots into the visible Settings state.")
+	background_success_probe.free()
 
 	var reload_probe := SyncReloadProbePlugin.new()
 	reload_probe._update_sync_request_serial = 10
@@ -639,6 +736,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		stable_refresh_probe.free()
 		stable_refresh_dock.free()
 		return _failure("plugin.gd should skip a second dock rebuild when the lightweight status signature stays unchanged.")
+	stable_refresh_probe._state.update_ref_commits = {"refactor/v2.0.0": "new-target-sha"}
+	stable_refresh_probe._refresh_dock_if_status_changed()
+	stable_refresh_probe._state.update_compare_ahead_by = 4
+	stable_refresh_probe._state.update_compare_behind_by = 7
+	stable_refresh_probe._refresh_dock_if_status_changed()
+	if stable_refresh_dock.apply_model_count != 3:
+		stable_refresh_probe.free()
+		stable_refresh_dock.free()
+		return _failure("plugin.gd should rebuild the Dock when background update refs or ahead/behind compare metadata changes.")
 	stable_refresh_probe.free()
 	stable_refresh_dock.free()
 

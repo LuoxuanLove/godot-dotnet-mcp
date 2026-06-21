@@ -202,6 +202,10 @@ func build_model() -> Dictionary:
 		"update_refs_state": str(_get_state_value("update_refs_state", "idle")),
 		"update_refs_status": str(_get_state_value("update_refs_status", "")),
 		"update_refs_error": str(_get_state_value("update_refs_error", "")),
+		"update_refs_refresh_state": str(_get_state_value("update_refs_refresh_state", "idle")),
+		"update_refs_refresh_error": str(_get_state_value("update_refs_refresh_error", "")),
+		"update_refs_last_checked_unix": int(_get_state_value("update_refs_last_checked_unix", 0)),
+		"update_refs_refresh_serial": int(_get_state_value("update_refs_refresh_serial", 0)),
 		"update_refs_branches": _duplicate_string_array(_get_state_value("update_ref_branches", [])),
 		"update_refs_releases": _duplicate_string_array(_get_state_value("update_ref_releases", [])),
 		"update_refs_latest_stable_release": str(_get_state_value("update_ref_latest_stable_release", "")),
@@ -211,6 +215,10 @@ func build_model() -> Dictionary:
 		"update_refs_versions": _duplicate_string_dictionary(_get_state_value("update_ref_versions", {})),
 		"update_compare_state": str(_get_state_value("update_compare_state", "idle")),
 		"update_compare_error": str(_get_state_value("update_compare_error", "")),
+		"update_compare_refresh_state": str(_get_state_value("update_compare_refresh_state", "idle")),
+		"update_compare_refresh_error": str(_get_state_value("update_compare_refresh_error", "")),
+		"update_compare_last_checked_unix": int(_get_state_value("update_compare_last_checked_unix", 0)),
+		"update_compare_refresh_serial": int(_get_state_value("update_compare_refresh_serial", 0)),
 		"update_compare_base_commit": str(_get_state_value("update_compare_base_commit", "")),
 		"update_compare_target_ref": str(_get_state_value("update_compare_target_ref", "")),
 		"update_compare_target_commit": str(_get_state_value("update_compare_target_commit", "")),
@@ -229,6 +237,10 @@ func build_model() -> Dictionary:
 	model["update_refs_state"] = str(_get_state_value("update_refs_state", "idle"))
 	model["update_refs_status"] = str(_get_state_value("update_refs_status", ""))
 	model["update_refs_error"] = str(_get_state_value("update_refs_error", ""))
+	model["update_refs_refresh_state"] = str(_get_state_value("update_refs_refresh_state", "idle"))
+	model["update_refs_refresh_error"] = str(_get_state_value("update_refs_refresh_error", ""))
+	model["update_refs_last_checked_unix"] = int(_get_state_value("update_refs_last_checked_unix", 0))
+	model["update_refs_refresh_serial"] = int(_get_state_value("update_refs_refresh_serial", 0))
 	model["update_refs_branches"] = _duplicate_string_array(_get_state_value("update_ref_branches", []))
 	model["update_refs_releases"] = _duplicate_string_array(_get_state_value("update_ref_releases", []))
 	model["update_refs_latest_stable_release"] = str(_get_state_value("update_ref_latest_stable_release", ""))
@@ -238,6 +250,10 @@ func build_model() -> Dictionary:
 	model["update_refs_versions"] = _duplicate_string_dictionary(_get_state_value("update_ref_versions", {}))
 	model["update_compare_state"] = str(_get_state_value("update_compare_state", "idle"))
 	model["update_compare_error"] = str(_get_state_value("update_compare_error", ""))
+	model["update_compare_refresh_state"] = str(_get_state_value("update_compare_refresh_state", "idle"))
+	model["update_compare_refresh_error"] = str(_get_state_value("update_compare_refresh_error", ""))
+	model["update_compare_last_checked_unix"] = int(_get_state_value("update_compare_last_checked_unix", 0))
+	model["update_compare_refresh_serial"] = int(_get_state_value("update_compare_refresh_serial", 0))
 	model["update_compare_base_commit"] = str(_get_state_value("update_compare_base_commit", ""))
 	model["update_compare_target_ref"] = str(_get_state_value("update_compare_target_ref", ""))
 	model["update_compare_target_commit"] = str(_get_state_value("update_compare_target_commit", ""))

@@ -54,7 +54,7 @@ class FakePlugin extends RefCounted:
 	func _on_update_custom_branch_changed(branch: String) -> void:
 		update_custom_branch_changes.append(branch)
 
-	func _on_update_check_requested() -> void:
+	func _on_update_check_requested(_background_refresh: bool = false) -> void:
 		update_check_count += 1
 
 	func _on_update_sync_requested() -> void:
