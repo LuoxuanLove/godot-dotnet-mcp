@@ -32,8 +32,6 @@ static func build_snapshot(loader, overrides: Dictionary = {}) -> Dictionary:
 	var build_all_views := presentation_views.is_empty()
 	var needs_legacy := build_all_views or presentation_views.has("legacy")
 	var needs_agent := build_all_views or presentation_views.has("agent_tools")
-	var needs_internal := build_all_views or presentation_views.has("internal_executors")
-	var needs_diagnostics := build_all_views or presentation_views.has("tool_diagnostics")
 	var presentation := {}
 	if needs_legacy:
 		presentation = ToolPresentationServiceScript.build_tool_presentation(
@@ -44,10 +42,7 @@ static func build_snapshot(loader, overrides: Dictionary = {}) -> Dictionary:
 			catalog_manifest.get("domain_defs", [])
 		)
 	var disabled_tools: Array = disabled_source if disabled_source is Array else []
-	var agent_tool_presentation := ToolTreePresentationServiceScript.build_agent_tool_tree(exposed_tools, disabled_tools) if needs_agent else {}
-	var internal_executor_presentation := ToolTreePresentationServiceScript.build_internal_executor_tree(all_tools_by_category, exposed_tools, category_states, catalog_manifest) if needs_internal else {}
-	var loader_status := _get_loader_status(loader) if needs_diagnostics else {}
-	var tool_diagnostics_presentation := ToolTreePresentationServiceScript.build_diagnostics_tree(exposed_tools, all_tools_by_category, loader_status) if needs_diagnostics else {}
+	var agent_tool_presentation := ToolTreePresentationServiceScript.build_agent_tool_tree(exposed_tools, disabled_tools, all_tools_by_category) if needs_agent else {}
 
 	return {
 		"success": true,
@@ -59,9 +54,7 @@ static func build_snapshot(loader, overrides: Dictionary = {}) -> Dictionary:
 		"domain_states": domain_states,
 		"presentation": presentation.duplicate(true),
 		"agent_tool_presentation": agent_tool_presentation.duplicate(true),
-		"internal_executor_presentation": internal_executor_presentation.duplicate(true),
-		"tool_diagnostics_presentation": tool_diagnostics_presentation.duplicate(true),
-		"tool_loader_status": loader_status
+		"tool_loader_status": _get_loader_status(loader)
 	}
 
 
@@ -72,7 +65,7 @@ static func _normalize_presentation_views(raw_views) -> Array[String]:
 	for raw_view in raw_views:
 		var view := str(raw_view).strip_edges()
 		match view:
-			"legacy", "agent_tools", "internal_executors", "tool_diagnostics":
+			"legacy", "agent_tools":
 				if not views.has(view):
 					views.append(view)
 	return views

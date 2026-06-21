@@ -92,9 +92,6 @@ const TRANSLATIONS: Dictionary = {
 	# Tools tab
 	"tools_enabled": "Tools: %d/%d enabled",
 	"external_tools_enabled": "Exposed Tools: %d/%d",
-	"tools_view_agent_tools": "Agent Tools",
-	"tools_view_internal_executors": "Internal",
-	"tools_view_diagnostics": "Diagnostics",
 	"agent_tools_group_project_context": "Project Context",
 	"agent_tools_group_project_context_desc": "Project state, files, configuration, lifecycle, indexing, symbol search, and scene dependencies.",
 	"agent_tools_group_editor_automation": "Editor Automation",
@@ -111,6 +108,8 @@ const TRANSLATIONS: Dictionary = {
 	"agent_tools_group_user_tools_desc": "Project-local custom user tools exposed through the MCP surface.",
 	"agent_tools_group_other_agent_tools": "Other Agent Tools",
 	"agent_tools_group_other_agent_tools_desc": "Additional public tools that do not fit the canonical groups yet.",
+	"tool_architecture_actions": "Actions",
+	"tool_architecture_implemented_by": "Implemented by",
 	"tool_profile": "Profile:",
 	"tool_profile_system": "System",
 	"tool_profile_task": "Task",

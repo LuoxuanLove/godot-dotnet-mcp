@@ -66,16 +66,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var loader := FakeLoader.new()
 	var exposed := loader.get_exposed_tool_definitions()
 	var all_tools := loader.get_all_tools_by_category()
-	var agent_tree := ToolTreePresentationService.build_agent_tool_tree(exposed)
-	var internal_tree := ToolTreePresentationService.build_internal_executor_tree(all_tools, exposed, loader.get_domain_states())
-	var diagnostics_tree := ToolTreePresentationService.build_diagnostics_tree(exposed, all_tools, loader.get_tool_loader_status())
+	var agent_tree := ToolTreePresentationService.build_agent_tool_tree(exposed, [], all_tools)
 
 	if str(agent_tree.get("view", "")) != "agent_tools":
 		return _failure("Agent tool tree should identify the default Agent Tools view.")
-	if str(agent_tree.get("signature", "")).is_empty() or str(internal_tree.get("signature", "")).is_empty() or str(diagnostics_tree.get("signature", "")).is_empty():
-		return _failure("Tool tree presentation layers should expose reusable signatures for UI refresh checks.")
-	if str(agent_tree.get("signature", "")) == str(internal_tree.get("signature", "")):
-		return _failure("Tool tree presentation signatures should distinguish the active view.")
+	if str(agent_tree.get("signature", "")).is_empty():
+		return _failure("Agent tool presentation should expose a reusable signature for UI refresh checks.")
 	if _find_node(agent_tree.get("toolTree", []), "public_tool", "system_project_state").is_empty():
 		return _failure("Agent tool tree should include canonical system tools.")
 	if _find_node(agent_tree.get("toolTree", []), "public_tool", "user_sample_tool").is_empty():
@@ -98,28 +94,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var project_state_metadata: Dictionary = (agent_tree.get("toolMetadataByName", {}) as Dictionary).get("system_project_state", {})
 	if str(project_state_metadata.get("visibility", "")) != "public" or str(project_state_metadata.get("callability", "")) != "callable":
 		return _failure("Agent tool metadata should expose visibility and callability.")
-
-	if _find_node(internal_tree.get("toolTree", []), "executor_category", "runtime").is_empty():
-		return _failure("Internal executor tree should include runtime executor category.")
-	if _find_node(internal_tree.get("toolTree", []), "executor_category", "dap").is_empty():
-		return _failure("Internal executor tree should include dap executor category.")
-	if _find_node(internal_tree.get("toolTree", []), "executor_category", "material").is_empty():
-		return _failure("Internal executor tree should include visual/internal executor categories.")
-	var runtime_executor_tool := _find_node(internal_tree.get("toolTree", []), "executor_tool", "runtime_control")
-	if runtime_executor_tool.is_empty() or str(runtime_executor_tool.get("visibility", "")) != "internal":
-		return _failure("Internal executor tree should label non-public executor tools as internal.")
-
-	var legacy_help := _find_node(diagnostics_tree.get("toolTree", []), "legacy_tool", "system_help")
-	if legacy_help.is_empty():
-		return _failure("Diagnostics tree should include removed legacy tools.")
-	if str(legacy_help.get("callability", "")) != "compat_callable" or str(legacy_help.get("replacement", "")) != "godot-dotnet-mcp://guides/index":
-		return _failure("Diagnostics tree should explain legacy replacement guidance.")
+	var runtime_tool := _find_node(agent_tree.get("toolTree", []), "public_tool", "system_runtime_control")
+	var runtime_impl_group := _find_node(runtime_tool.get("children", []), "architecture_group", "system_runtime_control:implemented_by")
+	if runtime_impl_group.is_empty():
+		return _failure("Agent tool tree should show internal implementation under the public runtime control tool.")
+	var runtime_atomic := _find_node(runtime_impl_group.get("children", []), "atomic", "runtime_control")
+	if runtime_atomic.is_empty() or str(runtime_atomic.get("visibility", "")) != "internal" or str(runtime_atomic.get("callability", "")) != "not_callable":
+		return _failure("Agent tool architecture should label runtime executor as internal and non-callable.")
+	var dap_tool := _find_node(agent_tree.get("toolTree", []), "public_tool", "system_dap_debugger")
+	if _find_node(dap_tool.get("children", []), "architecture_group", "system_dap_debugger:implemented_by").is_empty():
+		return _failure("Agent tool tree should show DAP implementation details under the public debugger tool.")
+	var metadata_by_name: Dictionary = agent_tree.get("toolMetadataByName", {})
+	if not metadata_by_name.has("runtime_control") or str((metadata_by_name.get("runtime_control", {}) as Dictionary).get("callability", "")) != "not_callable":
+		return _failure("Agent tool metadata should index internal implementation nodes for preview/search without a separate Internal page.")
 
 	var snapshot := ToolCatalogSnapshotService.build_snapshot(loader)
 	if not bool(snapshot.get("success", false)):
 		return _failure("Snapshot should build for the fake loader.")
-	if not snapshot.has("agent_tool_presentation") or not snapshot.has("internal_executor_presentation") or not snapshot.has("tool_diagnostics_presentation"):
-		return _failure("Snapshot should expose the new presentation model layers.")
+	if not snapshot.has("agent_tool_presentation"):
+		return _failure("Snapshot should expose the Agent Tools presentation model.")
+	if snapshot.has("internal_executor_presentation") or snapshot.has("tool_diagnostics_presentation"):
+		return _failure("Snapshot should not expose removed Internal or Diagnostics Tools views.")
 	var snapshot_agent: Dictionary = snapshot.get("agent_tool_presentation", {})
 	if not _find_node(snapshot_agent.get("toolTree", []), "public_tool", "system_project_state").is_empty() and _find_node(snapshot_agent.get("toolTree", []), "public_tool", "system_help").is_empty():
 		return {"name": "tool_tree_presentation_service_contracts", "success": true, "error": ""}

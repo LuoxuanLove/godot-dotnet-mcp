@@ -33,7 +33,6 @@ signal delete_user_tool_requested(script_path: String)
 signal category_toggled(category: String, enabled: bool)
 signal domain_toggled(domain_key: String, enabled: bool)
 signal tree_collapse_changed(kind: String, key: String, collapsed: bool)
-signal tool_view_changed(view_id: String)
 signal cli_scope_changed(scope: String)
 signal config_platform_changed(platform_id: String)
 signal config_client_action_requested(client_id: String)
@@ -352,8 +351,6 @@ func _connect_tools_tab() -> void:
 	_connect_signal_once(_tools_tab, "category_toggled", _on_tools_tab_category_toggled)
 	_connect_signal_once(_tools_tab, "domain_toggled", _on_tools_tab_domain_toggled)
 	_connect_signal_once(_tools_tab, "tree_collapse_changed", _on_tools_tab_tree_collapse_changed)
-	if _tools_tab.has_signal("tool_view_changed") and not _tools_tab.tool_view_changed.is_connected(_on_tools_tab_view_changed):
-		_tools_tab.tool_view_changed.connect(_on_tools_tab_view_changed)
 
 
 func _connect_mcp_catalog_tab(tab: Control) -> void:
@@ -510,10 +507,6 @@ func _on_tools_tab_domain_toggled(domain_key: String, enabled: bool) -> void:
 
 func _on_tools_tab_tree_collapse_changed(kind: String, key: String, collapsed: bool) -> void:
 	tree_collapse_changed.emit(kind, key, collapsed)
-
-
-func _on_tools_tab_view_changed(view_id: String) -> void:
-	tool_view_changed.emit(view_id)
 
 
 func _on_mcp_catalog_tab_copy_requested(text: String, source: String) -> void:

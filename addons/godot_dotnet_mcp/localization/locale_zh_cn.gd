@@ -92,9 +92,6 @@ const TRANSLATIONS: Dictionary = {
 	# Tools tab
 	"tools_enabled": "工具：%d/%d 已启用",
 	"external_tools_enabled": "对外工具：%d/%d",
-	"tools_view_agent_tools": "Agent 工具",
-	"tools_view_internal_executors": "内部执行器",
-	"tools_view_diagnostics": "诊断",
 	"agent_tools_group_project_context": "项目上下文",
 	"agent_tools_group_project_context_desc": "项目状态、文件、配置、生命周期、索引、符号搜索和场景依赖。",
 	"agent_tools_group_editor_automation": "编辑器自动化",
@@ -111,6 +108,8 @@ const TRANSLATIONS: Dictionary = {
 	"agent_tools_group_user_tools_desc": "通过 MCP surface 暴露的项目本地自定义用户工具。",
 	"agent_tools_group_other_agent_tools": "其他 Agent 工具",
 	"agent_tools_group_other_agent_tools_desc": "尚未归入规范分组的其他公开工具。",
+	"tool_architecture_actions": "动作",
+	"tool_architecture_implemented_by": "内部实现",
 	"tool_profile": "预设：",
 	"tool_profile_system": "系统",
 	"tool_profile_task": "任务",
