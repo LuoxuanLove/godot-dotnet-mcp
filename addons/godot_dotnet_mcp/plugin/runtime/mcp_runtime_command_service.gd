@@ -5,6 +5,12 @@ class_name MCPRuntimeCommandService
 const MCPProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
 
+const MAX_CAPTURE_FRAME_COUNT := 24
+const MAX_CAPTURE_INTERVAL_FRAMES := 300
+const MAX_STEP_WAIT_FRAMES := 300
+const MAX_INPUT_DURATION_MS := 5000
+const MAX_INPUTS_PER_REQUEST := 64
+
 var _get_tree := Callable()
 var _get_viewport := Callable()
 var _get_current_scene_path := Callable()
@@ -59,8 +65,16 @@ func _capture_async(session_id: int, args: Dictionary) -> Dictionary:
 	var interval_frames := int(args.get("interval_frames", 1))
 	if frame_count <= 0:
 		return _failure("invalid_argument", "frame_count must be greater than 0.")
+	if frame_count > MAX_CAPTURE_FRAME_COUNT:
+		return _failure("invalid_argument", "frame_count must be %d or less." % MAX_CAPTURE_FRAME_COUNT, {
+			"max_frame_count": MAX_CAPTURE_FRAME_COUNT
+		})
 	if interval_frames < 0:
 		return _failure("invalid_argument", "interval_frames must be 0 or greater.")
+	if interval_frames > MAX_CAPTURE_INTERVAL_FRAMES:
+		return _failure("invalid_argument", "interval_frames must be %d or less." % MAX_CAPTURE_INTERVAL_FRAMES, {
+			"max_interval_frames": MAX_CAPTURE_INTERVAL_FRAMES
+		})
 	if frame_count <= 1:
 		return await _capture_single_frame_async(session_id, args)
 
@@ -160,6 +174,10 @@ func _apply_inputs_async(session_id: int, args: Dictionary) -> Dictionary:
 	var inputs = args.get("inputs", [])
 	if not (inputs is Array) or (inputs as Array).is_empty():
 		return _failure("invalid_argument", "Runtime input requires a non-empty inputs array.")
+	if (inputs as Array).size() > MAX_INPUTS_PER_REQUEST:
+		return _failure("invalid_argument", "Runtime input accepts at most %d entries." % MAX_INPUTS_PER_REQUEST, {
+			"max_inputs": MAX_INPUTS_PER_REQUEST
+		})
 	var executed: Array[Dictionary] = []
 	for raw_input in inputs:
 		if not (raw_input is Dictionary):
@@ -184,6 +202,10 @@ func _apply_single_input_async(input_entry: Dictionary) -> Dictionary:
 	var duration_ms := maxi(int(input_entry.get("duration_ms", 60)), 1)
 	if kind.is_empty() or op.is_empty():
 		return _failure("invalid_argument", "Runtime input entries require kind and op.")
+	if op in ["tap", "hold", "click"] and duration_ms > MAX_INPUT_DURATION_MS:
+		return _failure("invalid_argument", "Runtime input duration_ms must be %d or less." % MAX_INPUT_DURATION_MS, {
+			"max_duration_ms": MAX_INPUT_DURATION_MS
+		})
 	if kind != "mouse" and target.is_empty():
 		return _failure("invalid_argument", "Runtime action/key input entries require target.")
 
@@ -299,6 +321,10 @@ func _run_step_async(session_id: int, args: Dictionary) -> Dictionary:
 			applied_inputs = (input_data as Dictionary).get("inputs", []).duplicate(true)
 
 	var wait_frames := maxi(int(args.get("wait_frames", 1)), 0)
+	if wait_frames > MAX_STEP_WAIT_FRAMES:
+		return _failure("invalid_argument", "Runtime step wait_frames must be %d or less." % MAX_STEP_WAIT_FRAMES, {
+			"max_wait_frames": MAX_STEP_WAIT_FRAMES
+		})
 	if wait_frames > 0:
 		await _await_process_frames(wait_frames)
 

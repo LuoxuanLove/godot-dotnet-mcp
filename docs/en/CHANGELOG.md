@@ -80,6 +80,7 @@ Target version: 2.0.0.
 - Fixed long-running stability gaps by refreshing User-tool definitions only after explicit invalidation, closing partial idle HTTP requests after the timeout window, and clearing stopped debugger sessions from the live bridge map immediately.
 - Fixed plugin disable lifecycle cleanup so runtime-owned services, watcher polling, client dialogs, debugger hooks, performance monitors, and static self-diagnostic state are released when the plugin is disabled without uninstalling the runtime bridge autoload.
 - Fixed User-tool runtime definition comparison so nested schema, presentation, and icon metadata are compared directly instead of serializing full definitions into JSON signatures during idle runtime checks.
+- Fixed runtime automation budget validation so oversized frame captures, wait-frame counts, input batches, and held input durations are rejected before they can keep the editor waiting for excessive runtime work.
 
 ### Documentation
 
