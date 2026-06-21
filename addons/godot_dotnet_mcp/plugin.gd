@@ -1013,12 +1013,6 @@ func _resolve_update_sync_target() -> Dictionary:
 	return _ensure_plugin_update_request_planning_service().resolve_sync_target(_state.settings, _build_update_refs_planning_context())
 
 
-func _resolve_update_ref_commit(target_ref: String) -> String:
-	if _state == null:
-		return ""
-	return _ensure_plugin_update_request_planning_service().resolve_ref_commit(target_ref, _state.update_ref_commits)
-
-
 func _start_update_refs_request(kind: String, url: String, serial: int) -> void:
 	if _state == null or serial != _update_refs_request_serial:
 		return
@@ -1109,10 +1103,6 @@ func _on_update_archive_branch_ref_request_completed(result: int, response_code:
 
 func _build_update_archive_request_attempts(target: Dictionary) -> Array:
 	return _ensure_plugin_update_request_planning_service().build_archive_request_attempts(target, _build_update_archive_url_prefixes())
-
-
-func _encode_update_archive_ref_path(target_ref: String) -> String:
-	return _ensure_plugin_update_request_planning_service().encode_archive_ref_path(target_ref)
 
 
 func _start_update_archive_sync_request_attempt(target: Dictionary, serial: int, attempts: Array, attempt_index: int, failures: Array) -> void:
@@ -1641,10 +1631,6 @@ func _extract_update_stable_release_names(items: Array) -> Array[String]:
 
 func _duplicate_update_ref_commits(raw_commits) -> Dictionary:
 	return _ensure_plugin_update_refs_discovery_service().duplicate_commits(raw_commits)
-
-
-func _append_unique_update_ref(values: Array[String], value: String) -> void:
-	_ensure_plugin_update_refs_discovery_service().append_unique_ref(values, value)
 
 
 func _on_start_requested() -> void:

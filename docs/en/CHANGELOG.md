@@ -47,6 +47,7 @@ Target version: 2.0.0.
 - Changed MCPToolLoader service readiness checks so status, catalog, tick, and execution hot paths skip repeated service factory wiring while still rehydrating services after script reloads.
 - Changed plugin update state transitions for refs, sync, and compare workflows to use a dedicated transition service while preserving the Dock and MCP update status fields.
 - Changed plugin update endpoint, archive, timeout, marker, and addon-root facts to use a dedicated endpoint config service instead of keeping those GitHub/update constants in the plugin entrypoint.
+- Changed plugin update helper ownership so unused branch-ref, archive-ref, and ref-list wrappers stay in dedicated update services instead of the plugin entrypoint.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v2.0 line.
 
 ### Fixed
