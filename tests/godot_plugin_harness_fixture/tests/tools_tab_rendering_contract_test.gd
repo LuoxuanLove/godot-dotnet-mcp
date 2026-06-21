@@ -27,6 +27,22 @@ class FakeLocalization extends RefCounted:
 		"tools_view_agent_tools": "Agent Tools",
 		"tools_view_internal_executors": "Internal",
 		"tools_view_diagnostics": "Diagnostics",
+		"agent_tools_group_project_context": "项目上下文",
+		"agent_tools_group_project_context_desc": "项目状态、文件、配置、生命周期、索引、符号搜索和场景依赖。",
+		"agent_tools_group_editor_automation": "编辑器自动化",
+		"agent_tools_group_editor_automation_desc": "编辑器状态、界面控制、证据截图、检查器和设置对话框工作流。",
+		"agent_tools_group_scene_resource": "场景与资源",
+		"agent_tools_group_scene_resource_desc": "场景树、场景检查、场景补丁、资源引用和绑定审计。",
+		"agent_tools_group_script_csharp_semantics": "脚本语义",
+		"agent_tools_group_script_csharp_semantics_desc": "脚本分析、脚本补丁以及 C# 绑定或语义检查。",
+		"agent_tools_group_runtime_debugging": "运行时调试",
+		"agent_tools_group_runtime_debugging_desc": "运行时控制、运行时步进、运行时诊断和 DAP 调试。",
+		"agent_tools_group_plugin_maintenance": "插件维护",
+		"agent_tools_group_plugin_maintenance_desc": "插件启用、更新、维护和用户数据清理工作流。",
+		"agent_tools_group_user_tools": "用户工具",
+		"agent_tools_group_user_tools_desc": "通过 MCP surface 暴露的项目本地自定义用户工具。",
+		"agent_tools_group_other_agent_tools": "其他 Agent 工具",
+		"agent_tools_group_other_agent_tools_desc": "尚未归入规范分组的其他公开工具。",
 		"tool_action": "工具动作",
 		"tools_partial_suffix": "(partial)",
 		"cat_system": "System",
@@ -173,6 +189,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var user_group := _find_child_by_metadata(root, "category", "user_tools")
 	if project_group == null or runtime_group == null or plugin_group == null or user_group == null:
 		return _failure("Tools tab should default to Agent Tools groups instead of internal domain roots.")
+	if str(project_group.get_text(0)).contains("Project Context") or str(runtime_group.get_text(0)).contains("Runtime Debugging"):
+		return _failure("Tools tab Agent Tools group labels should render localized text instead of raw English group labels.")
+	if not str(project_group.get_text(0)).contains("项目上下文") or not str(runtime_group.get_text(0)).contains("运行时调试"):
+		return _failure("Tools tab Agent Tools group labels should use localized group names from labelKey metadata.")
 	if _find_child_by_metadata(root, "domain", "core") != null or _find_child_by_metadata(root, "category", "plugin_runtime") != null:
 		return _failure("Tools tab Agent Tools view should not mix internal domain/category roots into the default tree.")
 	if _find_child_by_metadata(runtime_group, "tool", "system_dap_debugger") == null or _find_child_by_metadata(runtime_group, "tool", "system_runtime_control") == null:

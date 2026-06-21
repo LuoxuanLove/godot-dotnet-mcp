@@ -6,6 +6,7 @@ const ToolLoaderScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_
 const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localization/localization_service.gd")
 const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/system_tree_catalog.gd")
 const ToolPresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
+const ToolTreePresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_tree_presentation_service.gd")
 
 const REMOVED_PUBLIC_TOOL_LOCALIZATION_KEYS: Array[String] = [
 	"debug_log",
@@ -89,7 +90,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		tools_by_category,
 		_loader.get_domain_states()
 	)
+	var agent_presentation: Dictionary = ToolTreePresentationServiceScript.build_agent_tool_tree(
+		_loader.get_exposed_tool_definitions()
+	)
 	var required_key_groups := _collect_required_visible_tool_key_groups(presentation, tools_by_category)
+	required_key_groups.append_array(_collect_required_visible_tool_key_groups(agent_presentation, tools_by_category))
 	var localization = LocalizationServiceScript.new()
 	localization._init_translations()
 	var locale_codes: Array[String] = localization.get_available_language_codes()
@@ -155,7 +160,7 @@ func _build_tool_index(tools_by_category: Dictionary) -> Dictionary:
 func _collect_visible_tree_node_key_groups(node: Dictionary, tool_index: Dictionary, key_groups: Array, seen: Dictionary) -> void:
 	var kind := str(node.get("kind", ""))
 	match kind:
-		"domain", "category":
+		"domain", "category", "tool_group":
 			var label_key := str(node.get("labelKey", ""))
 			_add_required_group(key_groups, seen, [label_key])
 			_add_required_group(key_groups, seen, ["%s_desc" % label_key])
