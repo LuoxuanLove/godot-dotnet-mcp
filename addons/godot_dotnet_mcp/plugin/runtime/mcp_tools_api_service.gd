@@ -38,7 +38,9 @@ func build_tools_list_response() -> Dictionary:
 			"performance": {}
 		}
 
-	var snapshot: Dictionary = ToolCatalogSnapshotService.build_snapshot(loader)
+	var snapshot: Dictionary = ToolCatalogSnapshotService.build_snapshot(loader, {
+		"presentation_views": ["legacy"]
+	})
 	if not bool(snapshot.get("success", false)):
 		return {
 			"tools": [],

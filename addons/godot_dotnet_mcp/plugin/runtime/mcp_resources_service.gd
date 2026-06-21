@@ -449,7 +449,9 @@ func _build_tool_catalog_payload() -> Dictionary:
 	var loader = _get_loader()
 	if loader == null:
 		return {"tools": [], "domain_states": [], "presentationVersion": 1, "toolTree": [], "toolGroups": [], "toolLoaderStatus": _get_loader_status_safe()}
-	var snapshot: Dictionary = ToolCatalogSnapshotServiceScript.build_snapshot(loader)
+	var snapshot: Dictionary = ToolCatalogSnapshotServiceScript.build_snapshot(loader, {
+		"presentation_views": ["legacy"]
+	})
 	if not bool(snapshot.get("success", false)):
 		return {"tools": [], "domain_states": [], "presentationVersion": 1, "toolTree": [], "toolGroups": [], "toolLoaderStatus": _get_loader_status_safe()}
 	var exposed_tools: Array = snapshot.get("exposed_tools", [])

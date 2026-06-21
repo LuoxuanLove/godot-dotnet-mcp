@@ -78,6 +78,10 @@ class FakeStdioToolLoader extends RefCounted:
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	var source_guard := _verify_resources_catalog_requests_legacy_snapshot_view()
+	if not source_guard.is_empty():
+		return _failure(source_guard)
+
 	var localization = LocalizationServiceScript.get_instance()
 	if localization != null:
 		_previous_language = localization.get_language()
@@ -1024,6 +1028,16 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _verify_resources_catalog_requests_legacy_snapshot_view() -> String:
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_resources_service.gd")
+	if source.is_empty():
+		return "MCP resources service source should be readable."
+	var required := "ToolCatalogSnapshotServiceScript.build_snapshot(loader, {\n\t\t\"presentation_views\": [\"legacy\"]\n\t})"
+	if source.find(required) == -1:
+		return "MCP resources tool catalog payload should request only the legacy presentation view."
+	return ""
 
 
 func _first_tool_json_schema_2020_12_error(tools) -> String:

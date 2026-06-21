@@ -25,7 +25,9 @@ static func search(loader, args: Dictionary) -> Dictionary:
 	var category_filters := _string_filter_set(args.get("category", ""))
 	var include_schema := bool(args.get("include_schema", false))
 
-	var snapshot := ToolCatalogSnapshotServiceScript.build_snapshot(loader)
+	var snapshot := ToolCatalogSnapshotServiceScript.build_snapshot(loader, {
+		"presentation_views": ["legacy"]
+	})
 	if not bool(snapshot.get("success", false)):
 		return {
 			"success": false,
