@@ -333,11 +333,18 @@ class FakeToolLoader:
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	var source_guard := _verify_search_requests_legacy_snapshot_view()
+	if not source_guard.is_empty():
+		return _failure(source_guard)
+
 	var loader := FakeToolLoader.new()
 	var exposed_search: Dictionary = ToolCatalogSearchService.search(loader, {"query": "input", "limit": 10})
 	if not bool(exposed_search.get("success", false)):
 		return _failure("Exposed catalog search should succeed.")
 	var exposed_data: Dictionary = exposed_search.get("data", {})
+	var exposed_loader_status: Dictionary = exposed_data.get("tool_loader_status", {})
+	if str(exposed_loader_status.get("status", "")) != "ready":
+		return _failure("Catalog search should preserve loader status even when requesting only the legacy presentation view.")
 	var exposed_matches: Array = exposed_data.get("matches", [])
 	if exposed_matches.size() != 1 or str((exposed_matches[0] as Dictionary).get("name", "")) != "system_runtime_step":
 		return _failure("Default search should match exposed tools by action/description.")
@@ -491,6 +498,16 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _verify_search_requests_legacy_snapshot_view() -> String:
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_search_service.gd")
+	if source.is_empty():
+		return "Tool catalog search service source should be readable."
+	var required := "ToolCatalogSnapshotServiceScript.build_snapshot(loader, {\n\t\t\"presentation_views\": [\"legacy\"]\n\t})"
+	if source.find(required) == -1:
+		return "Tool catalog search should request only the legacy presentation view."
+	return ""
 
 
 func _match_names(matches: Array) -> Array[String]:

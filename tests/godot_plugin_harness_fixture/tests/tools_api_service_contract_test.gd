@@ -88,6 +88,10 @@ class FakeCallbacks:
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	var source_guard := _verify_tools_api_requests_legacy_snapshot_view()
+	if not source_guard.is_empty():
+		return _failure(source_guard)
+
 	var service = ToolsApiServiceScript.new()
 	var callbacks = FakeCallbacks.new()
 	var context = ToolsApiServiceContextScript.new()
@@ -142,6 +146,16 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _verify_tools_api_requests_legacy_snapshot_view() -> String:
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tools_api_service.gd")
+	if source.is_empty():
+		return "Tools API service source should be readable."
+	var required := "ToolCatalogSnapshotService.build_snapshot(loader, {\n\t\t\"presentation_views\": [\"legacy\"]\n\t})"
+	if source.find(required) == -1:
+		return "Tools API service should request only the legacy catalog presentation view for tools/list."
+	return ""
 
 
 func _tool_advertises_json_schema_2020_12(tool_entry, key: String) -> bool:
