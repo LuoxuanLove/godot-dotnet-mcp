@@ -5,7 +5,7 @@ class_name MCPToolLoader
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const ToolLoaderServiceFactoryScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_service_factory.gd")
 
-var _service_factory := ToolLoaderServiceFactoryScript.new()
+var _service_factory = ToolLoaderServiceFactoryScript.new()
 var _registry = null
 var _server_context: Object
 var _state_store = null
@@ -34,6 +34,7 @@ var _execution_context_service = null
 var _context_service = null
 var _query_service = null
 var _lifecycle_tick_budget_service = null
+var _services_ready := false
 var _tool_activity_registry = null
 var _performance: Dictionary = {}
 var _preload_runtimes_on_initialize := false
@@ -53,6 +54,8 @@ func _bind_state_refs() -> void:
 
 
 func _ensure_services_ready() -> void:
+	if _services_ready and _are_services_ready():
+		return
 	var services: Dictionary = _service_factory.ensure_services(_build_service_factory_context())
 	_registry = services.get("registry", _registry)
 	_state_store = services.get("state_store", _state_store)
@@ -83,6 +86,33 @@ func _ensure_services_ready() -> void:
 	_lsp_diagnostics_service.configure(self)
 	_execution_context_service.configure(_execution_observer)
 	_context_service.configure(_state_store)
+	_services_ready = _are_services_ready()
+
+
+func _are_services_ready() -> bool:
+	return _registry != null \
+		and _state_store != null \
+		and _public_surface_policy != null \
+		and _execution_observer != null \
+		and _runtime_manager != null \
+		and _status_service != null \
+		and _diagnostics_service != null \
+		and _entry_service != null \
+		and _runtime_context_service != null \
+		and _catalog_projection_service != null \
+		and _execution_service != null \
+		and _tick_service != null \
+		and _enablement_service != null \
+		and _reload_service != null \
+		and _user_reload_service != null \
+		and _runtime_state_service != null \
+		and _lifecycle_service != null \
+		and _access_service != null \
+		and _lsp_diagnostics_service != null \
+		and _execution_context_service != null \
+		and _context_service != null \
+		and _query_service != null \
+		and _lifecycle_tick_budget_service != null
 
 
 func _build_service_factory_context() -> Dictionary:
