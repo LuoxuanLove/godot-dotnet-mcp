@@ -171,7 +171,7 @@ static func _append_node_signature_entries(entries: Array[String], nodes: Array)
 			entries.append("node|invalid")
 			continue
 		var node := node_value as Dictionary
-		entries.append("node|%s" % JSON.stringify([
+		entries.append("node|%s" % _signature_join([
 			str(node.get("kind", "")),
 			str(node.get("id", "")),
 			str(node.get("key", "")),
@@ -213,7 +213,7 @@ static func _append_group_signature_entries(entries: Array[String], groups: Arra
 	entries.append("groups=%d" % groups.size())
 	for group_value in groups:
 		if group_value is Dictionary:
-			entries.append("group|%s" % JSON.stringify(group_value))
+			entries.append("group|%s" % _signature_value(group_value))
 		else:
 			entries.append("group|invalid")
 
@@ -226,9 +226,52 @@ static func _append_metadata_signature_entries(entries: Array[String], metadata_
 		var name := str(name_value)
 		var metadata = metadata_by_name.get(name_value, {})
 		if metadata is Dictionary:
-			entries.append("metadata|%s|%s" % [name, JSON.stringify(metadata)])
+			entries.append("metadata|%s|%s" % [_signature_scalar(name), _signature_value(metadata)])
 		else:
-			entries.append("metadata|%s|invalid" % name)
+			entries.append("metadata|%s|invalid" % _signature_scalar(name))
+
+
+static func _signature_join(values: Array) -> String:
+	var parts: Array[String] = []
+	for value in values:
+		parts.append(_signature_value(value))
+	return "|".join(parts)
+
+
+static func _signature_value(value) -> String:
+	match typeof(value):
+		TYPE_DICTIONARY:
+			var dict := value as Dictionary
+			var keys: Array[String] = []
+			var values_by_key := {}
+			for key in dict.keys():
+				var key_text := str(key)
+				keys.append(key_text)
+				values_by_key[key_text] = dict[key]
+			keys.sort()
+			var entries: Array[String] = []
+			for key_text in keys:
+				entries.append("%s=%s" % [_signature_scalar(key_text), _signature_value(values_by_key.get(key_text))])
+			return "d{%s}" % ",".join(entries)
+		TYPE_ARRAY:
+			var entries: Array[String] = []
+			for item in value as Array:
+				entries.append(_signature_value(item))
+			return "a[%s]" % ",".join(entries)
+		TYPE_BOOL:
+			return "b:%s" % ("1" if bool(value) else "0")
+		TYPE_INT:
+			return "i:%s" % str(int(value))
+		TYPE_FLOAT:
+			return "f:%s" % str(float(value))
+		TYPE_NIL:
+			return "n:"
+		_:
+			return "s:%s" % _signature_scalar(str(value))
+
+
+static func _signature_scalar(value: String) -> String:
+	return "%d:%s" % [value.length(), value]
 
 
 static func get_atomic_child_specs(parent_full_name: String) -> Array[Dictionary]:
