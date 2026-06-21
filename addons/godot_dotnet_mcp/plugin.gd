@@ -1068,7 +1068,8 @@ func _is_update_sync_target_verified(target: Dictionary = {}, require_compare: b
 		return true
 	if str(_state.update_refs_state) != "success" or str(_state.update_refs_refresh_state) == "loading":
 		return false
-	if str(_state.update_compare_state) != "success" or str(_state.update_compare_refresh_state) == "loading":
+	var compare_refresh_state := str(_state.update_compare_refresh_state)
+	if str(_state.update_compare_state) != "success" or compare_refresh_state == "loading" or compare_refresh_state == "error" or compare_refresh_state == "unavailable":
 		return false
 	if str(_state.update_compare_target_ref).strip_edges() != target_ref:
 		return false

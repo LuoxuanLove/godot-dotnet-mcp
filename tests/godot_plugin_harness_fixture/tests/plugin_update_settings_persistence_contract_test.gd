@@ -500,6 +500,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("MCP plugin update sync should accept the same ref after compare metadata is verified for the current target commit.")
 	stale_commit_probe.free()
 
+	var failed_compare_probe := SyncStartProbePlugin.new()
+	failed_compare_probe._state.settings["update_source"] = "custom_branch"
+	failed_compare_probe._state.settings["update_custom_branch"] = "feature/same-ref"
+	failed_compare_probe._state.update_refs_state = "success"
+	failed_compare_probe._state.update_ref_commits = {"feature/same-ref": "new-sha"}
+	failed_compare_probe._state.update_compare_state = "success"
+	failed_compare_probe._state.update_compare_refresh_state = "error"
+	failed_compare_probe._state.update_compare_target_ref = "feature/same-ref"
+	failed_compare_probe._state.update_compare_target_commit = "new-sha"
+	var failed_compare_result: Dictionary = failed_compare_probe.start_plugin_update_sync_from_tools()
+	if bool(failed_compare_result.get("accepted", true)) or not failed_compare_probe.archive_requests.is_empty():
+		failed_compare_probe.free()
+		return _failure("MCP plugin update sync should refuse stale compare success while the latest background compare refresh is failed.")
+	failed_compare_probe.free()
+
 	var archive_attempt_probe := ArchiveAttemptProbePlugin.new()
 	archive_attempt_probe._update_sync_request_serial = 21
 	var branch_body := JSON.stringify({"commit": {"sha": "resolved-sha"}}).to_utf8_buffer()
