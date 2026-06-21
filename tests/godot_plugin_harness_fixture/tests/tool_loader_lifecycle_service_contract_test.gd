@@ -20,6 +20,8 @@ class FakeLifecycleContext:
 	var lsp_dispose_count := 0
 	var refresh_entries_count := 0
 	var runtime_refresh_count := 0
+	var tool_definition_query_count := 0
+	var exposed_definition_query_count := 0
 	var sync_actions: Array = []
 	var ensured_definitions: Array = []
 	var ensured_runtimes: Array = []
@@ -28,8 +30,12 @@ class FakeLifecycleContext:
 	var tool_definitions: Array = []
 	var exposed_definitions: Array = []
 	var definitions_by_category: Dictionary = {}
+	var entries_by_category: Dictionary = {}
 	var tool_load_error_count := 0
 	var disabled_categories: Dictionary = {}
+	var hidden_categories: Dictionary = {}
+	var disabled_tool_names: Dictionary = {}
+	var exposed_tool_names: Dictionary = {}
 	var forced_values: Array = []
 	var tick_result: Dictionary = {}
 	var tick_deltas: Array = []
@@ -40,12 +46,14 @@ class FakeLifecycleContext:
 	func build() -> Dictionary:
 		return {
 			"ordered_categories": ordered_categories,
+			"entries_by_category": entries_by_category,
 			"runtime_by_category": runtime_by_category,
 			"tool_definitions_by_category": definitions_by_category,
 			"performance": performance,
 			"set_force_reload_script_load": Callable(self, "set_force_reload_script_load"),
 			"get_runtime_by_category": Callable(self, "get_runtime_by_category"),
 			"get_tool_definitions_by_category": Callable(self, "get_tool_definitions_by_category"),
+			"get_entries_by_category": Callable(self, "get_entries_by_category"),
 			"get_ordered_categories": Callable(self, "get_ordered_categories"),
 			"reset_state": Callable(self, "reset_state"),
 			"set_disabled_tools": Callable(self, "set_disabled_tools"),
@@ -65,6 +73,9 @@ class FakeLifecycleContext:
 			"refresh_runtime_context": Callable(self, "refresh_runtime_context"),
 			"get_tool_definitions": Callable(self, "get_tool_definitions"),
 			"get_exposed_tool_definitions": Callable(self, "get_exposed_tool_definitions"),
+			"is_category_visible": Callable(self, "is_category_visible"),
+			"is_tool_enabled": Callable(self, "is_tool_enabled"),
+			"is_exposed_tool_definition": Callable(self, "is_exposed_tool_definition"),
 			"get_tool_load_error_count": Callable(self, "get_tool_load_error_count")
 		}
 
@@ -77,6 +88,9 @@ class FakeLifecycleContext:
 
 	func get_tool_definitions_by_category() -> Dictionary:
 		return definitions_by_category
+
+	func get_entries_by_category() -> Dictionary:
+		return entries_by_category
 
 	func get_ordered_categories() -> Array:
 		return ordered_categories
@@ -104,7 +118,11 @@ class FakeLifecycleContext:
 
 	func ensure_tool_definitions(category: String) -> Array:
 		ensured_definitions.append(category)
-		return [{"name": "%s_probe" % category}]
+		var defs: Array = definitions_by_category.get(category, [])
+		if defs.is_empty():
+			defs = [{"name": "%s_probe" % category}]
+			definitions_by_category[category] = defs
+		return defs
 
 	func category_has_enabled_tools(category: String) -> bool:
 		return not bool(disabled_categories.get(category, false))
@@ -155,10 +173,21 @@ class FakeLifecycleContext:
 		runtime_refresh_count += 1
 
 	func get_tool_definitions() -> Array:
+		tool_definition_query_count += 1
 		return tool_definitions.duplicate(true)
 
 	func get_exposed_tool_definitions() -> Array:
+		exposed_definition_query_count += 1
 		return exposed_definitions.duplicate(true)
+
+	func is_category_visible(category: String) -> bool:
+		return not bool(hidden_categories.get(category, false))
+
+	func is_tool_enabled(tool_name: String) -> bool:
+		return not bool(disabled_tool_names.get(tool_name, false))
+
+	func is_exposed_tool_definition(tool_def: Dictionary) -> bool:
+		return bool(exposed_tool_names.get(str(tool_def.get("name", "")), false))
 
 	func get_tool_load_error_count() -> int:
 		return tool_load_error_count
@@ -169,9 +198,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var init_context := FakeLifecycleContext.new()
 	init_context.ordered_categories = ["system", "project", "debug"]
+	init_context.definitions_by_category = {
+		"system": [
+			{"name": "visible_probe"},
+			{"name": "disabled_probe"},
+			{"name": "legacy_removed"}
+		],
+		"project": [{"name": "hidden_probe"}],
+		"debug": [{"name": "internal_probe"}]
+	}
+	init_context.entries_by_category = {
+		"system": {"domain_key": "core", "path": "res://system.gd", "source": "builtin"},
+		"project": {"domain_key": "core", "path": "res://project.gd", "source": "builtin"},
+		"debug": {"domain_key": "core", "path": "res://debug.gd", "source": "builtin"}
+	}
 	init_context.disabled_categories = {"debug": true}
-	init_context.tool_definitions = [{"name": "system_probe"}, {"name": "project_probe"}]
-	init_context.exposed_definitions = [{"name": "system_probe"}]
+	init_context.hidden_categories = {"project": true}
+	init_context.disabled_tool_names = {"system_disabled_probe": true}
+	init_context.exposed_tool_names = {
+		"system_visible_probe": true,
+		"system_disabled_probe": true
+	}
 	init_context.tool_load_error_count = 2
 	var init_summary: Dictionary = service.initialize(["debug_probe"], true, init_context.build())
 	if init_context.forced_values.size() != 2 or init_context.forced_values[0] != true or init_context.forced_values[1] != false:
@@ -190,8 +237,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Lifecycle service should publish initialize reload status.")
 	if init_context.sync_actions != ["initialize"] or init_context.runtime_refresh_count != 1:
 		return _failure("Lifecycle service should sync load incidents and refresh runtime context after initialize.")
-	if int(init_summary.get("tool_count", 0)) != 2 or int(init_summary.get("exposed_tool_count", 0)) != 1 or int(init_summary.get("category_count", 0)) != 3 or int(init_summary.get("tool_load_error_count", 0)) != 2:
-		return _failure("Lifecycle service should return loader summary counts from callbacks.")
+	if int(init_summary.get("tool_count", 0)) != 4 or int(init_summary.get("exposed_tool_count", 0)) != 1 or int(init_summary.get("category_count", 0)) != 3 or int(init_summary.get("tool_load_error_count", 0)) != 2:
+		return _failure("Lifecycle service should return initialization summary counts from scanned definitions.")
+	if init_context.tool_definition_query_count != 0 or init_context.exposed_definition_query_count != 0:
+		return _failure("Lifecycle service initialize summary should not call heavy public definition query callbacks.")
 	if float(init_context.performance.get("startup_ms", 0.0)) <= 0.0:
 		return _failure("Lifecycle service should update startup performance metrics.")
 

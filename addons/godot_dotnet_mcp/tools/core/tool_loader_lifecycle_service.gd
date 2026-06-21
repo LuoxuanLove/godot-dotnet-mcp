@@ -16,6 +16,7 @@ func initialize(disabled_tools: Array, force_reload_scripts: bool, context: Dict
 	for category in _ordered_categories(context):
 		_call_array(context.get("ensure_tool_definitions", Callable()), [str(category)])
 	_performance(context)["definition_scan_ms"] = _elapsed_ms(definition_started)
+	var summary_counts := _build_initialization_summary_counts(context)
 
 	var preload_started := Time.get_ticks_usec()
 	if preload_enabled:
@@ -32,8 +33,8 @@ func initialize(disabled_tools: Array, force_reload_scripts: bool, context: Dict
 	_call_void(context.get("set_force_reload_script_load", Callable()), [false])
 
 	return {
-		"tool_count": _call_array(context.get("get_tool_definitions", Callable())).size(),
-		"exposed_tool_count": _call_array(context.get("get_exposed_tool_definitions", Callable())).size(),
+		"tool_count": int(summary_counts.get("tool_count", 0)),
+		"exposed_tool_count": int(summary_counts.get("exposed_tool_count", 0)),
 		"category_count": _ordered_categories(context).size(),
 		"tool_load_error_count": _call_int(context.get("get_tool_load_error_count", Callable()), 0)
 	}
@@ -91,6 +92,50 @@ func _make_reload_status(context: Dictionary, action: String) -> Dictionary:
 		if result is Dictionary:
 			return (result as Dictionary).duplicate(true)
 	return {"action": action}
+
+
+func _build_initialization_summary_counts(context: Dictionary) -> Dictionary:
+	var definitions_by_category: Dictionary = _tool_definitions_by_category(context)
+	var is_category_visible: Callable = context.get("is_category_visible", Callable())
+	var is_tool_enabled: Callable = context.get("is_tool_enabled", Callable())
+	var is_exposed_tool_definition: Callable = context.get("is_exposed_tool_definition", Callable())
+	var tool_count := 0
+	var exposed_tool_count := 0
+	for category in _ordered_categories(context):
+		var category_name := str(category)
+		if not _call_bool(is_category_visible, [category_name], true):
+			continue
+		var category_definitions: Array = _array(definitions_by_category.get(category_name, []))
+		for tool_def in category_definitions:
+			if not (tool_def is Dictionary):
+				continue
+			var decorated_def := _decorate_summary_tool_definition(context, category_name, tool_def as Dictionary)
+			tool_count += 1
+			if not _call_bool(is_exposed_tool_definition, [decorated_def], false):
+				continue
+			if not _call_bool(is_tool_enabled, [str(decorated_def.get("name", ""))], true):
+				continue
+			exposed_tool_count += 1
+	return {
+		"tool_count": tool_count,
+		"exposed_tool_count": exposed_tool_count
+	}
+
+
+func _decorate_summary_tool_definition(context: Dictionary, category: String, tool_def: Dictionary) -> Dictionary:
+	var full_name := "%s_%s" % [category, str(tool_def.get("name", ""))]
+	var entries: Dictionary = _dictionary_ref(context.get("entries_by_category", {}))
+	var entry: Dictionary = _dictionary_ref(entries.get(category, {}))
+	var decorated := tool_def.duplicate(true)
+	decorated["name"] = full_name
+	decorated["category"] = category
+	decorated["full_name"] = full_name
+	decorated["enabled"] = _call_bool(context.get("is_tool_enabled", Callable()), [full_name], true)
+	decorated["source"] = str(decorated.get("source", str(entry.get("source", "builtin"))))
+	decorated["domain_script_path"] = str(entry.get("path", ""))
+	decorated["script_path"] = str(decorated.get("script_path", str(entry.get("path", ""))))
+	decorated["domain_key"] = str(entry.get("domain_key", "other"))
+	return decorated
 
 
 func _call_status(context: Dictionary, status: Dictionary) -> Dictionary:

@@ -118,10 +118,12 @@ func build_runtime_state_context(callbacks: Dictionary) -> Dictionary:
 func build_lifecycle_context(callbacks: Dictionary) -> Dictionary:
 	var context := {
 		"ordered_categories": ordered_categories,
+		"entries_by_category": entries_by_category,
 		"runtime_by_category": runtime_by_category,
 		"tool_definitions_by_category": tool_definitions_by_category,
 		"performance": performance,
 		"set_force_reload_script_load": Callable(self, "set_force_reload_script_load"),
+		"get_entries_by_category": Callable(self, "get_entries_by_category"),
 		"get_runtime_by_category": Callable(self, "get_runtime_by_category"),
 		"get_tool_definitions_by_category": Callable(self, "get_tool_definitions_by_category"),
 		"get_ordered_categories": Callable(self, "get_ordered_categories")
