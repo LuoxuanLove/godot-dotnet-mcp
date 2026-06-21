@@ -2720,15 +2720,8 @@ func _record_runtime_bridge_stale_instance(phase: String, operation_id: String) 
 
 
 func _load_packed_scene(path: String) -> PackedScene:
-	_reload_script(MCP_DOCK_SCRIPT_PATH)
 	var scene = ResourceLoader.load(path, "PackedScene", ResourceLoader.CACHE_MODE_REPLACE_DEEP)
 	return scene as PackedScene
-
-
-func _reload_script(path: String) -> void:
-	var script = ResourceLoader.load(path, "Script", ResourceLoader.CACHE_MODE_REPLACE)
-	if script is Script:
-		(script as Script).reload(false)
 
 
 func _recreate_dock() -> void:

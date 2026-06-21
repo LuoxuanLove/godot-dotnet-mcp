@@ -34,6 +34,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_probe_plugin = probe_script.new(_probe_base_control)
 	_probe_plugin._enter_tree()
 	_probe_entered = true
+	var plugin_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin.gd")
+	if plugin_source.find("func _reload_script") != -1 or plugin_source.find(".reload(false)") != -1:
+		return _return_failure(tree, "plugin.gd should not force script reloads while creating the Dock; hot reload belongs to explicit runtime reload paths.")
 	for service_name in ["_state", "_settings_store", "_server_controller", "_tool_catalog", "_config_service", "_config_tab_action_service", "_dock_model_service", "_plugin_client_config_state_service", "_user_tool_service", "_user_tool_watch_service"]:
 		if _probe_plugin.get(service_name) == null:
 			return _return_failure(tree, "plugin.gd should initialize required service %s during _enter_tree()." % service_name)

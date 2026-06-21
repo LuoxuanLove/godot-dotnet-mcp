@@ -68,7 +68,7 @@ Target version: 2.0.0.
 - Fixed C# bridge patch/write actions to revalidate project-root and reparse-point boundaries before and after writes.
 - Fixed clean Asset Library validation so exported addon installs prove isolated Roslyn runtime availability, exclude plugin bridge/Roslyn source files, and reject dirty addon/archive inputs.
 - Fixed PR policy validation so BOM-prefixed titles/headings are recognized and policy/version workflows run on merge queue events.
-- Fixed startup stability for upgraded addon copies by preventing split tool executors from registering legacy global `MCP*Tools` class names and by removing Dock script reloads that could emit `Cannot reload script while instances exist`.
+- Fixed startup stability for upgraded addon copies by preventing split tool executors from registering legacy global `MCP*Tools` class names and by removing Dock scene script reloads during Dock creation that could stall the editor or emit `Cannot reload script while instances exist`.
 - Fixed Dock update sync so branch/tag archive installs mirror the addon directory with the existing safe preserve list, removing stale plugin files such as old root tool monolith scripts instead of only overwriting files.
 - Fixed upgraded addon self-update recovery so new plugin instances remove known stale root tool monolith leftovers left by older overwrite-only updaters, and aligned Dock and MCP plugin update requests on the same archive-sync entry path while preserving `.import` and `dotnet_bridge/obj` cache files.
 - Fixed plugin update sync feedback so the Settings tab shows staged progress while resolving, downloading, writing, and refreshing plugin files instead of appearing idle during longer sync operations.
