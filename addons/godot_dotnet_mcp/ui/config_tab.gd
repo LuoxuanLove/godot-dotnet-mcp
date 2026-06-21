@@ -484,24 +484,21 @@ func _make_client_cards_signature(clients: Array, supports_write: bool, localiza
 		"config_client_action_open_config_file",
 		"config_client_action_open_project"
 	]
-	var localization_signature := {}
+	var parts: Array[String] = [
+		"scale=%s" % _signature_scalar(str(_current_scale)),
+		"supports_write=%s" % ("1" if supports_write else "0")
+	]
 	for key in localized_keys:
-		localization_signature[key] = localization.get_text(key)
-	var client_signatures: Array = []
+		parts.append("loc:%s=%s" % [_signature_scalar(key), _signature_scalar(localization.get_text(key))])
 	for client_variant in clients:
 		var client := client_variant as Dictionary
 		if client == null:
 			continue
-		client_signatures.append(_make_client_card_signature(client, localization))
-	return JSON.stringify({
-		"scale": _current_scale,
-		"supports_write": supports_write,
-		"localization": localization_signature,
-		"clients": client_signatures
-	})
+		parts.append("client:%s" % _make_client_card_signature(client, localization))
+	return "\n".join(parts)
 
 
-func _make_client_card_signature(client: Dictionary, localization) -> Dictionary:
+func _make_client_card_signature(client: Dictionary, localization) -> String:
 	var key_fields := [
 		"id",
 		"name_key",
@@ -538,9 +535,9 @@ func _make_client_card_signature(client: Dictionary, localization) -> Dictionary
 		"remove_supported",
 		"remove_enabled"
 	]
-	var signature := {}
+	var parts: Array[String] = []
 	for field in key_fields:
-		signature[field] = client.get(field)
+		parts.append("%s=%s" % [_signature_scalar(field), _signature_value(client.get(field))])
 	var label_keys := [
 		str(client.get("name_key", "")),
 		str(client.get("summary_key", "")),
@@ -548,12 +545,24 @@ func _make_client_card_signature(client: Dictionary, localization) -> Dictionary
 		str(client.get("launch_action_label_key", "")),
 		str(client.get("path_pick_action_label_key", ""))
 	]
-	var localized_labels := {}
 	for key in label_keys:
 		if not key.is_empty():
-			localized_labels[key] = localization.get_text(key)
-	signature["localized_labels"] = localized_labels
-	return signature
+			parts.append("label:%s=%s" % [_signature_scalar(key), _signature_scalar(localization.get_text(key))])
+	return "|".join(parts)
+
+
+func _signature_value(value) -> String:
+	if value == null:
+		return "n:"
+	if value is bool:
+		return "b:%s" % ("1" if bool(value) else "0")
+	if value is int or value is float:
+		return "num:%s" % str(value)
+	return "s:%s" % _signature_scalar(str(value))
+
+
+func _signature_scalar(value: String) -> String:
+	return "%s:%s" % [value.length(), value]
 
 
 func _create_info_block(label_text: String, value_text: String) -> Control:
