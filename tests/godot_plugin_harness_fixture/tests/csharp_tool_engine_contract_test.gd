@@ -34,6 +34,19 @@ class ScriptToolBridge extends RefCounted:
 			_:
 				return error("Unsupported bridge call: %s" % tool_name)
 
+	func call_atomic_async(tool_name: String, args: Dictionary) -> Dictionary:
+		match tool_name:
+			"script_inspect":
+				return await _executor.execute_async("inspect", args)
+			"script_symbols":
+				return await _executor.execute_async("symbols", args)
+			"script_exports":
+				return await _executor.execute_async("exports", args)
+			"script_edit_cs":
+				return await _executor.execute_async("edit_cs", args)
+			_:
+				return call_atomic(tool_name, args)
+
 	func extract_data(result: Dictionary) -> Dictionary:
 		var data = result.get("data", {})
 		return (data as Dictionary).duplicate(true) if data is Dictionary else {}
@@ -75,7 +88,7 @@ func _ready(): pass""")
 
 	# --- C# tools that MUST return engine=roslyn, mode=syntax ---
 
-	var inspect_result: Dictionary = _executor.execute("inspect", {"path": cs_path})
+	var inspect_result: Dictionary = await _executor.execute_async("inspect", {"path": cs_path})
 	if not bool(inspect_result.get("success", false)):
 		return _failure("inspect(C#) should succeed")
 	var inspect_data: Dictionary = inspect_result.get("data", {})
@@ -84,7 +97,7 @@ func _ready(): pass""")
 	if str(inspect_data.get("mode", "")) != "syntax":
 		return _failure("inspect(C#) MUST return mode='syntax', got '%s'" % str(inspect_data.get("mode", "")))
 
-	var symbols_result: Dictionary = _executor.execute("symbols", {"path": cs_path})
+	var symbols_result: Dictionary = await _executor.execute_async("symbols", {"path": cs_path})
 	if not bool(symbols_result.get("success", false)):
 		return _failure("symbols(C#) should succeed")
 	var symbols_data: Dictionary = symbols_result.get("data", {})
@@ -93,7 +106,7 @@ func _ready(): pass""")
 	if str(symbols_data.get("mode", "")) != "syntax":
 		return _failure("symbols(C#) MUST return mode='syntax', got '%s'" % str(symbols_data.get("mode", "")))
 
-	var exports_result: Dictionary = _executor.execute("exports", {"path": cs_path})
+	var exports_result: Dictionary = await _executor.execute_async("exports", {"path": cs_path})
 	if not bool(exports_result.get("success", false)):
 		return _failure("exports(C#) should succeed")
 	var exports_data: Dictionary = exports_result.get("data", {})
@@ -102,7 +115,7 @@ func _ready(): pass""")
 	if str(exports_data.get("mode", "")) != "syntax":
 		return _failure("exports(C#) MUST return mode='syntax', got '%s'" % str(exports_data.get("mode", "")))
 
-	var edit_cs_result: Dictionary = _executor.execute("edit_cs", {
+	var edit_cs_result: Dictionary = await _executor.execute_async("edit_cs", {
 		"action": "upsert_method",
 		"path": cs_path,
 		"type_name": "TestEngine",
@@ -121,7 +134,7 @@ func _ready(): pass""")
 	if str(FileAccess.get_file_as_string(cs_path)).find("NewMethod") == -1:
 		return _failure("edit_cs(C#) should write the upserted method to disk.")
 
-	var replace_method_body: Dictionary = _executor.execute("edit_cs", {
+	var replace_method_body: Dictionary = await _executor.execute_async("edit_cs", {
 		"action": "replace_method_body",
 		"path": cs_path,
 		"type_name": "TestEngine",
@@ -137,7 +150,7 @@ func _ready(): pass""")
 	if str(FileAccess.get_file_as_string(cs_path)).find("return 2;") == -1:
 		return _failure("replace_method_body(C#) should persist the replaced method body.")
 
-	var upsert_field: Dictionary = _executor.execute("edit_cs", {
+	var upsert_field: Dictionary = await _executor.execute_async("edit_cs", {
 		"action": "upsert_field",
 		"path": cs_path,
 		"type_name": "TestEngine",
@@ -152,7 +165,7 @@ func _ready(): pass""")
 	if str(FileAccess.get_file_as_string(cs_path)).find("Count") == -1:
 		return _failure("upsert_field(C#) should persist the new field.")
 
-	var delete_field: Dictionary = _executor.execute("edit_cs", {
+	var delete_field: Dictionary = await _executor.execute_async("edit_cs", {
 		"action": "delete_member",
 		"path": cs_path,
 		"type_name": "TestEngine",
@@ -164,14 +177,14 @@ func _ready(): pass""")
 	if str(FileAccess.get_file_as_string(cs_path)).find("Count") != -1:
 		return _failure("delete_member(C#) should remove the field from disk.")
 
-	var invalid_edit: Dictionary = _executor.execute("edit_cs", {
+	var invalid_edit: Dictionary = await _executor.execute_async("edit_cs", {
 		"action": "bogus_action",
 		"path": cs_path
 	})
 	if bool(invalid_edit.get("success", true)):
 		return _failure("edit_cs(C#) should reject unsupported actions.")
 
-	var sys_analyze_cs: Dictionary = _sys_impl.execute("script_analyze", {
+	var sys_analyze_cs: Dictionary = await _sys_impl.execute_async("script_analyze", {
 		"script": cs_path,
 		"include_diagnostics": false
 	})
