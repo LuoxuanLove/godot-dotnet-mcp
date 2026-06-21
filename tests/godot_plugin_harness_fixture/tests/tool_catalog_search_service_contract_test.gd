@@ -342,6 +342,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not bool(exposed_search.get("success", false)):
 		return _failure("Exposed catalog search should succeed.")
 	var exposed_data: Dictionary = exposed_search.get("data", {})
+	var exposed_loader_status: Dictionary = exposed_data.get("tool_loader_status", {})
+	if str(exposed_loader_status.get("status", "")) != "ready":
+		return _failure("Catalog search should preserve loader status even when requesting only the legacy presentation view.")
 	var exposed_matches: Array = exposed_data.get("matches", [])
 	if exposed_matches.size() != 1 or str((exposed_matches[0] as Dictionary).get("name", "")) != "system_runtime_step":
 		return _failure("Default search should match exposed tools by action/description.")

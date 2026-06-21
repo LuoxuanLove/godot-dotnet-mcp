@@ -37,6 +37,9 @@ static func search(loader, args: Dictionary) -> Dictionary:
 
 	var catalog := _build_catalog(snapshot, visibility == "visible", include_schema)
 	var catalog_filter_index := _build_filter_index(catalog)
+	var loader_status: Dictionary = snapshot.get("tool_loader_status", {})
+	if loader_status.is_empty():
+		loader_status = _get_loader_status(loader)
 	var matches: Array[Dictionary] = []
 	var total_matched := 0
 	for tool in catalog:
@@ -86,10 +89,18 @@ static func search(loader, args: Dictionary) -> Dictionary:
 				"suggested_next_queries": diagnostics.get("suggested_next_queries", [])
 			},
 			"matches": matches,
-			"tool_loader_status": snapshot.get("tool_loader_status", {})
+			"tool_loader_status": loader_status
 		},
 		"message": "Tool catalog search complete"
 	}
+
+
+static func _get_loader_status(loader) -> Dictionary:
+	if loader != null and loader.has_method("get_tool_loader_status"):
+		var status = loader.get_tool_loader_status()
+		if status is Dictionary:
+			return (status as Dictionary).duplicate(true)
+	return {}
 
 
 static func _build_catalog(snapshot: Dictionary, include_internal: bool, include_schema: bool) -> Array[Dictionary]:
