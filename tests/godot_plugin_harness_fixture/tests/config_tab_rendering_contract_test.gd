@@ -209,6 +209,16 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if not rebuilt_copy_button.visible:
 		return _failure("Config tab content copy button should preserve hover visibility across a rendered model rebuild.")
 
+	var install_message_model: Dictionary = base_model.duplicate(true)
+	install_message_model["desktop_clients"][0]["install_message_text"] = "Config installed by the MCP plugin."
+	_instance.apply_model(install_message_model)
+	await tree.process_frame
+	await tree.process_frame
+	var install_message_desktop_clients = _instance.get_node("Scroll/Margin/Content/DesktopCard/DesktopCardMargin/DesktopCardBody/DesktopClients") as VBoxContainer
+	var install_message_labels = install_message_desktop_clients.get_child(0).find_children("*", "Label", true, false)
+	if _find_label_containing(install_message_labels, "Config installed by the MCP plugin.") == null:
+		return _failure("Config tab client-card signature should include install_message_text so visible install messages refresh.")
+
 	var layout_model: Dictionary = base_model.duplicate(true)
 	layout_model["desktop_clients"] = [
 		{
