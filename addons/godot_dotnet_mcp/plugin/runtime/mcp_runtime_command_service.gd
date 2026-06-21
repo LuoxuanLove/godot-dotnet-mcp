@@ -308,6 +308,12 @@ func _apply_mouse_input_async(input_entry: Dictionary, target: String, op: Strin
 
 
 func _run_step_async(session_id: int, args: Dictionary) -> Dictionary:
+	var wait_frames := maxi(int(args.get("wait_frames", 1)), 0)
+	if wait_frames > MAX_STEP_WAIT_FRAMES:
+		return _failure("invalid_argument", "Runtime step wait_frames must be %d or less." % MAX_STEP_WAIT_FRAMES, {
+			"max_wait_frames": MAX_STEP_WAIT_FRAMES
+		})
+
 	var inputs = args.get("inputs", [])
 	if inputs != null and not (inputs is Array):
 		return _failure("invalid_argument", "Runtime step inputs must be an array when provided.")
@@ -320,11 +326,6 @@ func _run_step_async(session_id: int, args: Dictionary) -> Dictionary:
 		if input_data is Dictionary:
 			applied_inputs = (input_data as Dictionary).get("inputs", []).duplicate(true)
 
-	var wait_frames := maxi(int(args.get("wait_frames", 1)), 0)
-	if wait_frames > MAX_STEP_WAIT_FRAMES:
-		return _failure("invalid_argument", "Runtime step wait_frames must be %d or less." % MAX_STEP_WAIT_FRAMES, {
-			"max_wait_frames": MAX_STEP_WAIT_FRAMES
-		})
 	if wait_frames > 0:
 		await _await_process_frames(wait_frames)
 

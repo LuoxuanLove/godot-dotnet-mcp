@@ -171,12 +171,15 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Runtime capture interval_frames rejection should expose the maximum budget.")
 	var too_many_step_wait_frames: Dictionary = await _service.execute_action_async(5, "step", {
 		"wait_frames": 301,
-		"capture": false
+		"capture": false,
+		"inputs": [{"kind": "key", "target": "A", "op": "press"}]
 	})
 	if str(too_many_step_wait_frames.get("error", "")) != "invalid_argument":
 		return _failure("Runtime step should reject wait_frames values above the bounded automation budget.")
 	if int((too_many_step_wait_frames.get("data", {}) as Dictionary).get("max_wait_frames", 0)) != 300:
 		return _failure("Runtime step wait_frames rejection should expose the maximum budget.")
+	if _input_events.size() != 3:
+		return _failure("Runtime step should reject wait_frames budget violations before dispatching input side effects.")
 	var too_many_inputs := []
 	for index in range(65):
 		too_many_inputs.append({"kind": "key", "target": "A", "op": "press"})
