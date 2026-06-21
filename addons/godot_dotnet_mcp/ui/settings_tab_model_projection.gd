@@ -230,7 +230,8 @@ func _is_update_sync_enabled(model: Dictionary, update_settings: Dictionary) -> 
 		return false
 	if str(model.get("update_refs_state", "idle")) != "success" or str(model.get("update_refs_refresh_state", "idle")) == "loading":
 		return false
-	if str(model.get("update_compare_state", "idle")) != "success" or str(model.get("update_compare_refresh_state", "idle")) == "loading":
+	var compare_refresh_state := str(model.get("update_compare_refresh_state", "idle"))
+	if str(model.get("update_compare_state", "idle")) != "success" or compare_refresh_state == "loading" or compare_refresh_state == "error" or compare_refresh_state == "unavailable":
 		return false
 	var source := str(update_settings.get("source", DEFAULT_UPDATE_SOURCE))
 	match source:
