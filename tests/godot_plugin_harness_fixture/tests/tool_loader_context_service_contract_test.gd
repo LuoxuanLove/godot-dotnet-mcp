@@ -271,12 +271,17 @@ func _verify_loader_wiring_contexts(store) -> Dictionary:
 		"update_reload_status",
 		"sync_load_error_incidents",
 		"refresh_runtime_context",
-		"get_tool_definitions",
-		"get_exposed_tool_definitions",
+		"is_category_visible",
+		"is_tool_enabled",
+		"is_exposed_tool_definition",
 		"get_tool_load_error_count"
 	]:
 		if not (lifecycle_context.get(key, Callable()) is Callable) or not (lifecycle_context[key] as Callable).is_valid():
 			return _failure("Loader lifecycle context should expose callable: %s" % key)
+	for heavy_query_key in ["get_tool_definitions", "get_exposed_tool_definitions"]:
+		var heavy_query_value = lifecycle_context.get(heavy_query_key, Callable())
+		if (heavy_query_value is Callable) and (heavy_query_value as Callable).is_valid():
+			return _failure("Loader lifecycle context should not expose heavy public query callback: %s" % heavy_query_key)
 
 	if lifecycle_context.get("runtime_by_category", {}) != store.runtime_by_category:
 		return _failure("Loader lifecycle context should retain shared runtime state references.")
