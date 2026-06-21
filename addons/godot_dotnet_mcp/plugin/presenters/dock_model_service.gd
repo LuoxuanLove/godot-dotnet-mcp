@@ -328,18 +328,18 @@ func _build_tool_catalog_model_signature(settings: Dictionary, presentation_view
 	for view in presentation_views:
 		views.append(view)
 	views.sort()
-	return JSON.stringify({
-		"catalog_revision": int(loader_status.get("catalog_revision", 0)),
-		"initialized": bool(loader_status.get("initialized", false)),
-		"status": str(loader_status.get("status", "")),
-		"tool_count": int(loader_status.get("tool_count", 0)),
-		"exposed_tool_count": int(loader_status.get("exposed_tool_count", 0)),
-		"category_count": int(loader_status.get("category_count", 0)),
-		"tool_load_error_count": int(loader_status.get("tool_load_error_count", 0)),
-		"disabled_tools": disabled_tools,
-		"presentation_views": views,
-		"show_user_tools": bool(settings.get("show_user_tools", true))
-	})
+	return _signature_join([
+		"catalog_revision", int(loader_status.get("catalog_revision", 0)),
+		"initialized", bool(loader_status.get("initialized", false)),
+		"status", str(loader_status.get("status", "")),
+		"tool_count", int(loader_status.get("tool_count", 0)),
+		"exposed_tool_count", int(loader_status.get("exposed_tool_count", 0)),
+		"category_count", int(loader_status.get("category_count", 0)),
+		"tool_load_error_count", int(loader_status.get("tool_load_error_count", 0)),
+		"disabled_tools", disabled_tools,
+		"presentation_views", views,
+		"show_user_tools", bool(settings.get("show_user_tools", true))
+	])
 
 
 func _resolve_tool_presentation_views() -> Array[String]:
@@ -485,32 +485,36 @@ func _build_tool_catalog_signature(loader, tools_by_category: Dictionary, settin
 		var raw_status = loader.get_tool_loader_status()
 		if raw_status is Dictionary:
 			loader_status = raw_status
-	var tool_entries := []
+	var tool_entries: Array[String] = []
 	for category in tools_by_category.keys():
 		var tools = tools_by_category.get(category, [])
 		if not (tools is Array):
-			tool_entries.append(JSON.stringify([str(category), "invalid"]))
+			tool_entries.append(_signature_join([str(category), "invalid"]))
 			continue
 		for tool in tools:
 			tool_entries.append(_build_tool_signature_entry(str(category), tool))
 	tool_entries.sort()
-	return JSON.stringify({
-		"tools": tool_entries,
-		"disabled": settings.get("disabled_tools", []),
-		"loader_initialized": bool(loader_status.get("initialized", false)),
-		"loader_status": str(loader_status.get("status", "")),
-		"tool_count": int(loader_status.get("tool_count", 0)),
-		"exposed_tool_count": int(loader_status.get("exposed_tool_count", 0)),
-		"category_count": int(loader_status.get("category_count", 0)),
-		"tool_load_error_count": int(loader_status.get("tool_load_error_count", 0))
-	})
+	var disabled_tools: Array[String] = []
+	for tool_name in settings.get("disabled_tools", []):
+		disabled_tools.append(str(tool_name))
+	disabled_tools.sort()
+	return _signature_join([
+		"tools", tool_entries,
+		"disabled", disabled_tools,
+		"loader_initialized", bool(loader_status.get("initialized", false)),
+		"loader_status", str(loader_status.get("status", "")),
+		"tool_count", int(loader_status.get("tool_count", 0)),
+		"exposed_tool_count", int(loader_status.get("exposed_tool_count", 0)),
+		"category_count", int(loader_status.get("category_count", 0)),
+		"tool_load_error_count", int(loader_status.get("tool_load_error_count", 0))
+	])
 
 
 func _build_tool_signature_entry(category: String, tool) -> String:
 	if not (tool is Dictionary):
-		return JSON.stringify([category, "invalid"])
+		return _signature_join([category, "invalid"])
 	var tool_def := tool as Dictionary
-	return JSON.stringify([
+	return _signature_join([
 		category,
 		str(tool_def.get("name", "")),
 		str(tool_def.get("full_name", tool_def.get("fullName", ""))),
@@ -527,10 +531,53 @@ func _build_tool_signature_entry(category: String, tool) -> String:
 
 
 func _build_mcp_projection_signature() -> String:
-	return JSON.stringify({
-		"protocol_catalog": "resources_prompts_list",
-		"language": str(_get_settings().get("language", ""))
-	})
+	return _signature_join([
+		"protocol_catalog", "resources_prompts_list",
+		"language", str(_get_settings().get("language", ""))
+	])
+
+
+func _signature_join(values: Array) -> String:
+	var parts: Array[String] = []
+	for value in values:
+		parts.append(_signature_value(value))
+	return "|".join(parts)
+
+
+func _signature_value(value) -> String:
+	match typeof(value):
+		TYPE_DICTIONARY:
+			var dict := value as Dictionary
+			var keys: Array[String] = []
+			var values_by_key := {}
+			for key in dict.keys():
+				var key_text := str(key)
+				keys.append(key_text)
+				values_by_key[key_text] = dict[key]
+			keys.sort()
+			var entries: Array[String] = []
+			for key_text in keys:
+				entries.append("%s=%s" % [_signature_scalar(key_text), _signature_value(values_by_key.get(key_text))])
+			return "d{%s}" % ",".join(entries)
+		TYPE_ARRAY:
+			var entries: Array[String] = []
+			for item in value as Array:
+				entries.append(_signature_value(item))
+			return "a[%s]" % ",".join(entries)
+		TYPE_BOOL:
+			return "b:%s" % ("1" if bool(value) else "0")
+		TYPE_INT:
+			return "i:%s" % str(int(value))
+		TYPE_FLOAT:
+			return "f:%s" % str(float(value))
+		TYPE_NIL:
+			return "n:"
+		_:
+			return "s:%s" % _signature_scalar(str(value))
+
+
+func _signature_scalar(value: String) -> String:
+	return "%d:%s" % [value.length(), value]
 
 
 func _filter_visible_tools_by_category(all_tools_by_category: Dictionary) -> Dictionary:
