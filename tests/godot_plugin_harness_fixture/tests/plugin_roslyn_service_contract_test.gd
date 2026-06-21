@@ -59,6 +59,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var runtime_guard := _assert_isolated_runtime_process_has_timeout_guards()
 	if not bool(runtime_guard.get("success", false)):
 		return runtime_guard
+	var isolation_guard := _assert_production_runtime_does_not_load_in_process_facade()
+	if not bool(isolation_guard.get("success", false)):
+		return isolation_guard
 
 	_service = PluginRoslynServiceScript.new()
 	_fake = FakeRoslynFacade.new()
@@ -240,6 +243,27 @@ func _assert_isolated_runtime_process_has_timeout_guards() -> Dictionary:
 	if service_source.find("DirAccess.remove_absolute(ProjectSettings.globalize_path(request_path))") != -1:
 		return _failure("PluginRoslynService should cleanup runtime request files through the shared cleanup helper.")
 
+	return {"success": true}
+
+
+func _assert_production_runtime_does_not_load_in_process_facade() -> Dictionary:
+	var service_source := _read_text(SERVICE_SOURCE_PATH)
+	if service_source.is_empty():
+		return _failure("PluginRoslynService source should be readable for isolation guard checks.")
+	for blocked_text in [
+		"ResourceLoader.load(FACADE_SCRIPT_PATH",
+		"ClassDB.class_exists(\"PluginRoslynRuntimeFacade\")",
+		"ClassDB.instantiate(\"PluginRoslynRuntimeFacade\")",
+		"_load_mode = LOAD_MODE_RUNTIME\n",
+		"const LOAD_MODE_RUNTIME :=",
+		"\"runtime_csharp\""
+	]:
+		if service_source.find(blocked_text) != -1:
+			return _failure("PluginRoslynService production path must not auto-load in-process Roslyn facade via '%s'." % blocked_text)
+	if service_source.find("RUNTIME_BRIDGE_DLL_PATH") == -1:
+		return _failure("PluginRoslynService should keep the isolated runtime bridge as the production entrypoint.")
+	if service_source.find("PluginRoslynRuntimeFacade in-process runtime is disabled for production installs") == -1:
+		return _failure("PluginRoslynService should document why production uses the isolated runtime process.")
 	return {"success": true}
 
 

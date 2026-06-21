@@ -1,10 +1,8 @@
 @tool
 extends Node
 
-const FACADE_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/roslyn/PluginRoslynRuntimeFacade.cs"
 const RUNTIME_MANIFEST_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/roslyn_runtime/roslyn-runtime-manifest.json"
 const RUNTIME_BRIDGE_DLL_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/roslyn_runtime/GodotDotnetMcp.PluginBridge.dll"
-const LOAD_MODE_RUNTIME := "runtime_csharp"
 const LOAD_MODE_RUNTIME_PROCESS := "isolated_runtime_process"
 const LOAD_MODE_PLACEHOLDER := "gdscript_placeholder"
 const LOAD_MODE_TESTING := "testing_double"
@@ -36,7 +34,7 @@ class PlaceholderRoslynFacade extends RefCounted:
 		return {
 			"success": true,
 			"data": _metadata,
-			"message": "Plugin-internal Roslyn skeleton is present, but the runtime C# facade is not active in this environment."
+			"message": "Isolated Roslyn runtime is not active in this environment."
 		}
 
 	func parse_file(script_path: String, _source_text: String = "") -> Dictionary:
@@ -351,38 +349,9 @@ func _ensure_facade_async() -> void:
 
 
 func _instantiate_facade():
-	if not FileAccess.file_exists(FACADE_SCRIPT_PATH):
-		var missing_source_process_facade = _instantiate_runtime_process_facade("PluginRoslynRuntimeFacade runtime source is not present in this installation")
-		if missing_source_process_facade != null:
-			return missing_source_process_facade
-		return PlaceholderRoslynFacade.new(_base_metadata(true), _load_error)
-	var script = ResourceLoader.load(FACADE_SCRIPT_PATH, "", ResourceLoader.CACHE_MODE_IGNORE)
-	if script == null or not (script is Script):
-		var process_facade = _instantiate_runtime_process_facade("PluginRoslynRuntimeFacade runtime source could not be loaded from res://")
-		if process_facade != null:
-			return process_facade
-		return PlaceholderRoslynFacade.new(_base_metadata(true), _load_error)
-	var script_resource := script as Script
-	if script_resource.can_instantiate():
-		var class_instance = script_resource.new()
-		if class_instance != null:
-			_load_mode = LOAD_MODE_RUNTIME
-			_load_error = ""
-			return class_instance
-	if ClassDB.class_exists("PluginRoslynRuntimeFacade"):
-		var class_instance = ClassDB.instantiate("PluginRoslynRuntimeFacade")
-		if class_instance != null:
-			_load_mode = LOAD_MODE_RUNTIME
-			_load_error = ""
-			return class_instance
-	if not script_resource.can_instantiate():
-		var process_facade = _instantiate_runtime_process_facade("PluginRoslynRuntimeFacade runtime source is present but not instantiable in the current Godot C# environment")
-		if process_facade != null:
-			return process_facade
-		return PlaceholderRoslynFacade.new(_base_metadata(true), _load_error)
-	var fallback_process_facade = _instantiate_runtime_process_facade("PluginRoslynRuntimeFacade runtime source is present but could not be instantiated")
-	if fallback_process_facade != null:
-		return fallback_process_facade
+	var process_facade = _instantiate_runtime_process_facade("PluginRoslynRuntimeFacade in-process runtime is disabled for production installs")
+	if process_facade != null:
+		return process_facade
 	return PlaceholderRoslynFacade.new(_base_metadata(true), _load_error)
 
 
@@ -707,7 +676,7 @@ func _normalize_capabilities_result(result) -> Dictionary:
 	payload["success"] = bool(payload.get("success", false))
 	payload["data"] = data
 	if not payload.has("message"):
-		payload["message"] = "Plugin-internal Roslyn facade is ready."
+		payload["message"] = "Isolated Roslyn runtime facade is ready."
 	if not bool(payload.get("success", false)):
 		return _build_error_result(
 			"",
@@ -929,11 +898,10 @@ func _first_operation(operations: Array) -> Dictionary:
 
 
 func _base_metadata(degraded: bool) -> Dictionary:
-	var transport := "in_process"
-	var entrypoint := "plugin_internal_facade"
+	var transport := "isolated_runtime_unavailable"
+	var entrypoint := RUNTIME_BRIDGE_DLL_PATH
 	if _load_mode == LOAD_MODE_RUNTIME_PROCESS:
 		transport = "process_json"
-		entrypoint = RUNTIME_BRIDGE_DLL_PATH
 	return {
 		"engine": "roslyn",
 		"mode": "syntax",
