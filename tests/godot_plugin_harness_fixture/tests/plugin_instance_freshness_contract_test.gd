@@ -51,6 +51,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var disk_source: Dictionary = snapshot.get("disk_source", {})
 	if not str(disk_source.get("source_fingerprint", "")).contains("tools/system/impl_project.gd"):
 		return _failure("Freshness fingerprint should cover tool implementation files, not only plugin.gd/protocol facts.")
+	var cache_after_first_snapshot: Dictionary = PluginInstanceFreshness.get_cache_diagnostics_for_contract_tests()
+	var scan_count_after_first_snapshot := int(cache_after_first_snapshot.get("disk_fingerprint_scan_count", 0))
+	var second_snapshot: Dictionary = PluginInstanceFreshness.get_freshness_snapshot()
+	if str(second_snapshot.get("status", "")) != str(snapshot.get("status", "")):
+		return _failure("Cached freshness snapshots should preserve status semantics.")
+	var cache_after_second_snapshot: Dictionary = PluginInstanceFreshness.get_cache_diagnostics_for_contract_tests()
+	if int(cache_after_second_snapshot.get("disk_fingerprint_scan_count", -1)) != scan_count_after_first_snapshot:
+		return _failure("Back-to-back freshness snapshots should reuse the disk fingerprint cache instead of rescanning the addon tree.")
+	PluginInstanceFreshness.mark_lifecycle_reload_requested("contract_cache_invalidation")
+	PluginInstanceFreshness.get_freshness_snapshot()
+	var cache_after_reload_request: Dictionary = PluginInstanceFreshness.get_cache_diagnostics_for_contract_tests()
+	if int(cache_after_reload_request.get("disk_fingerprint_scan_count", -1)) <= scan_count_after_first_snapshot:
+		return _failure("Lifecycle reload requests should invalidate the disk fingerprint cache before the next snapshot.")
 
 	return {
 		"name": "plugin_instance_freshness_contracts",

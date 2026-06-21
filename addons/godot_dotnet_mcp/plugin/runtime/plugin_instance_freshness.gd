@@ -9,6 +9,7 @@ const PROTOCOL_FACTS_PATH := ADDON_ROOT + "/plugin/runtime/mcp_protocol_facts.js
 const PLUGIN_SCRIPT_PATH := ADDON_ROOT + "/plugin.gd"
 const SYNC_MARKER_PATH := ADDON_ROOT + "/.mcp_sync.json"
 const SYNC_MARKER_MAX_BYTES := 16384
+const DISK_FINGERPRINT_CACHE_TTL_MSEC := 1000
 const FINGERPRINT_EXTENSIONS := ["cfg", "gd", "json", "tscn"]
 const FINGERPRINT_EXCLUDED_DIRS := {
 	".git": true,
@@ -20,6 +21,9 @@ const FINGERPRINT_EXCLUDED_DIRS := {
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 
 static var _running_instance: Dictionary = {}
+static var _disk_fingerprint_summary_cache: Dictionary = {}
+static var _disk_fingerprint_cache_ticks_msec := 0
+static var _disk_fingerprint_scan_count := 0
 static var _lifecycle_reload: Dictionary = {
 	"state": "idle",
 	"pending": false,
@@ -49,7 +53,7 @@ static func capture_running_instance(source: String = "plugin_enter_tree") -> Di
 		"server_version": MCPProtocolFacts.get_server_version(),
 		"protocol_version": MCPProtocolFacts.get_protocol_version(),
 		"tool_schema_version": MCPProtocolFacts.get_tool_schema_version(),
-		"source_fingerprint": _build_fingerprint()
+		"source_fingerprint": _build_fingerprint(true)
 	}
 	if source != "freshness_lazy_capture":
 		_complete_lifecycle_reload_if_pending(now_unix)
@@ -70,6 +74,7 @@ static func mark_lifecycle_reload_requested(source: String = "tool") -> Dictiona
 	_lifecycle_reload["completed_instance_id"] = ""
 	_lifecycle_reload["completion_observed"] = false
 	_lifecycle_reload["force_fresh_load_pending"] = true
+	_invalidate_disk_fingerprint_cache()
 	return _lifecycle_reload.duplicate(true)
 
 
@@ -81,6 +86,7 @@ static func mark_lifecycle_reload_scheduled(request_id: String = "") -> Dictiona
 	_lifecycle_reload["last_scheduled_at_unix"] = int(Time.get_unix_time_from_system())
 	_lifecycle_reload["last_error"] = ""
 	_lifecycle_reload["force_fresh_load_pending"] = true
+	_invalidate_disk_fingerprint_cache()
 	return _lifecycle_reload.duplicate(true)
 
 
@@ -91,6 +97,7 @@ static func mark_lifecycle_reload_failed(error_message: String, request_id: Stri
 	_lifecycle_reload["pending"] = false
 	_lifecycle_reload["last_error"] = error_message
 	_lifecycle_reload["force_fresh_load_pending"] = false
+	_invalidate_disk_fingerprint_cache()
 	return _lifecycle_reload.duplicate(true)
 
 
@@ -106,6 +113,9 @@ static func should_force_fresh_load() -> bool:
 
 static func reset_for_contract_tests() -> void:
 	_running_instance = {}
+	_disk_fingerprint_summary_cache = {}
+	_disk_fingerprint_cache_ticks_msec = 0
+	_disk_fingerprint_scan_count = 0
 	_lifecycle_reload = {
 		"state": "idle",
 		"pending": false,
@@ -125,8 +135,9 @@ static func get_freshness_snapshot() -> Dictionary:
 	var running := _running_instance.duplicate(true)
 	if running.is_empty():
 		running = capture_running_instance("freshness_lazy_capture")
-	var disk_source := _build_disk_source_snapshot()
-	var sync_snapshot := _build_sync_snapshot()
+	var fingerprint_summary := _get_disk_fingerprint_summary()
+	var disk_source := _build_disk_source_snapshot(fingerprint_summary)
+	var sync_snapshot := _build_sync_snapshot(fingerprint_summary)
 	var comparison := _compare_running_to_disk(running, disk_source, sync_snapshot)
 	var status := "unknown"
 	if bool(comparison.get("version_changed_since_load", false)) or \
@@ -156,9 +167,10 @@ static func _complete_lifecycle_reload_if_pending(completed_at_unix: int) -> voi
 	_lifecycle_reload["last_completed_at_unix"] = completed_at_unix
 	_lifecycle_reload["completed_instance_id"] = str(_running_instance.get("instance_id", ""))
 	_lifecycle_reload["completion_observed"] = true
+	_invalidate_disk_fingerprint_cache()
 
 
-static func _build_disk_source_snapshot() -> Dictionary:
+static func _build_disk_source_snapshot(fingerprint_summary: Dictionary) -> Dictionary:
 	return {
 		"source_root": ADDON_ROOT,
 		"plugin_cfg_path": PLUGIN_CFG_PATH,
@@ -166,16 +178,16 @@ static func _build_disk_source_snapshot() -> Dictionary:
 		"server_version": MCPProtocolFacts.get_server_version(),
 		"protocol_version": MCPProtocolFacts.get_protocol_version(),
 		"tool_schema_version": MCPProtocolFacts.get_tool_schema_version(),
-		"latest_modified_at_unix": _latest_modified_time(_get_fingerprint_paths()),
-		"source_fingerprint": _build_fingerprint()
+		"latest_modified_at_unix": int(fingerprint_summary.get("latest_modified_at_unix", 0)),
+		"source_fingerprint": str(fingerprint_summary.get("source_fingerprint", ""))
 	}
 
 
-static func _build_sync_snapshot() -> Dictionary:
+static func _build_sync_snapshot(fingerprint_summary: Dictionary) -> Dictionary:
 	var snapshot := {
 		"marker_path": SYNC_MARKER_PATH,
 		"marker_available": false,
-		"last_sync_at_unix": _latest_modified_time(_get_fingerprint_paths()),
+		"last_sync_at_unix": int(fingerprint_summary.get("latest_modified_at_unix", 0)),
 		"source_repo_path": "",
 		"target_addon_path": ADDON_ROOT,
 		"source_git_commit": "",
@@ -254,11 +266,43 @@ static func _read_plugin_cfg_version(path: String) -> String:
 	return str(config.get_value("plugin", "version", ""))
 
 
-static func _build_fingerprint() -> String:
+static func _build_fingerprint(force_refresh: bool = false) -> String:
+	var summary := _get_disk_fingerprint_summary(force_refresh)
+	return str(summary.get("source_fingerprint", ""))
+
+
+static func get_cache_diagnostics_for_contract_tests() -> Dictionary:
+	return {
+		"disk_fingerprint_scan_count": _disk_fingerprint_scan_count,
+		"cache_available": not _disk_fingerprint_summary_cache.is_empty(),
+		"cache_ticks_msec": _disk_fingerprint_cache_ticks_msec
+	}
+
+
+static func _get_disk_fingerprint_summary(force_refresh: bool = false) -> Dictionary:
+	var now_ticks := Time.get_ticks_msec()
+	if not force_refresh and not _disk_fingerprint_summary_cache.is_empty():
+		if now_ticks - _disk_fingerprint_cache_ticks_msec <= DISK_FINGERPRINT_CACHE_TTL_MSEC:
+			return _disk_fingerprint_summary_cache.duplicate(true)
+	var paths := _get_fingerprint_paths()
+	var latest_modified_at_unix := _latest_modified_time(paths)
 	var parts := PackedStringArray()
-	for path in _get_fingerprint_paths():
+	for path in paths:
 		parts.append("%s:%d" % [path, FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else 0])
-	return "|".join(parts)
+	_disk_fingerprint_summary_cache = {
+		"paths": paths.duplicate(),
+		"latest_modified_at_unix": latest_modified_at_unix,
+		"source_fingerprint": "|".join(parts),
+		"scanned_at_ticks_msec": now_ticks
+	}
+	_disk_fingerprint_cache_ticks_msec = now_ticks
+	_disk_fingerprint_scan_count += 1
+	return _disk_fingerprint_summary_cache.duplicate(true)
+
+
+static func _invalidate_disk_fingerprint_cache() -> void:
+	_disk_fingerprint_summary_cache = {}
+	_disk_fingerprint_cache_ticks_msec = 0
 
 
 static func _get_fingerprint_paths() -> Array[String]:
