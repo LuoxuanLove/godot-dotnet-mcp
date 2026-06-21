@@ -75,6 +75,7 @@ Target version: 2.0.0.
 - Fixed first-open responsiveness of the Dock Tools tab by building only the active tool presentation view up front and deferring Internal Executors / Diagnostics trees until those views are selected.
 - Fixed repeated Dock Tools refreshes so unchanged tool catalogs reuse the last presentation model through a lightweight catalog revision instead of rebuilding the full tool snapshot on every active-tab refresh.
 - Fixed Dock Tools tab search responsiveness so same-frame query bursts coalesce into one deferred tree render instead of clearing and rebuilding the catalog on every keystroke.
+- Fixed Dock Tools tab refresh signatures so disabled-tool lists, collapsed nodes, and tool-load errors are compared with lightweight deterministic strings instead of JSON serialization during tab switches.
 - Fixed Dock status snapshots so lightweight views reuse cached lifecycle context and avoid calling heavy server diagnostics unless the active tab explicitly needs them.
 - Fixed MCP tool discovery recovery after update or hot reload so `tools/list` / `tools/call` lazily reinitialize empty registries, overlapping editor automation calls fail fast with `editor_automation_busy`, and idle GDScript LSP tick logs no longer make the editor or MCP clients appear stuck.
 - Fixed idle runtime ticking so HTTP/stdio transports no longer drive loaded tool executors and GDScript LSP diagnostics every editor frame, while exposing lifecycle tick timing in performance diagnostics.

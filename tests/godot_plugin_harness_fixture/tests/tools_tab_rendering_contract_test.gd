@@ -107,6 +107,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var ui_source_guard := _assert_tools_tab_prefers_shared_presentation_metadata()
 	if not ui_source_guard.is_empty():
 		return _failure(ui_source_guard)
+	var signature_guard := _assert_tools_tab_uses_lightweight_tree_signatures()
+	if not signature_guard.is_empty():
+		return _failure(signature_guard)
 	tree.root.add_child(_instance)
 	await tree.process_frame
 
@@ -840,6 +843,25 @@ func _assert_tools_tab_prefers_shared_presentation_metadata() -> String:
 		return "Tools tab tree signature should not deep-serialize presentation trees or metadata on every refresh."
 	if source.find("func _filter_presentation_node") != -1:
 		return "Tools tab search should render shared presentation nodes directly instead of deep-copying filtered presentation trees."
+	return ""
+
+
+func _assert_tools_tab_uses_lightweight_tree_signatures() -> String:
+	var source_path := "res://addons/godot_dotnet_mcp/ui/tools_tab.gd"
+	if not FileAccess.file_exists(source_path):
+		return "Tools tab source should exist for tree signature guard."
+	var source := FileAccess.get_file_as_string(source_path)
+	var signature_start := source.find("func _build_tree_signature")
+	if signature_start == -1:
+		return "Tools tab should keep a tree signature builder."
+	var signature_end := source.find("func _get_presentation_signature", signature_start)
+	if signature_end == -1:
+		return "Tools tab tree signature guard could not find the signature function boundary."
+	var signature_source := source.substr(signature_start, signature_end - signature_start)
+	if signature_source.find("JSON.stringify") != -1:
+		return "Tools tab tree signatures should avoid JSON serialization in hot tab-switch refresh paths."
+	if source.find("func _build_sorted_string_array_signature") == -1 or source.find("func _build_collapsed_nodes_signature") == -1:
+		return "Tools tab tree signatures should use lightweight deterministic helpers for arrays and collapse state."
 	return ""
 
 
