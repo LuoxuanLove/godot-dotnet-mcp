@@ -480,6 +480,26 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("MCP plugin update sync should accept the selected target after background refresh verification succeeds.")
 	stale_selection_probe.free()
 
+	var stale_commit_probe := SyncStartProbePlugin.new()
+	stale_commit_probe._state.settings["update_source"] = "custom_branch"
+	stale_commit_probe._state.settings["update_custom_branch"] = "feature/same-ref"
+	stale_commit_probe._state.update_refs_state = "success"
+	stale_commit_probe._state.update_ref_commits = {"feature/same-ref": "new-sha"}
+	stale_commit_probe._state.update_compare_state = "success"
+	stale_commit_probe._state.update_compare_refresh_state = "idle"
+	stale_commit_probe._state.update_compare_target_ref = "feature/same-ref"
+	stale_commit_probe._state.update_compare_target_commit = "old-sha"
+	var stale_commit_result: Dictionary = stale_commit_probe.start_plugin_update_sync_from_tools()
+	if bool(stale_commit_result.get("accepted", true)) or not stale_commit_probe.archive_requests.is_empty():
+		stale_commit_probe.free()
+		return _failure("MCP plugin update sync should refuse a target when compare metadata matches the ref but not the current target commit.")
+	_mark_update_target_verified(stale_commit_probe, "feature/same-ref", "new-sha")
+	var fresh_commit_result: Dictionary = stale_commit_probe.start_plugin_update_sync_from_tools()
+	if not bool(fresh_commit_result.get("accepted", false)) or stale_commit_probe.archive_requests.size() != 1:
+		stale_commit_probe.free()
+		return _failure("MCP plugin update sync should accept the same ref after compare metadata is verified for the current target commit.")
+	stale_commit_probe.free()
+
 	var archive_attempt_probe := ArchiveAttemptProbePlugin.new()
 	archive_attempt_probe._update_sync_request_serial = 21
 	var branch_body := JSON.stringify({"commit": {"sha": "resolved-sha"}}).to_utf8_buffer()
@@ -578,6 +598,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		foreground_compare_probe.free()
 		return _failure("plugin.gd should not start a background compare refresh while a foreground compare request is loading.")
 	foreground_compare_probe.free()
+
+	var commit_drift_probe := RefreshProbePlugin.new()
+	commit_drift_probe._state.settings["update_source"] = "custom_branch"
+	commit_drift_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
+	commit_drift_probe._state.update_refs_state = "success"
+	commit_drift_probe._state.update_ref_commits = {"refactor/v2.0.0": "new-target-sha"}
+	commit_drift_probe._state.update_compare_state = "success"
+	commit_drift_probe._state.update_compare_refresh_state = "idle"
+	commit_drift_probe._state.update_compare_target_ref = "refactor/v2.0.0"
+	commit_drift_probe._state.update_compare_target_commit = "old-target-sha"
+	commit_drift_probe._state.update_compare_last_checked_unix = int(Time.get_unix_time_from_system())
+	if not commit_drift_probe._should_refresh_update_compare_in_background():
+		commit_drift_probe.free()
+		return _failure("plugin.gd should refresh background compare immediately when the selected ref resolves to a new commit.")
+	commit_drift_probe.free()
 
 	var refs_completion_compare_probe := RefreshProbePlugin.new()
 	refs_completion_compare_probe._state.settings["update_source"] = "custom_branch"

@@ -997,6 +997,13 @@ func _should_refresh_update_compare_in_background() -> bool:
 		return false
 	if str(_state.update_refs_state) != "success" or str(_state.update_compare_state) == "loading" or str(_state.update_compare_refresh_state) == "loading":
 		return false
+	var target := _resolve_update_sync_target()
+	var target_ref := str(target.get("ref", "")).strip_edges()
+	var target_commit := str(target.get("commit", "")).strip_edges()
+	if not target_ref.is_empty() and str(_state.update_compare_target_ref).strip_edges() != target_ref:
+		return true
+	if not target_commit.is_empty() and str(_state.update_compare_target_commit).strip_edges() != target_commit:
+		return true
 	var last_checked := int(_state.update_compare_last_checked_unix)
 	if last_checked <= 0:
 		return true
@@ -1064,6 +1071,9 @@ func _is_update_sync_target_verified(target: Dictionary = {}, require_compare: b
 	if str(_state.update_compare_state) != "success" or str(_state.update_compare_refresh_state) == "loading":
 		return false
 	if str(_state.update_compare_target_ref).strip_edges() != target_ref:
+		return false
+	var target_commit := str(target.get("commit", "")).strip_edges()
+	if not target_commit.is_empty() and str(_state.update_compare_target_commit).strip_edges() != target_commit:
 		return false
 	return true
 
