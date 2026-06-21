@@ -16,7 +16,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if _service == null:
 		return _failure("PluginRoslynService not yet implemented at 'res://addons/godot_dotnet_mcp/plugin/runtime/plugin_roslyn_service.gd'")
 
-	var capabilities: Dictionary = _service.get_capabilities()
+	var capabilities: Dictionary = await _service.get_capabilities_async()
 	if not bool(capabilities.get("success", false)):
 		return _failure("Roslyn capabilities should resolve successfully before parse coverage runs: %s" % str(capabilities.get("error", capabilities.get("message", ""))))
 	var capability_data: Dictionary = capabilities.get("data", {})
@@ -24,10 +24,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Expected capabilities.engine='roslyn', got '%s'" % str(capability_data.get("engine", "")))
 	if str(capability_data.get("mode", "")) != "syntax":
 		return _failure("Expected capabilities.mode='syntax', got '%s'" % str(capability_data.get("mode", "")))
-	if str(capability_data.get("transport", "")) != "in_process":
-		return _failure("Expected capabilities.transport='in_process', got '%s'" % str(capability_data.get("transport", "")))
-	if str(capability_data.get("entrypoint", "")) != "plugin_internal_facade":
-		return _failure("Expected plugin-internal Roslyn entrypoint metadata, got '%s'" % str(capability_data.get("entrypoint", "")))
+	if str(capability_data.get("transport", "")) != "process_json":
+		return _failure("Expected capabilities.transport='process_json', got '%s'" % str(capability_data.get("transport", "")))
+	if str(capability_data.get("entrypoint", "")).find("roslyn_runtime") == -1:
+		return _failure("Expected isolated Roslyn runtime entrypoint metadata, got '%s'" % str(capability_data.get("entrypoint", "")))
 
 	# --- Fixture 1: Valid C# with namespace, class, method ---
 	var temp_dir := "res://tests_tmp/roslyn_parsing_contracts"
@@ -55,7 +55,7 @@ namespace Game.Logic {
 
 	_write_text(valid_cs_path, valid_cs)
 
-	var result1: Dictionary = _service.parse_file(valid_cs_path, "")
+	var result1: Dictionary = await _service.parse_file_async(valid_cs_path, "")
 	if not bool(result1.get("success", false)):
 		return _failure("Valid C# file should parse successfully: %s" % str(result1.get("error", "")))
 
@@ -64,10 +64,10 @@ namespace Game.Logic {
 		return _failure("Expected engine='roslyn', got '%s'" % str(data1.get("engine", "")))
 	if str(data1.get("mode", "")) != "syntax":
 		return _failure("Expected mode='syntax', got '%s'" % str(data1.get("mode", "")))
-	if str(data1.get("transport", "")) != "in_process":
-		return _failure("Expected transport='in_process', got '%s'" % str(data1.get("transport", "")))
-	if str(data1.get("entrypoint", "")) != "plugin_internal_facade":
-		return _failure("Expected parse entrypoint='plugin_internal_facade', got '%s'" % str(data1.get("entrypoint", "")))
+	if str(data1.get("transport", "")) != "process_json":
+		return _failure("Expected transport='process_json', got '%s'" % str(data1.get("transport", "")))
+	if str(data1.get("entrypoint", "")).find("roslyn_runtime") == -1:
+		return _failure("Expected isolated parse entrypoint metadata, got '%s'" % str(data1.get("entrypoint", "")))
 	if str(data1.get("source_hash", "")).is_empty():
 		return _failure("Expected non-empty source_hash")
 	if not (data1.get("types") is Array) or (data1.get("types") as Array).size() == 0:
@@ -87,7 +87,7 @@ public class Malformed {
 
 	_write_text(malformed_cs_path, malformed_cs)
 
-	var result2: Dictionary = _service.parse_file(malformed_cs_path, "")
+	var result2: Dictionary = await _service.parse_file_async(malformed_cs_path, "")
 	# Should return success=false OR parse_errors populated, not crash
 	var data2: Dictionary = result2.get("data", {})
 	var parse_errors2: Array = data2.get("parse_errors", []) if data2 is Dictionary else []
@@ -106,7 +106,7 @@ public partial class PartialClass : Node {
 
 	_write_text(partial_cs_path, partial_cs)
 
-	var result3: Dictionary = _service.parse_file(partial_cs_path, "")
+	var result3: Dictionary = await _service.parse_file_async(partial_cs_path, "")
 	if not bool(result3.get("success", false)):
 		return _failure("Partial class C# should parse successfully: %s" % str(result3.get("error", "")))
 	var data3: Dictionary = result3.get("data", {})
@@ -114,7 +114,7 @@ public partial class PartialClass : Node {
 		return _failure("Partial class should still return types[]")
 
 	# --- Fixture 4: Missing file ---
-	var result4: Dictionary = _service.parse_file("res://NonExistent.cs", "")
+	var result4: Dictionary = await _service.parse_file_async("res://NonExistent.cs", "")
 	if bool(result4.get("success", false)):
 		return _failure("Missing file should return success=false, got success=true")
 
@@ -124,7 +124,7 @@ public class UnsavedText : Node {
     public int UnsavedField = 42;
 }"""
 
-	var result5: Dictionary = _service.parse_file("res://UnsavedText.cs", unsaved_cs)
+	var result5: Dictionary = await _service.parse_file_async("res://UnsavedText.cs", unsaved_cs)
 	if not bool(result5.get("success", false)):
 		return _failure("Unsaved source text should parse successfully: %s" % str(result5.get("error", "")))
 	var data5: Dictionary = result5.get("data", {})
@@ -132,7 +132,7 @@ public class UnsavedText : Node {
 	if hash5.is_empty():
 		return _failure("Unsaved text should produce a non-empty source_hash")
 	# Calling again with same unsaved text should hit cache (same hash)
-	var result5b: Dictionary = _service.parse_file("res://UnsavedText.cs", unsaved_cs)
+	var result5b: Dictionary = await _service.parse_file_async("res://UnsavedText.cs", unsaved_cs)
 	var data5b: Dictionary = result5b.get("data", {})
 	if str(data5b.get("source_hash", "")) != hash5:
 		return _failure("Same unsaved text should produce same source_hash (cache hit)")
