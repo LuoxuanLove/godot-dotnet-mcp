@@ -636,6 +636,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("plugin.gd should refresh background compare immediately when the selected ref resolves to a new commit.")
 	commit_drift_probe.free()
 
+	var compare_reset_probe := PluginScript.new()
+	compare_reset_probe._state.update_compare_state = "success"
+	compare_reset_probe._state.update_compare_refresh_state = "loading"
+	compare_reset_probe._state.update_compare_refresh_error = ""
+	compare_reset_probe._state.update_compare_refresh_serial = 7
+	compare_reset_probe._update_compare_request_serial = 7
+	compare_reset_probe._update_compare_background_serials[7] = true
+	compare_reset_probe._reset_update_compare_state()
+	if compare_reset_probe._state.update_compare_refresh_state != "idle" or compare_reset_probe._state.update_compare_refresh_serial != compare_reset_probe._update_compare_request_serial or not compare_reset_probe._update_compare_background_serials.is_empty():
+		compare_reset_probe.free()
+		return _failure("plugin.gd should clear stale background compare refresh state when compare work is reset.")
+	compare_reset_probe.free()
+
 	var refs_completion_compare_probe := RefreshProbePlugin.new()
 	refs_completion_compare_probe._state.settings["update_source"] = "custom_branch"
 	refs_completion_compare_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"

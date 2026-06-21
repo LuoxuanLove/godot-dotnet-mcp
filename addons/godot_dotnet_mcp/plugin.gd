@@ -1818,6 +1818,10 @@ func _reset_update_compare_state() -> void:
 	if _state == null:
 		return
 	_update_compare_request_serial += 1
+	_state.update_compare_refresh_state = "idle"
+	_state.update_compare_refresh_error = ""
+	_state.update_compare_refresh_serial = _update_compare_request_serial
+	_update_compare_background_serials.clear()
 	_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_compare_reset())
 
 
