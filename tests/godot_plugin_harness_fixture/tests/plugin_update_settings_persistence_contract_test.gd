@@ -8,6 +8,18 @@ const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localiz
 var _plugin = null
 
 
+func _mark_update_target_verified(probe, target_ref: String, target_commit: String = "target-sha") -> void:
+	probe._state.update_refs_state = "success"
+	probe._state.update_refs_refresh_state = "idle"
+	probe._state.update_ref_commits = {target_ref: target_commit}
+	probe._state.update_compare_state = "success"
+	probe._state.update_compare_refresh_state = "idle"
+	probe._state.update_compare_target_ref = target_ref
+	probe._state.update_compare_target_commit = target_commit
+	probe._state.update_selection_refresh_pending = false
+	probe._state.update_selection_refresh_pending_ref = ""
+
+
 class FocusRestoreProbePlugin extends PluginScript:
 	var discovery_request_count := 0
 	var request_parent := Node.new()
@@ -364,6 +376,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var sync_start_probe := SyncStartProbePlugin.new()
 	sync_start_probe._state.settings["update_source"] = "custom_branch"
 	sync_start_probe._state.settings["update_custom_branch"] = "dev"
+	_mark_update_target_verified(sync_start_probe, "dev")
 	var first_sync_start: Dictionary = sync_start_probe.start_plugin_update_sync_from_tools()
 	var second_sync_start: Dictionary = sync_start_probe.start_plugin_update_sync_from_tools()
 	if sync_start_probe.archive_requests.size() != 1:
@@ -419,12 +432,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var dock_sync_probe := SyncStartProbePlugin.new()
 	dock_sync_probe._state.settings["update_source"] = "custom_branch"
 	dock_sync_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
-	dock_sync_probe._state.update_ref_commits = {"refactor/v2.0.0": "target-sha"}
+	_mark_update_target_verified(dock_sync_probe, "refactor/v2.0.0")
 	dock_sync_probe._on_update_sync_requested()
 	var tool_sync_probe := SyncStartProbePlugin.new()
 	tool_sync_probe._state.settings["update_source"] = "custom_branch"
 	tool_sync_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
-	tool_sync_probe._state.update_ref_commits = {"refactor/v2.0.0": "target-sha"}
+	_mark_update_target_verified(tool_sync_probe, "refactor/v2.0.0")
 	var tool_start_result: Dictionary = tool_sync_probe.start_plugin_update_sync_from_tools()
 	if dock_sync_probe.archive_requests.size() != 1 or tool_sync_probe.archive_requests.size() != 1:
 		dock_sync_probe.free()
@@ -442,6 +455,30 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("plugin.gd should route Dock and tool update sync through the same resolved target.")
 	dock_sync_probe.free()
 	tool_sync_probe.free()
+
+	var stale_selection_probe := SyncStartProbePlugin.new()
+	stale_selection_probe._state.settings["update_source"] = "custom_branch"
+	stale_selection_probe._state.settings["update_custom_branch"] = "feature/new"
+	stale_selection_probe._state.update_refs_state = "success"
+	stale_selection_probe._state.update_ref_commits = {"feature/old": "old-sha", "feature/new": "new-sha"}
+	stale_selection_probe._state.update_compare_state = "success"
+	stale_selection_probe._state.update_compare_target_ref = "feature/old"
+	stale_selection_probe._state.update_selection_refresh_pending = true
+	stale_selection_probe._state.update_selection_refresh_pending_ref = "feature/new"
+	stale_selection_probe._on_update_sync_requested()
+	if not stale_selection_probe.archive_requests.is_empty() or str(stale_selection_probe._state.update_sync_state) != "error":
+		stale_selection_probe.free()
+		return _failure("Dock update sync should refuse a newly selected target until its background refresh finishes.")
+	var stale_tool_result: Dictionary = stale_selection_probe.start_plugin_update_sync_from_tools()
+	if bool(stale_tool_result.get("accepted", true)) or not stale_selection_probe.archive_requests.is_empty():
+		stale_selection_probe.free()
+		return _failure("MCP plugin update sync should refuse a pending newly selected target instead of applying stale compare metadata.")
+	_mark_update_target_verified(stale_selection_probe, "feature/new", "new-sha")
+	var fresh_tool_result: Dictionary = stale_selection_probe.start_plugin_update_sync_from_tools()
+	if not bool(fresh_tool_result.get("accepted", false)) or stale_selection_probe.archive_requests.size() != 1:
+		stale_selection_probe.free()
+		return _failure("MCP plugin update sync should accept the selected target after background refresh verification succeeds.")
+	stale_selection_probe.free()
 
 	var archive_attempt_probe := ArchiveAttemptProbePlugin.new()
 	archive_attempt_probe._update_sync_request_serial = 21
@@ -821,6 +858,7 @@ func _run_shared_update_sync_entry_contract() -> Dictionary:
 	var probe := SyncStartProbePlugin.new()
 	probe._state.settings["update_source"] = "custom_branch"
 	probe._state.settings["update_custom_branch"] = "feature/sync-entry"
+	_mark_update_target_verified(probe, "feature/sync-entry")
 	probe._on_update_sync_requested()
 	if probe.archive_requests.size() != 1:
 		probe.free()

@@ -728,6 +728,8 @@ func _build_dock_refresh_status_signature() -> String:
 		"update_compare_target_commit",
 		"update_compare_ahead_by",
 		"update_compare_behind_by",
+		"update_selection_refresh_pending",
+		"update_selection_refresh_pending_ref",
 		"update_sync_state"
 	]:
 		parts.append("%s=%s" % [key, str(data.get(key, ""))])
@@ -803,6 +805,8 @@ func _build_dock_refresh_status_signature_data() -> Dictionary:
 		"update_compare_target_commit": str(_get_state_value("update_compare_target_commit", "")),
 		"update_compare_ahead_by": int(_get_state_value("update_compare_ahead_by", -1)),
 		"update_compare_behind_by": int(_get_state_value("update_compare_behind_by", -1)),
+		"update_selection_refresh_pending": bool(_get_state_value("update_selection_refresh_pending", false)),
+		"update_selection_refresh_pending_ref": str(_get_state_value("update_selection_refresh_pending_ref", "")),
 		"update_sync_state": str(_get_state_value("update_sync_state", "idle"))
 	}
 
@@ -922,7 +926,8 @@ func _on_update_source_changed(source: String) -> void:
 	if _state.settings["update_source"] == "custom_branch":
 		_state.settings["update_custom_branch"] = "dev"
 	_save_settings()
-	if not _start_background_update_refs_refresh():
+	_mark_update_selection_refresh_pending()
+	if not _start_background_update_refs_refresh() and not _is_update_selection_refresh_pending():
 		_refresh_update_compare_for_current_target(true)
 	_refresh_dock()
 
@@ -1011,6 +1016,54 @@ func _start_background_update_refs_refresh() -> bool:
 	return true
 
 
+func _mark_update_selection_refresh_pending() -> void:
+	if _state == null:
+		return
+	var target := _resolve_update_sync_target()
+	var target_ref := str(target.get("ref", "")).strip_edges()
+	if target_ref.is_empty():
+		_state.update_selection_refresh_pending = false
+		_state.update_selection_refresh_pending_ref = ""
+		return
+	_state.update_selection_refresh_pending = true
+	_state.update_selection_refresh_pending_ref = target_ref
+
+
+func _is_update_selection_refresh_pending(target: Dictionary = {}) -> bool:
+	if _state == null:
+		return false
+	if not bool(_state.update_selection_refresh_pending):
+		return false
+	var pending_ref := str(_state.update_selection_refresh_pending_ref).strip_edges()
+	if pending_ref.is_empty():
+		return false
+	if target.is_empty():
+		target = _resolve_update_sync_target()
+	var target_ref := str(target.get("ref", "")).strip_edges()
+	return not target_ref.is_empty() and target_ref == pending_ref
+
+
+func _is_update_sync_target_verified(target: Dictionary = {}, require_compare: bool = false) -> bool:
+	if _state == null:
+		return false
+	if target.is_empty():
+		target = _resolve_update_sync_target()
+	var target_ref := str(target.get("ref", "")).strip_edges()
+	if target_ref.is_empty():
+		return false
+	if _is_update_selection_refresh_pending(target):
+		return false
+	if not require_compare:
+		return true
+	if str(_state.update_refs_state) != "success" or str(_state.update_refs_refresh_state) == "loading":
+		return false
+	if str(_state.update_compare_state) != "success" or str(_state.update_compare_refresh_state) == "loading":
+		return false
+	if str(_state.update_compare_target_ref).strip_edges() != target_ref:
+		return false
+	return true
+
+
 func _ensure_saved_update_source_discovery_requested() -> bool:
 	if _state == null:
 		return false
@@ -1042,7 +1095,8 @@ func _on_update_custom_branch_changed(branch: String) -> void:
 	_update_sync_after_refs_discovery_pending = false
 	_state.settings["update_custom_branch"] = branch
 	_save_settings()
-	if not _start_background_update_refs_refresh():
+	_mark_update_selection_refresh_pending()
+	if not _start_background_update_refs_refresh() and not _is_update_selection_refresh_pending():
 		_refresh_update_compare_for_current_target(true)
 	_refresh_dock()
 
@@ -1106,6 +1160,13 @@ func _on_update_sync_requested() -> void:
 		_state.update_sync_progress = 0.0
 		_refresh_dock()
 		return
+	if not _is_update_sync_target_verified(target, true):
+		_state.update_sync_state = "error"
+		_state.update_sync_error = "Selected update target is still being verified; wait for the background refresh to finish before syncing."
+		_state.update_sync_status = ""
+		_state.update_sync_progress = 0.0
+		_refresh_dock()
+		return
 	_request_update_sync(target, "dock")
 
 
@@ -1117,6 +1178,14 @@ func _request_update_sync(target: Dictionary, source: String = "unknown") -> boo
 		return false
 	var target_ref := str(target.get("ref", "")).strip_edges()
 	if target_ref.is_empty():
+		return false
+	var require_verified_compare := source != "refs_discovery"
+	if not _is_update_sync_target_verified(target, require_verified_compare):
+		_state.update_sync_state = "error"
+		_state.update_sync_error = "Selected update target is still being verified; wait for the background refresh to finish before syncing."
+		_state.update_sync_status = ""
+		_state.update_sync_progress = 0.0
+		_refresh_dock()
 		return false
 	_update_sync_after_refs_discovery_pending = false
 	_update_sync_request_serial += 1
@@ -1703,6 +1772,9 @@ func _refresh_update_compare_for_current_target(background_refresh: bool = false
 		_state.update_compare_refresh_state = "success" if background_refresh else "idle"
 		_state.update_compare_refresh_error = ""
 		_state.update_compare_last_checked_unix = int(Time.get_unix_time_from_system())
+		if bool(_state.update_selection_refresh_pending) and str(_state.update_selection_refresh_pending_ref).strip_edges() == target_ref:
+			_state.update_selection_refresh_pending = false
+			_state.update_selection_refresh_pending_ref = ""
 		return true
 	if not background_refresh:
 		_state.update_compare_ahead_by = int(compare_snapshot.get("ahead_by", -1))
@@ -1772,6 +1844,9 @@ func _on_update_compare_request_completed(result: int, response_code: int, _head
 	_state.update_compare_refresh_error = ""
 	_state.update_compare_refresh_serial = serial
 	_state.update_compare_last_checked_unix = int(Time.get_unix_time_from_system())
+	if bool(_state.update_selection_refresh_pending) and str(_state.update_selection_refresh_pending_ref).strip_edges() == str(_state.update_compare_target_ref).strip_edges():
+		_state.update_selection_refresh_pending = false
+		_state.update_selection_refresh_pending_ref = ""
 	_update_compare_background_serials.erase(serial)
 	_refresh_dock()
 
@@ -1849,7 +1924,9 @@ func set_plugin_update_source_from_tools(source: String, custom_branch: String =
 	if normalized == "latest_release":
 		_state.settings["update_release_tag"] = release_tag.strip_edges()
 		_save_settings()
-		_refresh_update_compare_for_current_target()
+		_mark_update_selection_refresh_pending()
+		if not _start_background_update_refs_refresh() and not _is_update_selection_refresh_pending():
+			_refresh_update_compare_for_current_target(true)
 		_refresh_dock()
 	var data := _build_plugin_update_status_snapshot()
 	data["accepted"] = false
@@ -2037,6 +2114,8 @@ func _build_plugin_update_tool_context(target: Dictionary = {}) -> Dictionary:
 		"compare_target_commit": str(_state.update_compare_target_commit),
 		"compare_ahead_by": int(_state.update_compare_ahead_by),
 		"compare_behind_by": int(_state.update_compare_behind_by),
+		"selection_refresh_pending": _is_update_selection_refresh_pending(target),
+		"selection_refresh_pending_ref": str(_state.update_selection_refresh_pending_ref),
 		"sync_state": str(_state.update_sync_state),
 		"sync_status": str(_state.update_sync_status),
 		"sync_error": str(_state.update_sync_error),

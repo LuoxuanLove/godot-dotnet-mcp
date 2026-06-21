@@ -224,6 +224,8 @@ func build_model() -> Dictionary:
 		"update_compare_target_commit": str(_get_state_value("update_compare_target_commit", "")),
 		"update_compare_ahead_by": int(_get_state_value("update_compare_ahead_by", -1)),
 		"update_compare_behind_by": int(_get_state_value("update_compare_behind_by", -1)),
+		"update_selection_refresh_pending": bool(_get_state_value("update_selection_refresh_pending", false)),
+		"update_selection_refresh_pending_ref": str(_get_state_value("update_selection_refresh_pending_ref", "")),
 		"update_sync_state": str(_get_state_value("update_sync_state", "idle")),
 		"update_sync_status": str(_get_state_value("update_sync_status", "")),
 		"update_sync_error": str(_get_state_value("update_sync_error", "")),
@@ -259,6 +261,8 @@ func build_model() -> Dictionary:
 	model["update_compare_target_commit"] = str(_get_state_value("update_compare_target_commit", ""))
 	model["update_compare_ahead_by"] = int(_get_state_value("update_compare_ahead_by", -1))
 	model["update_compare_behind_by"] = int(_get_state_value("update_compare_behind_by", -1))
+	model["update_selection_refresh_pending"] = bool(_get_state_value("update_selection_refresh_pending", false))
+	model["update_selection_refresh_pending_ref"] = str(_get_state_value("update_selection_refresh_pending_ref", ""))
 	model["update_sync_state"] = str(_get_state_value("update_sync_state", "idle"))
 	model["update_sync_status"] = str(_get_state_value("update_sync_status", ""))
 	model["update_sync_error"] = str(_get_state_value("update_sync_error", ""))

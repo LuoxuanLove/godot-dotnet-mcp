@@ -151,6 +151,8 @@ func build_model(context: Dictionary) -> Dictionary:
 		"update_compare_target_commit": str(context.get("update_compare_target_commit", "")),
 		"update_compare_ahead_by": int(context.get("update_compare_ahead_by", -1)),
 		"update_compare_behind_by": int(context.get("update_compare_behind_by", -1)),
+		"update_selection_refresh_pending": bool(context.get("update_selection_refresh_pending", false)),
+		"update_selection_refresh_pending_ref": str(context.get("update_selection_refresh_pending_ref", "")),
 		"update_sync_state": str(context.get("update_sync_state", "idle")),
 		"update_sync_status": str(context.get("update_sync_status", "")),
 		"update_sync_error": str(context.get("update_sync_error", "")),
