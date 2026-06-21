@@ -226,14 +226,24 @@ func _is_update_check_enabled(model: Dictionary) -> bool:
 func _is_update_sync_enabled(model: Dictionary, update_settings: Dictionary) -> bool:
 	if str(model.get("update_sync_state", "idle")) == "loading":
 		return false
+	if bool(model.get("update_selection_refresh_pending", false)):
+		return false
+	if str(model.get("update_refs_state", "idle")) != "success" or str(model.get("update_refs_refresh_state", "idle")) == "loading":
+		return false
+	var compare_refresh_state := str(model.get("update_compare_refresh_state", "idle"))
+	if str(model.get("update_compare_state", "idle")) != "success" or compare_refresh_state == "loading" or compare_refresh_state == "error" or compare_refresh_state == "unavailable":
+		return false
 	var source := str(update_settings.get("source", DEFAULT_UPDATE_SOURCE))
 	match source:
 		"custom_branch":
-			return not str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH)).strip_edges().is_empty()
+			var target_ref := str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH)).strip_edges()
+			return not target_ref.is_empty() and str(model.get("update_compare_target_ref", "")).strip_edges() == target_ref
 		"latest_stable":
-			return not str(model.get("update_refs_latest_stable_release", "")).strip_edges().is_empty()
+			var target_ref := str(model.get("update_refs_latest_stable_release", "")).strip_edges()
+			return not target_ref.is_empty() and str(model.get("update_compare_target_ref", "")).strip_edges() == target_ref
 		"latest_release":
-			return not str(model.get("update_refs_latest_release", "")).strip_edges().is_empty()
+			var target_ref := str(model.get("update_refs_latest_release", "")).strip_edges()
+			return not target_ref.is_empty() and str(model.get("update_compare_target_ref", "")).strip_edges() == target_ref
 		_:
 			return false
 

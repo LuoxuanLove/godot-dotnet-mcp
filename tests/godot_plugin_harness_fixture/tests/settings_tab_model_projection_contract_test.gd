@@ -67,6 +67,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"update_refs_commits": {"feature/settings": "1234567890abcdef"},
 		"update_refs_versions": {"feature/settings": "2.0.0"},
 		"update_compare_state": "success",
+		"update_compare_target_ref": "feature/settings",
 		"update_compare_ahead_by": 4,
 		"update_compare_behind_by": 1,
 		"update_sync_state": "success",
@@ -122,7 +123,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var latest_release_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "latest_release"},
+		"update_refs_state": "success",
 		"update_refs_latest_release": "v1.1.0-beta",
+		"update_refs_versions": {"v1.1.0-beta": "v1.1.0-beta"},
+		"update_compare_state": "success",
+		"update_compare_target_ref": "v1.1.0-beta",
 		"plugin_freshness": {}
 	})
 	if not bool((latest_release_projection.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_release_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("v1.1.0-beta"):
@@ -167,11 +172,42 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var latest_stable_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "latest_stable"},
+		"update_refs_state": "success",
 		"update_refs_latest_stable_release": "v1.0.0",
+		"update_refs_versions": {"v1.0.0": "v1.0.0"},
+		"update_compare_state": "success",
+		"update_compare_target_ref": "v1.0.0",
 		"plugin_freshness": {}
 	})
 	if not bool((latest_stable_projection.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_stable_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("v1.0.0"):
 		return _failure("Settings projection should resolve latest stable release targets from discovered release state.")
+	var stale_selection_projection: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {"update_source": "custom_branch", "update_custom_branch": "feature/new"},
+		"update_refs_state": "success",
+		"update_refs_commits": {"feature/old": "old-sha", "feature/new": "new-sha"},
+		"update_compare_state": "success",
+		"update_compare_target_ref": "feature/old",
+		"update_selection_refresh_pending": true,
+		"plugin_freshness": {}
+	})
+	if bool((stale_selection_projection.get("updates", {}) as Dictionary).get("apply_enabled", true)):
+		return _failure("Settings projection should disable update Sync while the newly selected target is still refreshing.")
+
+	var failed_compare_refresh_projection: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {"update_source": "custom_branch", "update_custom_branch": "feature/settings"},
+		"update_refs_state": "success",
+		"update_refs_refresh_state": "idle",
+		"update_refs_commits": {"feature/settings": "1234567890abcdef"},
+		"update_compare_state": "success",
+		"update_compare_refresh_state": "error",
+		"update_compare_target_ref": "feature/settings",
+		"update_compare_target_commit": "1234567890abcdef",
+		"plugin_freshness": {}
+	})
+	if bool((failed_compare_refresh_projection.get("updates", {}) as Dictionary).get("apply_enabled", true)):
+		return _failure("Settings projection should disable update Sync after a failed background compare refresh.")
 
 	var refresh_loading_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
@@ -199,16 +235,24 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var latest_stable: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "latest_stable"},
+		"update_refs_state": "success",
 		"update_refs_latest_stable_release": "v2.0.0",
-		"update_refs_latest_release": "v2.1.0-beta.1"
+		"update_refs_latest_release": "v2.1.0-beta.1",
+		"update_refs_versions": {"v2.0.0": "v2.0.0", "v2.1.0-beta.1": "v2.1.0-beta.1"},
+		"update_compare_state": "success",
+		"update_compare_target_ref": "v2.0.0"
 	})
 	if not bool((latest_stable.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_stable.get("updates", {}) as Dictionary).get("status_text", "")).contains("v2.0.0"):
 		return _failure("Settings projection should sync the latest stable release when discovered.")
 	var latest_release: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "latest_release"},
+		"update_refs_state": "success",
 		"update_refs_latest_stable_release": "v2.0.0",
-		"update_refs_latest_release": "v2.1.0-beta.1"
+		"update_refs_latest_release": "v2.1.0-beta.1",
+		"update_refs_versions": {"v2.0.0": "v2.0.0", "v2.1.0-beta.1": "v2.1.0-beta.1"},
+		"update_compare_state": "success",
+		"update_compare_target_ref": "v2.1.0-beta.1"
 	})
 	if not bool((latest_release.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_release.get("updates", {}) as Dictionary).get("status_text", "")).contains("v2.1.0-beta.1"):
 		return _failure("Settings projection should sync the latest release, including prereleases, when discovered.")

@@ -48,6 +48,8 @@ func build_status_snapshot(context: Dictionary) -> Dictionary:
 		"request_host_available": bool(context.get("request_host_available", false)),
 		"discovery_retry_pending": bool(context.get("discovery_retry_pending", false)),
 		"pending_sync_after_refs_discovery": bool(context.get("pending_sync_after_refs_discovery", false)),
+		"selection_refresh_pending": bool(context.get("selection_refresh_pending", false)),
+		"selection_refresh_pending_ref": str(context.get("selection_refresh_pending_ref", "")),
 		"next_action": "poll_update_status" if bool(context.get("pending_sync_after_refs_discovery", false)) else "",
 		"refs": build_refs_status(context),
 		"compare": build_compare_status(context),
@@ -128,6 +130,10 @@ func build_refs_status(context: Dictionary) -> Dictionary:
 		"state": str(context.get("refs_state", "")),
 		"status": str(context.get("refs_status", "")),
 		"error": str(context.get("refs_error", "")),
+		"refresh_state": str(context.get("refs_refresh_state", "")),
+		"refresh_error": str(context.get("refs_refresh_error", "")),
+		"last_checked_unix": int(context.get("refs_last_checked_unix", 0)),
+		"refresh_serial": int(context.get("refs_refresh_serial", 0)),
 		"branches": _duplicate_array(context.get("branches", [])),
 		"releases": _duplicate_array(context.get("releases", [])),
 		"latest_stable_release": str(context.get("latest_stable_release", "")),
@@ -142,6 +148,10 @@ func build_compare_status(context: Dictionary) -> Dictionary:
 	return {
 		"state": str(context.get("compare_state", "")),
 		"error": str(context.get("compare_error", "")),
+		"refresh_state": str(context.get("compare_refresh_state", "")),
+		"refresh_error": str(context.get("compare_refresh_error", "")),
+		"last_checked_unix": int(context.get("compare_last_checked_unix", 0)),
+		"refresh_serial": int(context.get("compare_refresh_serial", 0)),
 		"base_commit": str(context.get("compare_base_commit", "")),
 		"target_ref": str(context.get("compare_target_ref", "")),
 		"target_commit": str(context.get("compare_target_commit", "")),
@@ -157,6 +167,8 @@ func build_sync_status(context: Dictionary) -> Dictionary:
 		"error": str(context.get("sync_error", "")),
 		"target_ref": str(context.get("sync_target_ref", "")),
 		"target_kind": str(context.get("sync_target_kind", "")),
+		"selection_refresh_pending": bool(context.get("selection_refresh_pending", false)),
+		"selection_refresh_pending_ref": str(context.get("selection_refresh_pending_ref", "")),
 		"pending_after_refs_discovery": bool(context.get("pending_sync_after_refs_discovery", false))
 	}
 
