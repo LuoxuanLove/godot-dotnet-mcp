@@ -508,6 +508,7 @@ func _make_client_card_signature(client: Dictionary, localization) -> String:
 		"runtime_status_text",
 		"entry_status_text",
 		"path_source_text",
+		"install_message_text",
 		"path_label_text",
 		"path",
 		"detail_label_text",
