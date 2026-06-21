@@ -48,6 +48,18 @@ class FakeRuntimeControlService extends RefCounted:
 		}
 
 
+class CountingServiceFactory extends RefCounted:
+	var inner
+	var ensure_count := 0
+
+	func _init(inner_factory) -> void:
+		inner = inner_factory
+
+	func ensure_services(current: Dictionary) -> Dictionary:
+		ensure_count += 1
+		return inner.ensure_services(current)
+
+
 var _loader = null
 
 
@@ -72,6 +84,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var runtime_control_service = FakeRuntimeControlService.new()
 	_loader = ToolLoaderScript.new()
 	_loader.configure(FakeServerContext.new(tool_access_provider, runtime_control_service))
+	var counting_factory := CountingServiceFactory.new(_loader._service_factory)
+	_loader._service_factory = counting_factory
+	_loader._services_ready = false
 	_loader.set_tool_activity_registry(ToolActivityRegistryScript.new())
 	var summary: Dictionary = _loader.initialize([])
 
@@ -85,6 +100,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool loader category summary should match indexed domain states.")
 	if int(summary.get("catalog_revision", 0)) <= 0:
 		return _failure("Tool loader initialize() should publish a positive catalog revision for cached UI consumers.")
+	var ensure_count_after_initialize := counting_factory.ensure_count
+	_loader.get_tool_loader_status()
+	_loader.get_tool_definitions()
+	_loader.get_exposed_tool_definitions()
+	_loader.get_domain_states()
+	if counting_factory.ensure_count != ensure_count_after_initialize:
+		return _failure("Tool loader should skip service factory work while all services are already ready.")
+	_loader._query_service = null
+	_loader.get_tool_loader_status()
+	if counting_factory.ensure_count <= ensure_count_after_initialize:
+		return _failure("Tool loader should rehydrate services when a service reference is lost after script reload.")
+	var ensure_count_after_rehydrate := counting_factory.ensure_count
+	_loader.get_tool_loader_status()
+	if counting_factory.ensure_count != ensure_count_after_rehydrate:
+		return _failure("Tool loader should return to the ready fast path after service rehydration.")
 
 	var status: Dictionary = _loader.get_tool_loader_status()
 	if not bool(status.get("healthy", false)):

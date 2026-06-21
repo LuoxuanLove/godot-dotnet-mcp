@@ -44,6 +44,7 @@ Target version: 2.0.0.
 - Changed root domain implementations to split executors for audio, animation, signal, TileMap, UI, filesystem, node, project, resource, scene, group, geometry, material, lighting, navigation, particle, physics, shader, debug, and editor domains, with debug/editor kept as thin compatibility wrappers.
 - Changed AtomicBridge, `MCPToolLoader`, stdio routing, plugin lifecycle wiring, reload handling, runtime context wiring, status/query projections, and User-tool maintenance to use dedicated services while preserving their public facades.
 - Changed MCPToolLoader lifecycle tick budgeting, interval selection, and tick performance counters to use a dedicated budget service while keeping runtime tick side effects in the loader lifecycle path.
+- Changed MCPToolLoader service readiness checks so status, catalog, tick, and execution hot paths skip repeated service factory wiring while still rehydrating services after script reloads.
 - Changed plugin update state transitions for refs, sync, and compare workflows to use a dedicated transition service while preserving the Dock and MCP update status fields.
 - Changed plugin update endpoint, archive, timeout, marker, and addon-root facts to use a dedicated endpoint config service instead of keeping those GitHub/update constants in the plugin entrypoint.
 - Changed the project and bundled plugin license from MIT to Apache-2.0 for the v2.0 line.
