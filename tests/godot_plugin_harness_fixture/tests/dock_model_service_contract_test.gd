@@ -255,6 +255,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var source_guard := _assert_dock_model_signature_avoids_json_sort_comparators()
 	if not source_guard.is_empty():
 		return _failure(source_guard)
+	var lightweight_signature_guard := _assert_dock_model_uses_lightweight_signatures()
+	if not lightweight_signature_guard.is_empty():
+		return _failure(lightweight_signature_guard)
 	var service = DockModelService.new()
 	var state = FakeState.new()
 	state.mcp_catalog_preview = {"kind": "prompt", "id": "godot.project_orientation", "success": true, "text": "Preview text"}
@@ -367,6 +370,25 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var refreshed_project_metadata: Dictionary = refreshed_metadata_by_name.get("system_project_state", {})
 	if str(refreshed_project_metadata.get("scriptPath", "")) != changed_script_path:
 		return _failure("Dock catalog snapshot cache should invalidate when tool metadata changes without a count change.")
+	var signature_before_nested_schema_change: String = service.call("_build_tool_signature_entry", "system", {
+		"name": "project_state",
+		"inputSchema": {"properties": {"flags": {"items": {"enum": ["a", "b"]}}}},
+		"presentation": {"group": "Project", "rank": 1}
+	})
+	var signature_after_nested_schema_change: String = service.call("_build_tool_signature_entry", "system", {
+		"name": "project_state",
+		"inputSchema": {"properties": {"flags": {"items": {"enum": ["a", "c"]}}}},
+		"presentation": {"rank": 1, "group": "Project"}
+	})
+	if signature_before_nested_schema_change == signature_after_nested_schema_change:
+		return _failure("Dock model lightweight tool signatures should still detect nested schema metadata changes.")
+	var signature_with_reordered_keys: String = service.call("_build_tool_signature_entry", "system", {
+		"presentation": {"rank": 1, "group": "Project"},
+		"inputSchema": {"properties": {"flags": {"items": {"enum": ["a", "b"]}}}},
+		"name": "project_state"
+	})
+	if signature_before_nested_schema_change != signature_with_reordered_keys:
+		return _failure("Dock model lightweight tool signatures should be stable for reordered dictionary keys.")
 
 	state.current_tools_view = "internal_executors"
 	var internal_model: Dictionary = service.build_model()
@@ -461,6 +483,25 @@ func _assert_dock_model_signature_avoids_json_sort_comparators() -> String:
 		return "Dock model catalog signature should not stringify tool entries inside the sort comparator."
 	if source.find("tool_entries.sort()") == -1:
 		return "Dock model catalog signature should sort precomputed lightweight entry keys."
+	return ""
+
+
+func _assert_dock_model_uses_lightweight_signatures() -> String:
+	var source_path := "res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd"
+	if not FileAccess.file_exists(source_path):
+		return "Dock model service source should exist for lightweight signature guard."
+	var source := FileAccess.get_file_as_string(source_path)
+	for needle in [
+		"return JSON.stringify({",
+		"tool_entries.append(JSON.stringify",
+		"return JSON.stringify(["
+	]:
+		if source.find(needle) != -1:
+			return "Dock model signatures should avoid JSON serialization in hot refresh paths."
+	if source.find("func _signature_value") == -1 or source.find("func _signature_scalar") == -1:
+		return "Dock model signatures should use lightweight deterministic value signatures."
+	if source.find("_build_tool_catalog_model_signature") == -1 or source.find("_signature_join([") == -1:
+		return "Dock model catalog signatures should use lightweight signature joins."
 	return ""
 
 
