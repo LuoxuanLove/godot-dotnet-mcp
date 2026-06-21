@@ -65,6 +65,7 @@ Target version: 2.0.0.
 - Fixed plugin update sync from MCP tools so custom branches with slash-separated names resolve their commit before archive download, retry through commit/ref archive fallbacks, and trigger ref discovery for release-derived targets instead of failing while the Dock path can still recover.
 - Fixed plugin update sync request planning so Dock and MCP update actions share target resolution, branch-ref URL encoding, archive retry decisions, and sync marker payload construction instead of duplicating those rules in the plugin entrypoint.
 - Fixed Config tab one-click CLI setup actions so they run through a non-blocking process path with immediate in-panel status instead of freezing the editor until the client command exits.
+- Fixed Config tab direct config write/remove actions so file preflight and writeback work starts after the panel enters a visible running state, avoiding click-to-dialog stalls on slower configuration paths.
 - Fixed first-open responsiveness of the Dock Tools tab by building only the active tool presentation view up front and deferring Internal Executors / Diagnostics trees until those views are selected.
 - Fixed repeated Dock Tools refreshes so unchanged tool catalogs reuse the last presentation model through a lightweight catalog revision instead of rebuilding the full tool snapshot on every active-tab refresh.
 - Fixed Dock status snapshots so lightweight views reuse cached lifecycle context and avoid calling heavy server diagnostics unless the active tab explicitly needs them.

@@ -17,6 +17,29 @@ class FakeLocalization extends RefCounted:
 			"msg_client_action_failed": "%s automatic setup failed.",
 			"msg_config_remove_success": "Removed godot-mcp from %s.",
 			"msg_config_remove_failed": "Remove failed.",
+			"msg_config_success": "%s configured successfully.",
+			"msg_config_verified": "Verified: %s",
+			"msg_config_backup_created": "Backup: %s",
+			"msg_config_effect_hint": "Restart the client to apply changes.",
+			"msg_config_client_not_running": "Client is not running.",
+			"msg_config_remove_confirm": "Remove %s?",
+			"msg_config_remove_safe_scope": "Only godot-mcp is removed.",
+			"msg_config_remove_noop_missing_file": "No %s config file.",
+			"msg_config_remove_noop_missing_entry": "No godot-mcp in %s.",
+			"msg_config_readback_failed": "Readback failed.",
+			"msg_config_readback_missing_file": "Missing file: %s",
+			"msg_config_readback_open_error": "Open error: %s",
+			"msg_config_readback_parse_error": "Parse error: %s",
+			"msg_config_readback_missing_server": "Missing server %s: %s",
+			"msg_config_readback_mismatch": "Mismatch %s: %s",
+			"msg_config_precheck_read_error": "Read error: %s",
+			"msg_config_precheck_invalid_json": "Invalid JSON: %s",
+			"msg_config_precheck_incompatible_root": "Bad root: %s",
+			"msg_config_precheck_incompatible_servers": "Bad servers: %s",
+			"msg_config_precheck_incompatible_mcp": "Bad mcp: %s",
+			"msg_config_overwrite_confirm": "Overwrite %s?",
+			"msg_config_backup_notice": "Backup at %s",
+			"msg_write_error": "Write error",
 			"msg_client_launch_success": "%s launched.",
 			"msg_client_launch_failed": "%s launch failed.",
 			"msg_client_launch_workdir": "Workspace: %s",
@@ -35,6 +58,9 @@ class FakeConfigService extends RefCounted:
 	var sync_cli_calls: Array[Dictionary] = []
 	var desktop_launches: Array[Dictionary] = []
 	var cli_launches: Array[Dictionary] = []
+	var config_writes: Array[Dictionary] = []
+	var config_removes: Array[Dictionary] = []
+	var config_entry_status := "present"
 
 	func execute_cli_command(executable_path: String, arguments: PackedStringArray) -> Dictionary:
 		sync_cli_calls.append({
@@ -69,6 +95,57 @@ class FakeConfigService extends RefCounted:
 		})
 		return {"success": true, "message": "ok"}
 
+	func preflight_write_config(config_type: String, filepath: String, new_config: String) -> Dictionary:
+		return {
+			"success": true,
+			"config_type": config_type,
+			"path": filepath,
+			"status": "missing",
+			"requires_confirmation": false,
+			"has_existing_file": false,
+			"backup_path": "%s.bak" % filepath
+		}
+
+	func write_config_file(config_type: String, filepath: String, new_config: String, options: Dictionary = {}) -> Dictionary:
+		config_writes.append({
+			"config_type": config_type,
+			"filepath": filepath,
+			"new_config": new_config,
+			"options": options.duplicate(true)
+		})
+		return {
+			"success": true,
+			"config_type": config_type,
+			"path": filepath,
+			"backup_path": "",
+			"verified": true
+		}
+
+	func inspect_config_entry(config_type: String, filepath: String, server_name: String = "godot-mcp") -> Dictionary:
+		return {
+			"success": true,
+			"config_type": config_type,
+			"path": filepath,
+			"status": config_entry_status,
+			"has_server_entry": config_entry_status == "present",
+			"server_name": server_name,
+			"backup_path": "%s.bak" % filepath
+		}
+
+	func remove_config_entry(config_type: String, filepath: String, options: Dictionary = {}) -> Dictionary:
+		config_removes.append({
+			"config_type": config_type,
+			"filepath": filepath,
+			"options": options.duplicate(true)
+		})
+		return {
+			"success": true,
+			"config_type": config_type,
+			"path": filepath,
+			"removed": true,
+			"backup_path": ""
+		}
+
 
 class FakeRecorder extends RefCounted:
 	var statuses: Dictionary = {}
@@ -76,6 +153,7 @@ class FakeRecorder extends RefCounted:
 	var refreshed := 0
 	var saved := 0
 	var messages: Array[String] = []
+	var confirmations: Array[Dictionary] = []
 
 	func get_statuses() -> Dictionary:
 		return statuses
@@ -91,6 +169,12 @@ class FakeRecorder extends RefCounted:
 
 	func show_message(message: String) -> void:
 		messages.append(message)
+
+	func show_confirmation(message: String, on_confirmed: Callable) -> void:
+		confirmations.append({
+			"message": message,
+			"on_confirmed": on_confirmed
+		})
 
 
 class FakeState extends RefCounted:
@@ -137,6 +221,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	context.refresh_dock = Callable(recorder, "refresh")
 	context.save_settings = Callable(recorder, "save")
 	context.show_message = Callable(recorder, "show_message")
+	context.show_confirmation = Callable(recorder, "show_confirmation")
 	action_service.configure(context)
 
 	recorder.statuses = {
@@ -220,6 +305,30 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Config tab one-click setup should use the async CLI execution path instead of blocking execute_cli_command.")
 	if state.client_action_state != "idle" or not state.client_action_client_id.is_empty() or not state.client_action_status.is_empty():
 		return _failure("Config tab action service should clear the running state after async CLI setup completes.")
+
+	action_service.handle_config_write_requested("desktop", "C:/Users/Test/AppData/Roaming/Claude/claude_desktop_config.json", "{\"mcpServers\":{}}", "Claude Desktop")
+	if state.client_action_state != "loading" or state.client_action_status.find("Claude Desktop") == -1:
+		return _failure("Config file writes should enter a visible running state before deferred file IO.")
+	if not config_service.config_writes.is_empty():
+		return _failure("Config file writes should be deferred until after the click frame can repaint.")
+	await _drain_async_action(tree)
+	if config_service.config_writes.size() != 1:
+		return _failure("Config file writes should execute after the deferred action starts.")
+	if state.client_action_state != "idle" or not state.client_action_status.is_empty():
+		return _failure("Config file writes should clear the running state after write/readback completes.")
+
+	action_service.handle_config_remove_requested("desktop", "C:/Users/Test/AppData/Roaming/Claude/claude_desktop_config.json", "Claude Desktop")
+	if state.client_action_state != "loading" or state.client_action_status.find("Claude Desktop") == -1:
+		return _failure("Config removal preflight should enter a visible running state before deferred inspection.")
+	if not config_service.config_removes.is_empty():
+		return _failure("Config removals should not remove entries on the click frame.")
+	await _drain_async_action(tree)
+	if config_service.config_removes.size() != 0:
+		return _failure("Config removals should wait for explicit confirmation before changing a config file.")
+	if state.client_action_state != "idle":
+		return _failure("Config removal confirmation prompts should release the running state while waiting for user input.")
+	if recorder.confirmations.is_empty():
+		return _failure("Config removals should show an explicit confirmation before removing managed entries.")
 
 	recorder.statuses["claude_desktop"] = {
 		"status": "ready",

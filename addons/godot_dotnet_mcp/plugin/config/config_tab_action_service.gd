@@ -181,37 +181,62 @@ func handle_config_client_open_config_file_requested(client_id: String) -> void:
 
 
 func handle_config_write_requested(config_type: String, filepath: String, config: String, client_name: String) -> void:
+	if _is_client_action_running():
+		_show_config_message(_localization.get_text("config_client_action_already_running"))
+		return
+	_begin_named_client_action(client_name)
+	call_deferred("_handle_config_write_requested_async", config_type, filepath, config, client_name)
+
+
+func _handle_config_write_requested_async(config_type: String, filepath: String, config: String, client_name: String) -> void:
+	await _wait_one_frame()
 	var preflight = _config_service.preflight_write_config(config_type, filepath, config)
 	if not bool(preflight.get("success", false)):
+		_finish_client_action()
 		_show_config_message(_build_config_write_failure_message(preflight, filepath))
 		return
 
 	if bool(preflight.get("requires_confirmation", false)):
+		_finish_client_action()
 		_show_config_confirmation(
 			_build_config_write_confirmation_message(client_name, preflight),
 			func() -> void:
-				_perform_config_write(config_type, filepath, config, client_name, preflight, true)
+				_begin_named_client_action(client_name)
+				call_deferred("_perform_config_write_async", config_type, filepath, config, client_name, preflight, true)
 		)
 		return
 
-	_perform_config_write(config_type, filepath, config, client_name, preflight, false)
+	await _perform_config_write_async(config_type, filepath, config, client_name, preflight, false)
 
 
 func handle_config_remove_requested(config_type: String, filepath: String, client_name: String) -> void:
+	if _is_client_action_running():
+		_show_config_message(_localization.get_text("config_client_action_already_running"))
+		return
+	_begin_named_client_action(client_name)
+	call_deferred("_handle_config_remove_requested_async", config_type, filepath, client_name)
+
+
+func _handle_config_remove_requested_async(config_type: String, filepath: String, client_name: String) -> void:
+	await _wait_one_frame()
 	var inspection = _config_service.inspect_config_entry(config_type, filepath)
 	if not bool(inspection.get("success", false)):
+		_finish_client_action()
 		_show_config_message(_build_config_remove_failure_message(inspection, filepath))
 		return
 
 	var status = str(inspection.get("status", "missing_file"))
 	if status != "present":
+		_finish_client_action()
 		_show_config_message(_build_config_remove_noop_message(inspection, client_name))
 		return
 
+	_finish_client_action()
 	_show_config_confirmation(
 		_build_config_remove_confirmation_message(client_name, inspection),
 		func() -> void:
-			_perform_config_remove(config_type, filepath, client_name, inspection)
+			_begin_named_client_action(client_name)
+			call_deferred("_perform_config_remove_async", config_type, filepath, client_name, inspection)
 	)
 
 
@@ -297,6 +322,19 @@ func _perform_config_write(
 	_show_config_message("\n\n".join(success_lines))
 
 
+func _perform_config_write_async(
+	config_type: String,
+	filepath: String,
+	config: String,
+	client_name: String,
+	preflight: Dictionary,
+	allow_incompatible_overwrite: bool
+) -> void:
+	await _wait_one_frame()
+	_perform_config_write(config_type, filepath, config, client_name, preflight, allow_incompatible_overwrite)
+	_finish_client_action()
+
+
 func _perform_config_remove(config_type: String, filepath: String, client_name: String, inspection: Dictionary) -> void:
 	var result = _config_service.remove_config_entry(config_type, filepath, {"inspection": inspection})
 	if not bool(result.get("success", false)):
@@ -318,6 +356,12 @@ func _perform_config_remove(config_type: String, filepath: String, client_name: 
 		success_lines.append(_localization.get_text("msg_config_backup_created") % backup_path)
 	success_lines.append(_build_client_runtime_followup_message(config_type))
 	_show_config_message("\n\n".join(success_lines))
+
+
+func _perform_config_remove_async(config_type: String, filepath: String, client_name: String, inspection: Dictionary) -> void:
+	await _wait_one_frame()
+	_perform_config_remove(config_type, filepath, client_name, inspection)
+	_finish_client_action()
 
 
 func _build_config_write_confirmation_message(client_name: String, preflight: Dictionary) -> String:
@@ -522,9 +566,12 @@ func _is_client_action_running() -> bool:
 
 
 func _begin_client_action(client_id: String) -> void:
+	_begin_named_client_action(_get_client_display_name(client_id), client_id)
+
+
+func _begin_named_client_action(client_name: String, client_id: String = "") -> void:
 	if _state == null:
 		return
-	var client_name := _get_client_display_name(client_id)
 	_state.client_action_state = "loading"
 	_state.client_action_client_id = client_id
 	_state.client_action_status = _localization.get_text("config_client_action_running_status") % client_name
