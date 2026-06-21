@@ -59,7 +59,6 @@ var custom_tool_profiles: Dictionary = {}
 var current_cli_scope := "user"
 var current_config_platform := "claude_desktop"
 var current_tab := 0
-var current_tools_view := "agent_tools"
 var restore_focus := false
 var needs_initial_tool_profile_apply := false
 var update_refs_state := "idle"

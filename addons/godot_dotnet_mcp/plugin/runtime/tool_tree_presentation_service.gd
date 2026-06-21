@@ -80,8 +80,9 @@ const AGENT_TOOL_GROUPS: Array[Dictionary] = [
 ]
 
 
-static func build_agent_tool_tree(exposed_tools: Array, disabled_tools: Array = []) -> Dictionary:
+static func build_agent_tool_tree(exposed_tools: Array, disabled_tools: Array = [], all_tools_by_category: Dictionary = {}) -> Dictionary:
 	var exposed_by_name := _build_exposed_public_lookup(exposed_tools)
+	var all_tools_by_name := _build_all_tool_lookup(all_tools_by_category)
 	var disabled_lookup := _build_disabled_lookup(disabled_tools)
 	var seen := {}
 	var roots: Array[Dictionary] = []
@@ -100,9 +101,9 @@ static func build_agent_tool_tree(exposed_tools: Array, disabled_tools: Array = 
 			if seen.has(tool_name) or not exposed_by_name.has(tool_name):
 				continue
 			var tool: Dictionary = exposed_by_name.get(tool_name, {})
-			var node := _build_public_tool_node(tool_name, tool, group_key, disabled_lookup)
+			var node := _build_public_tool_node(tool_name, tool, group_key, disabled_lookup, all_tools_by_name)
 			tool_nodes.append(node)
-			metadata_by_name[tool_name] = _build_tool_metadata(node)
+			_index_tool_metadata_recursive(node, metadata_by_name)
 			seen[tool_name] = true
 		if tool_nodes.is_empty():
 			continue
@@ -135,9 +136,9 @@ static func build_agent_tool_tree(exposed_tools: Array, disabled_tools: Array = 
 		var tool_nodes: Array[Dictionary] = []
 		for tool_name in uncategorized:
 			var tool: Dictionary = exposed_by_name.get(tool_name, {})
-			var node := _build_public_tool_node(tool_name, tool, "other_agent_tools", disabled_lookup)
+			var node := _build_public_tool_node(tool_name, tool, "other_agent_tools", disabled_lookup, all_tools_by_name)
 			tool_nodes.append(node)
-			metadata_by_name[tool_name] = _build_tool_metadata(node)
+			_index_tool_metadata_recursive(node, metadata_by_name)
 			seen[tool_name] = true
 		var counts := _count_enabled(tool_nodes)
 		var group_node := {
@@ -173,195 +174,13 @@ static func build_agent_tool_tree(exposed_tools: Array, disabled_tools: Array = 
 	return presentation
 
 
-static func build_internal_executor_tree(
-	all_tools_by_category: Dictionary,
-	exposed_tools: Array,
-	domain_states: Array = [],
-	catalog_manifest: Dictionary = {}
-) -> Dictionary:
-	var exposed_lookup := _build_exposed_name_lookup(exposed_tools)
-	var domain_defs: Array = catalog_manifest.get("domain_defs", ToolCatalogManifest.get_domain_defs())
-	var category_states := _build_category_state_lookup(domain_states)
-	var roots: Array[Dictionary] = []
-	var groups: Array[Dictionary] = []
-	for domain_def in domain_defs:
-		if not (domain_def is Dictionary):
-			continue
-		var domain_dict := domain_def as Dictionary
-		var domain_key := str(domain_dict.get("key", "other"))
-		var category_nodes: Array[Dictionary] = []
-		for category_value in domain_dict.get("categories", []):
-			var category := str(category_value)
-			if not all_tools_by_category.has(category):
-				continue
-			var tools = all_tools_by_category.get(category, [])
-			if not (tools is Array):
-				continue
-			var tool_nodes: Array[Dictionary] = []
-			var public_produced: Array[String] = []
-			var internal_count := 0
-			for raw_tool in tools:
-				if not (raw_tool is Dictionary):
-					continue
-				var tool := raw_tool as Dictionary
-				var full_name := _get_full_name(category, tool)
-				if full_name.is_empty():
-					continue
-				var is_exposed := exposed_lookup.has(full_name)
-				if is_exposed:
-					public_produced.append(full_name)
-				else:
-					internal_count += 1
-				tool_nodes.append(_build_executor_tool_node(category, domain_key, full_name, tool, is_exposed))
-			if tool_nodes.is_empty():
-				continue
-			var state: Dictionary = category_states.get(category, {})
-			var category_node := {
-				"kind": "executor_category",
-				"id": "executor:%s" % category,
-				"key": category,
-				"label": category,
-				"category": category,
-				"domain": domain_key,
-				"labelKey": "cat_%s" % category,
-				"visibility": "advanced",
-				"callability": "not_callable",
-				"loaded": bool(state.get("loaded", true)),
-				"toolCount": tool_nodes.size(),
-				"enabledToolCount": int(state.get("enabled_tool_count", tool_nodes.size())),
-				"loadErrorCount": int(state.get("load_error_count", 0)),
-				"lastError": state.get("last_error", null),
-				"publicToolsProduced": public_produced,
-				"internalToolCount": internal_count,
-				"children": tool_nodes
-			}
-			category_nodes.append(category_node)
-			groups.append({
-				"id": category_node.get("id", ""),
-				"kind": "executor_category",
-				"key": category,
-				"domain": domain_key,
-				"toolIds": _node_keys(tool_nodes),
-				"totalCount": tool_nodes.size()
-			})
-		if category_nodes.is_empty():
-			continue
-		roots.append({
-			"kind": "executor_domain",
-			"id": "executor_domain:%s" % domain_key,
-			"key": domain_key,
-			"label": str(domain_dict.get("label", domain_key)),
-			"domain": domain_key,
-			"labelKey": str(domain_dict.get("label", "domain_%s" % domain_key)),
-			"visibility": "advanced",
-			"callability": "not_callable",
-			"totalCount": category_nodes.size(),
-			"children": category_nodes
-		})
-	var presentation := {
-		"presentationVersion": PRESENTATION_VERSION,
-		"view": "internal_executors",
-		"toolTree": roots,
-		"toolGroups": groups
-	}
-	presentation["signature"] = ToolPresentationService.build_presentation_signature("internal_executors", roots, groups)
-	return presentation
-
-
-static func build_diagnostics_tree(exposed_tools: Array, all_tools_by_category: Dictionary, loader_status: Dictionary = {}) -> Dictionary:
-	var exposed_lookup := _build_exposed_name_lookup(exposed_tools)
-	var diagnostics: Array[Dictionary] = []
-	var exposed_children: Array[Dictionary] = []
-	for tool_name in _sorted_keys(exposed_lookup):
-		var tool: Dictionary = exposed_lookup.get(tool_name, {})
-		exposed_children.append({
-			"kind": "diagnostic_node",
-			"id": "diagnostic:tool:%s" % tool_name,
-			"key": tool_name,
-			"label": tool_name,
-			"tool_name": tool_name,
-			"category": str(tool.get("category", "")),
-			"visibility": "public",
-			"callability": "callable",
-			"source": str(tool.get("source", "")),
-			"schema": {
-				"inputSchema": ToolPresentationService.build_tool_input_schema(tool),
-				"outputSchema": ToolPresentationService.build_tool_output_schema(tool)
-			},
-			"children": []
-		})
-	if not exposed_children.is_empty():
-		diagnostics.append({
-			"kind": "diagnostic_node",
-			"id": "diagnostic:public_tools",
-			"key": "public_tools",
-			"labelKey": "tool_diagnostics_public_tools",
-			"visibility": "public",
-			"callability": "not_callable",
-			"children": exposed_children
-		})
-
-	var legacy_children: Array[Dictionary] = []
-	for removed_tool in ToolCatalogManifest.get_removed_public_tool_names():
-		legacy_children.append({
-			"kind": "legacy_tool",
-			"id": "diagnostic:legacy:%s" % removed_tool,
-			"key": removed_tool,
-			"label": removed_tool,
-			"tool_name": removed_tool,
-			"visibility": "removed",
-			"callability": "compat_callable",
-			"replacement": "godot-dotnet-mcp://guides/index",
-			"reason": "context_moved_to_resources_prompts_or_canonical_tools",
-			"children": []
-		})
-	if not legacy_children.is_empty():
-		diagnostics.append({
-			"kind": "diagnostic_node",
-			"id": "diagnostic:legacy_tools",
-			"key": "legacy_tools",
-			"labelKey": "tool_diagnostics_legacy_tools",
-			"visibility": "legacy",
-			"callability": "not_callable",
-			"children": legacy_children
-		})
-
-	var category_children: Array[Dictionary] = []
-	for category in _sorted_dictionary_keys(all_tools_by_category):
-		var tools = all_tools_by_category.get(category, [])
-		category_children.append({
-			"kind": "diagnostic_node",
-			"id": "diagnostic:category:%s" % category,
-			"key": category,
-			"label": category,
-			"category": category,
-			"visibility": "internal" if not ToolCatalogManifest.is_public_category(category) else "public",
-			"callability": "not_callable",
-			"toolCount": (tools as Array).size() if tools is Array else 0,
-			"children": []
-		})
-	diagnostics.append({
-		"kind": "diagnostic_node",
-		"id": "diagnostic:executor_categories",
-		"key": "executor_categories",
-		"labelKey": "tool_diagnostics_executor_categories",
-		"visibility": "advanced",
-		"callability": "not_callable",
-		"status": loader_status.duplicate(true),
-		"children": category_children
-	})
-	var presentation := {
-		"presentationVersion": PRESENTATION_VERSION,
-		"view": "tool_diagnostics",
-		"toolTree": diagnostics
-	}
-	presentation["signature"] = ToolPresentationService.build_presentation_signature("tool_diagnostics", diagnostics)
-	return presentation
-
-
-static func _build_public_tool_node(tool_name: String, tool: Dictionary, group_key: String, disabled_lookup: Dictionary) -> Dictionary:
+static func _build_public_tool_node(tool_name: String, tool: Dictionary, group_key: String, disabled_lookup: Dictionary, all_tools_by_name: Dictionary) -> Dictionary:
 	var enabled := not disabled_lookup.has(tool_name) and bool(tool.get("enabled", true))
 	var annotations := ToolAnnotationService.build_annotations(_tool_with_full_name(tool, tool_name))
+	var children := _build_architecture_children(tool_name, tool, all_tools_by_name, disabled_lookup, ["tool:%s" % tool_name], {})
+	var child_ids: Array[String] = []
+	for child in children:
+		child_ids.append(str(child.get("id", "")))
 	return {
 		"kind": "public_tool",
 		"id": "tool:%s" % tool_name,
@@ -386,26 +205,134 @@ static func _build_public_tool_node(tool_name: String, tool: Dictionary, group_k
 			"resourceAlternatives": _duplicate_array(tool.get("resourceAlternatives", [])),
 			"promptAlternatives": _duplicate_array(tool.get("promptAlternatives", []))
 		},
-		"children": []
+		"groupPath": ["tool:%s" % tool_name],
+		"treeChildren": child_ids,
+		"children": children
 	}
 
 
-static func _build_executor_tool_node(category: String, domain_key: String, full_name: String, tool: Dictionary, is_exposed: bool) -> Dictionary:
-	var visibility := "public" if is_exposed else "internal"
+static func _build_architecture_children(parent_full_name: String, tool: Dictionary, all_tools_by_name: Dictionary, disabled_lookup: Dictionary, parent_path: Array, visited: Dictionary) -> Array[Dictionary]:
+	var children: Array[Dictionary] = []
+	var action_nodes: Array[Dictionary] = []
+	for action in _extract_action_values(tool):
+		action_nodes.append(_build_action_node(parent_full_name, str(action), parent_path))
+	if not action_nodes.is_empty():
+		children.append(_build_architecture_group_node(parent_full_name, "actions", "tool_architecture_actions", action_nodes, parent_path))
+	var next_visited := visited.duplicate()
+	next_visited[parent_full_name] = true
+	var atomic_nodes := _build_atomic_nodes(parent_full_name, all_tools_by_name, disabled_lookup, parent_path, next_visited)
+	if not atomic_nodes.is_empty():
+		children.append(_build_architecture_group_node(parent_full_name, "implemented_by", "tool_architecture_implemented_by", atomic_nodes, parent_path))
+	return children
+
+
+static func _build_architecture_group_node(parent_full_name: String, group_key: String, label_key: String, children: Array[Dictionary], parent_path: Array) -> Dictionary:
+	var group_path := parent_path.duplicate()
+	group_path.append("architecture:%s.%s" % [parent_full_name, group_key])
+	var child_ids: Array[String] = []
+	for child in children:
+		child_ids.append(str(child.get("id", "")))
 	return {
-		"kind": "executor_tool",
-		"id": "executor_tool:%s" % full_name,
+		"kind": "architecture_group",
+		"id": "architecture:%s:%s" % [parent_full_name, group_key],
+		"key": "%s:%s" % [parent_full_name, group_key],
+		"labelKey": label_key,
+		"parentTool": parent_full_name,
+		"parent_tool": parent_full_name,
+		"visibility": "internal",
+		"callability": "not_callable",
+		"totalCount": children.size(),
+		"groupPath": group_path,
+		"treeChildren": child_ids,
+		"children": children
+	}
+
+
+static func _build_atomic_nodes(parent_full_name: String, all_tools_by_name: Dictionary, disabled_lookup: Dictionary, parent_path: Array, visited: Dictionary) -> Array[Dictionary]:
+	var nodes: Array[Dictionary] = []
+	for entry in ToolPresentationService.get_atomic_child_specs(parent_full_name):
+		var atomic_full_name := ""
+		var actions: Array = []
+		if entry is Dictionary:
+			atomic_full_name = str((entry as Dictionary).get("tool", ""))
+			actions = (entry as Dictionary).get("actions", [])
+		else:
+			atomic_full_name = str(entry)
+		if atomic_full_name.is_empty() or visited.has(atomic_full_name):
+			continue
+		var atomic_tool: Dictionary = all_tools_by_name.get(atomic_full_name, {})
+		if atomic_tool.is_empty():
+			continue
+		var next_path := parent_path.duplicate()
+		next_path.append("atomic:%s" % atomic_full_name)
+		var next_visited := visited.duplicate()
+		next_visited[atomic_full_name] = true
+		var nested_children: Array[Dictionary] = []
+		var action_nodes: Array[Dictionary] = []
+		for action in actions:
+			action_nodes.append(_build_action_node(atomic_full_name, str(action), next_path))
+		if not action_nodes.is_empty():
+			nested_children.append(_build_architecture_group_node(atomic_full_name, "actions", "tool_architecture_actions", action_nodes, next_path))
+		var deeper_atomic := _build_atomic_nodes(atomic_full_name, all_tools_by_name, disabled_lookup, next_path, next_visited)
+		if not deeper_atomic.is_empty():
+			nested_children.append(_build_architecture_group_node(atomic_full_name, "implemented_by", "tool_architecture_implemented_by", deeper_atomic, next_path))
+		nodes.append(_build_atomic_tool_node(atomic_full_name, atomic_tool, disabled_lookup, next_path, nested_children))
+	return nodes
+
+
+static func _build_atomic_tool_node(full_name: String, tool: Dictionary, disabled_lookup: Dictionary, group_path: Array, children: Array[Dictionary]) -> Dictionary:
+	var category := str(tool.get("category", _category_from_name(full_name)))
+	var tool_name := str(tool.get("name", full_name.trim_prefix("%s_" % category)))
+	var annotations := ToolAnnotationService.build_annotations(_tool_with_full_name(tool, full_name))
+	var child_ids: Array[String] = []
+	for child in children:
+		child_ids.append(str(child.get("id", "")))
+	return {
+		"kind": "atomic",
+		"id": "atomic:%s" % full_name,
 		"key": full_name,
-		"label": full_name,
-		"tool_name": full_name,
+		"label": str(annotations.get("title", full_name)),
+		"tool_name": tool_name,
+		"toolName": tool_name,
 		"fullName": full_name,
 		"category": category,
-		"domain": domain_key,
-		"visibility": visibility,
-		"callability": "callable" if is_exposed else "not_callable",
+		"visibility": "internal",
+		"callability": "not_callable",
+		"enabled": not disabled_lookup.has(full_name) and bool(tool.get("enabled", true)),
+		"description": str(tool.get("description", "")),
+		"title": str(annotations.get("title", "")),
+		"icons": _duplicate_array(tool.get("icons", [])),
+		"annotations": annotations,
+		"inputSchema": ToolPresentationService.build_tool_input_schema(tool),
+		"outputSchema": ToolPresentationService.build_tool_output_schema(tool),
 		"source": str(tool.get("source", "")),
 		"loadState": str(tool.get("load_state", tool.get("loadState", ""))),
 		"script_path": str(tool.get("script_path", tool.get("scriptPath", ""))),
+		"scriptPath": str(tool.get("script_path", tool.get("scriptPath", ""))),
+		"domain_script_path": str(tool.get("domain_script_path", tool.get("domainScriptPath", ""))),
+		"domainScriptPath": str(tool.get("domain_script_path", tool.get("domainScriptPath", ""))),
+		"groupPath": group_path,
+		"treeChildren": child_ids,
+		"children": children
+	}
+
+
+static func _build_action_node(parent_full_name: String, action_name: String, parent_path: Array) -> Dictionary:
+	var group_path := parent_path.duplicate()
+	group_path.append("action:%s.%s" % [parent_full_name, action_name])
+	return {
+		"kind": "action",
+		"id": "action:%s.%s" % [parent_full_name, action_name],
+		"key": "%s.%s" % [parent_full_name, action_name],
+		"actionName": action_name,
+		"action": action_name,
+		"parentTool": parent_full_name,
+		"parent_tool": parent_full_name,
+		"labelKey": ToolPresentationService.get_action_name_key(parent_full_name, action_name),
+		"descriptionKey": ToolPresentationService.get_action_desc_key(parent_full_name, action_name),
+		"groupPath": group_path,
+		"visibility": "internal",
+		"callability": "not_callable",
 		"children": []
 	}
 
@@ -430,10 +357,46 @@ static func _build_tool_metadata(node: Dictionary) -> Dictionary:
 		"inputSchema": _duplicate_dictionary(node.get("inputSchema", {})),
 		"outputSchema": _duplicate_dictionary(node.get("outputSchema", {})),
 		"source": str(node.get("source", "")),
+		"loadState": str(node.get("loadState", "")),
 		"script_path": str(node.get("script_path", "")),
-		"scriptPath": str(node.get("script_path", "")),
+		"scriptPath": str(node.get("scriptPath", node.get("script_path", ""))),
+		"domain_script_path": str(node.get("domain_script_path", "")),
+		"domainScriptPath": str(node.get("domainScriptPath", node.get("domain_script_path", ""))),
+		"groupPath": _duplicate_array(node.get("groupPath", [])),
+		"treeChildren": _collect_direct_atomic_child_ids(node),
 		"metadata": _duplicate_dictionary(node.get("metadata", {}))
 	}
+
+
+static func _collect_direct_atomic_child_ids(node: Dictionary) -> Array[String]:
+	var child_ids: Array[String] = []
+	for child in node.get("children", []):
+		if not (child is Dictionary):
+			continue
+		var child_dict := child as Dictionary
+		if str(child_dict.get("kind", "")) == "atomic":
+			child_ids.append(str(child_dict.get("id", "")))
+			continue
+		if str(child_dict.get("kind", "")) != "architecture_group":
+			continue
+		for nested in child_dict.get("children", []):
+			if not (nested is Dictionary):
+				continue
+			var nested_dict := nested as Dictionary
+			if str(nested_dict.get("kind", "")) == "atomic":
+				child_ids.append(str(nested_dict.get("id", "")))
+	return child_ids
+
+
+static func _index_tool_metadata_recursive(node: Dictionary, metadata_by_name: Dictionary) -> void:
+	var kind := str(node.get("kind", ""))
+	if kind == "public_tool" or kind == "atomic":
+		var full_name := str(node.get("fullName", node.get("key", "")))
+		if not full_name.is_empty():
+			metadata_by_name[full_name] = _build_tool_metadata(node)
+	for child in node.get("children", []):
+		if child is Dictionary:
+			_index_tool_metadata_recursive(child as Dictionary, metadata_by_name)
 
 
 static func _build_exposed_public_lookup(exposed_tools: Array) -> Dictionary:
@@ -456,21 +419,24 @@ static func _build_exposed_public_lookup(exposed_tools: Array) -> Dictionary:
 	return lookup
 
 
-static func _build_exposed_name_lookup(exposed_tools: Array) -> Dictionary:
+static func _build_all_tool_lookup(all_tools_by_category: Dictionary) -> Dictionary:
 	var lookup := {}
-	for raw_tool in exposed_tools:
-		if not (raw_tool is Dictionary):
+	for raw_category in all_tools_by_category.keys():
+		var category := str(raw_category)
+		var tools = all_tools_by_category.get(raw_category, [])
+		if not (tools is Array):
 			continue
-		var tool := raw_tool as Dictionary
-		var full_name := str(tool.get("name", tool.get("full_name", "")))
-		if full_name.is_empty():
-			continue
-		var copy := tool.duplicate(true)
-		copy["name"] = full_name
-		copy["full_name"] = full_name
-		if not copy.has("category"):
-			copy["category"] = _category_from_name(full_name)
-		lookup[full_name] = copy
+		for raw_tool in tools:
+			if not (raw_tool is Dictionary):
+				continue
+			var tool := (raw_tool as Dictionary).duplicate(true)
+			var full_name := _get_full_name(category, tool)
+			if full_name.is_empty():
+				continue
+			tool["name"] = str(tool.get("name", full_name.trim_prefix("%s_" % category)))
+			tool["full_name"] = full_name
+			tool["category"] = category
+			lookup[full_name] = tool
 	return lookup
 
 
@@ -522,34 +488,6 @@ static func _node_keys(nodes: Array[Dictionary]) -> Array[String]:
 	return keys
 
 
-static func _build_category_state_lookup(domain_states: Array) -> Dictionary:
-	var lookup := {}
-	for state in domain_states:
-		if not (state is Dictionary):
-			continue
-		var state_dict := state as Dictionary
-		var category := str(state_dict.get("category", ""))
-		if not category.is_empty():
-			lookup[category] = state_dict.duplicate(true)
-	return lookup
-
-
-static func _sorted_keys(values: Dictionary) -> Array[String]:
-	var keys: Array[String] = []
-	for key in values.keys():
-		keys.append(str(key))
-	keys.sort()
-	return keys
-
-
-static func _sorted_dictionary_keys(values: Dictionary) -> Array[String]:
-	var keys: Array[String] = []
-	for key in values.keys():
-		keys.append(str(key))
-	keys.sort()
-	return keys
-
-
 static func _get_full_name(category: String, tool: Dictionary) -> String:
 	var full_name := str(tool.get("full_name", ""))
 	if not full_name.is_empty():
@@ -567,6 +505,27 @@ static func _category_from_name(tool_name: String) -> String:
 		if tool_name.begins_with("%s_" % category):
 			return category
 	return ""
+
+
+static func _extract_action_values(tool_def: Dictionary) -> Array[String]:
+	var actions: Array[String] = []
+	var input_schema = tool_def.get("inputSchema", {})
+	if not (input_schema is Dictionary):
+		return actions
+	var properties = (input_schema as Dictionary).get("properties", {})
+	if not (properties is Dictionary):
+		return actions
+	var action_schema = (properties as Dictionary).get("action", {})
+	if not (action_schema is Dictionary):
+		return actions
+	var enum_values = (action_schema as Dictionary).get("enum", [])
+	if not (enum_values is Array):
+		return actions
+	for value in enum_values:
+		var action := str(value)
+		if not action.is_empty():
+			actions.append(action)
+	return actions
 
 
 static func _tool_with_full_name(tool: Dictionary, full_name: String) -> Dictionary:

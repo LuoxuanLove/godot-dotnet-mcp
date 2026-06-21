@@ -6,7 +6,6 @@ signal delete_user_tool_requested(script_path: String)
 signal category_toggled(category: String, enabled: bool)
 signal domain_toggled(domain_key: String, enabled: bool)
 signal tree_collapse_changed(kind: String, key: String, collapsed: bool)
-signal tool_view_changed(view_id: String)
 
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tree_collapse_state.gd")
@@ -55,16 +54,9 @@ const MAX_PROTOCOL_ICON_SRC_LENGTH := 8192
 const MAX_PROTOCOL_ICON_BASE64_LENGTH := 6144
 const MAX_PROTOCOL_ICON_DECODED_BYTES := 4096
 const MAX_ICON_TEXTURE_CACHE_ENTRIES := 64
-const VIEW_AGENT_TOOLS := "agent_tools"
-const VIEW_INTERNAL_EXECUTORS := "internal_executors"
-const VIEW_DIAGNOSTICS := "tool_diagnostics"
 
 @onready var _header_card: PanelContainer = %HeaderCard
 @onready var _tool_count_label: Label = %ToolCountLabel
-@onready var _view_mode_row: HBoxContainer = %ViewModeRow
-@onready var _agent_tools_button: Button = %AgentToolsButton
-@onready var _internal_executors_button: Button = %InternalExecutorsButton
-@onready var _diagnostics_button: Button = %DiagnosticsButton
 @onready var _search_edit: LineEdit = %ToolSearchEdit
 @onready var _content_split: VSplitContainer = %ContentSplit
 @onready var _tool_tree: Tree = %ToolTree
@@ -98,22 +90,12 @@ var _last_tree_signature := ""
 var _last_preview_key := ""
 var _icon_texture_cache: Dictionary = {}
 var _icon_texture_cache_order: Array[String] = []
-var _active_tools_view := VIEW_AGENT_TOOLS
-var _view_buttons: Dictionary = {}
 var _search_render_queued := false
 
 
 func _ready() -> void:
 	auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	_search_edit.text_changed.connect(_on_search_text_changed)
-	_view_buttons = {
-		VIEW_AGENT_TOOLS: _agent_tools_button,
-		VIEW_INTERNAL_EXECUTORS: _internal_executors_button,
-		VIEW_DIAGNOSTICS: _diagnostics_button
-	}
-	_agent_tools_button.pressed.connect(_on_tool_view_button_pressed.bind(VIEW_AGENT_TOOLS))
-	_internal_executors_button.pressed.connect(_on_tool_view_button_pressed.bind(VIEW_INTERNAL_EXECUTORS))
-	_diagnostics_button.pressed.connect(_on_tool_view_button_pressed.bind(VIEW_DIAGNOSTICS))
 	_tool_tree.item_collapsed.connect(_on_tree_item_collapsed)
 	_tool_tree.gui_input.connect(_on_tree_gui_input)
 	_tool_tree.theme_type_variation = "TreeSecondary"
@@ -148,11 +130,6 @@ func apply_model(model: Dictionary) -> void:
 
 	_apply_localized_copy(localization, model)
 
-	var model_view := _resolve_tool_view_id(str(model.get("current_tools_view", _active_tools_view)))
-	if model_view != _active_tools_view:
-		_active_tools_view = model_view
-		_update_tool_view_buttons()
-
 	var tree_signature = _build_tree_signature(model)
 	_refresh_tree_state(model, tree_signature)
 
@@ -172,9 +149,6 @@ func _render_tool_tree(model: Dictionary) -> void:
 				_create_presentation_node(root, model, node as Dictionary)
 		_tree_syncing = false
 		return
-	if not _is_agent_tools_view():
-		_tree_syncing = false
-		return
 
 	_create_root_group_item(root, model, SYSTEM_CATEGORY)
 	_create_root_group_item(root, model, "user")
@@ -187,8 +161,6 @@ func _has_presentation_tree(model: Dictionary) -> bool:
 	var tree = presentation.get("toolTree", [])
 	if tree is Array and not (tree as Array).is_empty():
 		return true
-	if not _is_agent_tools_view():
-		return false
 	return model.get("toolTree", []) is Array and not (model.get("toolTree", []) as Array).is_empty()
 
 
@@ -204,14 +176,18 @@ func _create_presentation_node(parent: TreeItem, model: Dictionary, node: Dictio
 	var display_name := _get_presentation_node_display_name(node)
 	var metadata := _build_presentation_node_metadata(node, display_name)
 	match kind:
-		"domain", "category", "executor_domain", "executor_category":
+		"domain", "category":
 			_configure_item_toggle(item, _is_presentation_group_enabled(node))
 			var text := "%s    %d/%d" % [display_name, int(node.get("enabledCount", 0)), int(node.get("totalCount", 0))]
 			_configure_item_text(item, text, metadata, _get_group_tooltip(_localization, str(node.get("labelKey", ""))))
-		"tool_group", "diagnostic_node":
+		"tool_group":
 			var text := "%s    %d/%d" % [display_name, int(node.get("enabledCount", node.get("toolCount", 0))), int(node.get("totalCount", node.get("toolCount", 0)))]
 			_configure_info_row(item, text, metadata, TreeCollapseState.is_node_collapsed(model.get("settings", {}), _presentation_collapse_kind(kind), key))
-		"tool", "public_tool", "executor_tool":
+		"architecture_group":
+			var total_count := int(node.get("totalCount", node.get("children", []).size()))
+			var text := "%s    %d" % [display_name, total_count] if total_count > 0 else display_name
+			_configure_info_row(item, text, metadata, TreeCollapseState.is_node_collapsed(model.get("settings", {}), _presentation_collapse_kind(kind), key))
+		"tool", "public_tool":
 			_configure_item_toggle(item, not _current_model.get("settings", {}).get("disabled_tools", []).has(key))
 			_configure_item_text(item, display_name, metadata, _get_tool_description(_localization, key, _get_tool_metadata(key)))
 			if str(node.get("callability", "")) == "not_callable":
@@ -271,9 +247,9 @@ func _get_presentation_node_display_name(node: Dictionary) -> String:
 			return _localization.get_text(str(node.get("labelKey", "domain_other")))
 		"category":
 			return _get_category_label(_localization, str(node.get("category", node.get("key", ""))))
-		"tool_group", "executor_domain", "executor_category", "diagnostic_node":
+		"tool_group", "architecture_group":
 			return _get_labeled_presentation_name(node)
-		"tool", "public_tool", "executor_tool", "legacy_tool", "atomic":
+		"tool", "public_tool", "atomic":
 			var full_name := str(node.get("fullName", node.get("key", "")))
 			return _get_tool_display_name(_localization, full_name, str(node.get("toolName", node.get("tool_name", ""))))
 		"action":
@@ -324,15 +300,11 @@ func _presentation_collapse_kind(kind: String) -> String:
 			return TreeCollapseState.KIND_DOMAIN
 		"category":
 			return TreeCollapseState.KIND_CATEGORY
-		"tool", "public_tool", "executor_tool":
+		"tool", "public_tool":
 			return TreeCollapseState.KIND_TOOL
 		"atomic":
 			return TreeCollapseState.KIND_ATOMIC
-		"tool_group":
-			return TreeCollapseState.KIND_CATEGORY
-		"executor_domain":
-			return TreeCollapseState.KIND_DOMAIN
-		"executor_category", "diagnostic_node":
+		"tool_group", "architecture_group":
 			return TreeCollapseState.KIND_CATEGORY
 	return kind
 
@@ -364,11 +336,6 @@ func _apply_localized_copy(localization, model: Dictionary) -> void:
 	var counts = _count_visible_tools(model)
 	_tool_count_label.text = localization.get_text("tools_enabled") % [counts["enabled"], counts["total"]]
 	_search_edit.placeholder_text = localization.get_text("tool_search_placeholder")
-	_agent_tools_button.text = localization.get_text("tools_view_agent_tools")
-	_internal_executors_button.text = localization.get_text("tools_view_internal_executors")
-	_diagnostics_button.text = localization.get_text("tools_view_diagnostics")
-	_refresh_view_button_tooltips()
-	_update_tool_view_buttons()
 
 
 func _refresh_tree_state(model: Dictionary, tree_signature: String) -> void:
@@ -407,7 +374,7 @@ func _configure_action_item(item: TreeItem, action_name: String, parent_tool: St
 
 func _configure_item_toggle(item: TreeItem, checked: bool) -> void:
 	item.set_cell_mode(TREE_CHECK_COLUMN, TreeItem.CELL_MODE_CHECK)
-	item.set_editable(TREE_CHECK_COLUMN, _is_agent_tools_view())
+	item.set_editable(TREE_CHECK_COLUMN, true)
 	item.set_selectable(TREE_CHECK_COLUMN, false)
 	item.set_checked(TREE_CHECK_COLUMN, checked)
 
@@ -631,8 +598,6 @@ func _count_visible_tools(model: Dictionary) -> Dictionary:
 	var tool_tree: Array = _active_tool_presentation().get("toolTree", [])
 	if not tool_tree.is_empty():
 		return _count_presentation_nodes(tool_tree)
-	if not _is_agent_tools_view():
-		return {"total": 0, "enabled": 0}
 	return _count_legacy_visible_tools(model)
 
 
@@ -734,76 +699,18 @@ func _get_labeled_presentation_name(node: Dictionary) -> String:
 
 func _normalize_presentation_kind(kind: String) -> String:
 	match kind:
-		"public_tool", "executor_tool", "legacy_tool":
+		"public_tool":
 			return "tool"
-		"tool_group", "diagnostic_node":
-			return "category"
-		"executor_domain":
-			return "domain"
-		"executor_category":
+		"tool_group", "architecture_group":
 			return "category"
 	return kind
 
 
 func _is_tool_like_presentation_kind(kind: String) -> bool:
-	return ["tool", "public_tool", "executor_tool"].has(kind)
-
-
-func _is_agent_tools_view() -> bool:
-	return _active_tools_view == VIEW_AGENT_TOOLS
-
-
-func _on_tool_view_button_pressed(view_id: String) -> void:
-	var resolved_view := _resolve_tool_view_id(view_id)
-	if resolved_view == _active_tools_view:
-		_update_tool_view_buttons()
-		return
-	_active_tools_view = resolved_view
-	_clear_selection_metadata()
-	_last_tree_signature = ""
-	_update_tool_view_buttons()
-	tool_view_changed.emit(resolved_view)
-	if not _current_model.is_empty():
-		_apply_localized_copy(_localization, _current_model)
-		_refresh_tree_state(_current_model, _build_tree_signature(_current_model))
-
-
-func _resolve_tool_view_id(view_id: String) -> String:
-	match view_id:
-		VIEW_AGENT_TOOLS, VIEW_INTERNAL_EXECUTORS, VIEW_DIAGNOSTICS:
-			return view_id
-	return VIEW_AGENT_TOOLS
-
-
-func _update_tool_view_buttons() -> void:
-	for view_id in _view_buttons.keys():
-		var button := _view_buttons.get(view_id) as Button
-		if button == null:
-			continue
-		button.set_pressed_no_signal(str(view_id) == _active_tools_view)
-
-
-func _presentation_for_view(view_id: String) -> Dictionary:
-	var key := ""
-	match _resolve_tool_view_id(view_id):
-		VIEW_AGENT_TOOLS:
-			key = "agent_tool_presentation"
-		VIEW_INTERNAL_EXECUTORS:
-			key = "internal_executor_presentation"
-		VIEW_DIAGNOSTICS:
-			key = "tool_diagnostics_presentation"
-	var presentation = _current_model.get(key, {})
-	if presentation is Dictionary and not (presentation as Dictionary).is_empty():
-		return presentation as Dictionary
-	return {}
+	return ["tool", "public_tool"].has(kind)
 
 
 func _active_tool_presentation() -> Dictionary:
-	var selected_presentation := _presentation_for_view(_active_tools_view)
-	if not selected_presentation.is_empty():
-		return selected_presentation
-	if not _is_agent_tools_view():
-		return {}
 	var active = _current_model.get("active_tool_presentation", {})
 	if active is Dictionary and not (active as Dictionary).is_empty():
 		return (active as Dictionary)
@@ -1170,30 +1077,6 @@ func _apply_responsive_layout() -> void:
 	var text_width: float = min(max(tree_width - check_width, TREE_TEXT_MIN_WIDTH * scale), TREE_TEXT_MAX_WIDTH * scale)
 	_tool_tree.set_column_custom_minimum_width(TREE_TEXT_COLUMN, int(round(text_width)))
 	_tool_tree.set_column_custom_minimum_width(TREE_CHECK_COLUMN, int(round(check_width)))
-	var narrow := available_width > 0.0 and available_width < 360.0 * scale
-	_view_mode_row.add_theme_constant_override("separation", int(round((4.0 if narrow else 6.0) * scale)))
-	_configure_view_mode_button(_agent_tools_button, VIEW_AGENT_TOOLS, 76.0 if narrow else 96.0, scale)
-	_configure_view_mode_button(_internal_executors_button, VIEW_INTERNAL_EXECUTORS, 70.0 if narrow else 92.0, scale)
-	_configure_view_mode_button(_diagnostics_button, VIEW_DIAGNOSTICS, 78.0 if narrow else 96.0, scale)
-
-
-func _configure_view_mode_button(button: Button, view: String, min_width: float, scale: float) -> void:
-	if button == null:
-		return
-	button.custom_minimum_size.x = min_width * scale
-	button.tooltip_text = button.text if not button.text.strip_edges().is_empty() else view
-
-
-func _refresh_view_button_tooltips() -> void:
-	_configure_view_button_tooltip(_agent_tools_button, VIEW_AGENT_TOOLS)
-	_configure_view_button_tooltip(_internal_executors_button, VIEW_INTERNAL_EXECUTORS)
-	_configure_view_button_tooltip(_diagnostics_button, VIEW_DIAGNOSTICS)
-
-
-func _configure_view_button_tooltip(button: Button, view: String) -> void:
-	if button == null:
-		return
-	button.tooltip_text = button.text if not button.text.strip_edges().is_empty() else view
 
 
 func _on_resized() -> void:
@@ -1441,8 +1324,6 @@ func _handle_tree_click_deferred(mouse_position: Vector2) -> void:
 
 
 func _emit_toggle_for_item(item: TreeItem) -> void:
-	if not _is_agent_tools_view():
-		return
 	var metadata = item.get_metadata(TREE_TEXT_COLUMN)
 	if not (metadata is Dictionary):
 		return
@@ -1483,7 +1364,7 @@ func _refresh_preview() -> void:
 		return
 	_tool_preview_title.text = _localization.get_text("tool_preview_title")
 	# Build a key representing the current selection to detect changes
-	var current_preview_key := "%s|%s|%s|%s" % [_active_tools_view, _selected_tree_kind, _selected_tree_key, _selected_tool_name]
+	var current_preview_key := "%s|%s|%s" % [_selected_tree_kind, _selected_tree_key, _selected_tool_name]
 	var selection_changed := current_preview_key != _last_preview_key
 	_last_preview_key = current_preview_key
 	# Preserve scroll position when re-rendering without a selection change
@@ -1498,6 +1379,8 @@ func _refresh_preview() -> void:
 func _build_preview_text() -> String:
 	if _selected_tree_kind.is_empty() or _selected_tree_key.is_empty():
 		return str(_localization.get_text("tool_preview_empty"))
+	if str(_selected_tree_metadata.get("presentation_kind", "")) == "architecture_group":
+		return _build_architecture_group_preview()
 
 	match _selected_tree_kind:
 		"domain":
@@ -1877,6 +1760,37 @@ func _build_action_item_preview() -> String:
 	return "\n".join(_filter_empty_preview_lines(lines))
 
 
+func _build_architecture_group_preview() -> String:
+	var node := _find_presentation_node("category", _selected_tree_key)
+	if node.is_empty():
+		return str(_localization.get_text("tool_preview_empty"))
+	var group_name := _get_labeled_presentation_name(node)
+	var parent_tool := str(node.get("parentTool", node.get("parent_tool", "")))
+	var parent_metadata := _get_tool_metadata(parent_tool)
+	var parent_name := parent_tool
+	if not parent_metadata.is_empty():
+		parent_name = _get_tool_display_name(_localization, parent_tool, str(parent_metadata.get("toolName", parent_metadata.get("tool_name", ""))))
+	var lines: Array[String] = [
+		"%s: %s" % [_localization.get_text("tool_preview_category"), group_name],
+		"%s: %s" % [_localization.get_text("tool_preview_parent_tool"), parent_name],
+		"",
+		_localization.get_text("tool_preview_tool_count") % int(node.get("totalCount", node.get("children", []).size()))
+	]
+	for child in node.get("children", []):
+		if not (child is Dictionary):
+			continue
+		var child_dict := child as Dictionary
+		match str(child_dict.get("kind", "")):
+			"action":
+				lines.append("- %s" % _get_action_display_name_from_metadata(child_dict, str(child_dict.get("parentTool", child_dict.get("parent_tool", ""))), str(child_dict.get("actionName", child_dict.get("action", "")))))
+			"atomic":
+				var full_name := str(child_dict.get("fullName", child_dict.get("key", "")))
+				lines.append("- %s" % _get_tool_display_name(_localization, full_name, str(child_dict.get("toolName", child_dict.get("tool_name", "")))))
+			_:
+				lines.append("- %s" % _get_presentation_node_display_name(child_dict))
+	return "\n".join(_filter_empty_preview_lines(lines))
+
+
 func _context_for_selected_action() -> Dictionary:
 	if str(_selected_tree_metadata.get("kind", "")) != "action":
 		return {}
@@ -2200,7 +2114,6 @@ func _build_tree_signature(model: Dictionary) -> String:
 	var tools_by_category = model.get("tools_by_category", {})
 	var settings: Dictionary = model.get("settings", {})
 	var parts: Array[String] = [
-		_active_tools_view,
 		_get_tree_language_signature(model),
 		_get_search_query(),
 		_build_sorted_string_array_signature(settings.get("disabled_tools", [])),
@@ -2273,7 +2186,7 @@ func _get_presentation_signature(presentation: Dictionary) -> String:
 	if not signature.is_empty():
 		return signature
 	return ToolPresentationService.build_presentation_signature(
-		str(presentation.get("view", _active_tools_view)),
+		str(presentation.get("view", "agent_tools")),
 		presentation.get("toolTree", []),
 		presentation.get("toolGroups", []),
 		presentation.get("toolMetadataByName", {})

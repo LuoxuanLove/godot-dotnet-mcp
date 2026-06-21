@@ -24,9 +24,6 @@ class FakeLocalization extends RefCounted:
 		"tool_preview_category_count": "%d categories",
 		"tool_preview_tool_count": "%d tools",
 		"tool_preview_description": "描述",
-		"tools_view_agent_tools": "Agent Tools",
-		"tools_view_internal_executors": "Internal",
-		"tools_view_diagnostics": "Diagnostics",
 		"agent_tools_group_project_context": "项目上下文",
 		"agent_tools_group_project_context_desc": "项目状态、文件、配置、生命周期、索引、符号搜索和场景依赖。",
 		"agent_tools_group_editor_automation": "编辑器自动化",
@@ -43,6 +40,8 @@ class FakeLocalization extends RefCounted:
 		"agent_tools_group_user_tools_desc": "通过 MCP surface 暴露的项目本地自定义用户工具。",
 		"agent_tools_group_other_agent_tools": "其他 Agent 工具",
 		"agent_tools_group_other_agent_tools_desc": "尚未归入规范分组的其他公开工具。",
+		"tool_architecture_actions": "Actions",
+		"tool_architecture_implemented_by": "Implemented by",
 		"tool_action": "工具动作",
 		"tools_partial_suffix": "(partial)",
 		"cat_system": "System",
@@ -131,9 +130,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 
 	var tools_by_category := _build_tools_by_category()
 	var presentation := ToolPresentationService.build_tool_presentation(_build_exposed_tools(tools_by_category), tools_by_category)
-	var agent_presentation := ToolTreePresentationService.build_agent_tool_tree(_build_exposed_tools(tools_by_category))
-	var internal_presentation := ToolTreePresentationService.build_internal_executor_tree(tools_by_category, _build_exposed_tools(tools_by_category))
-	var diagnostics_presentation := ToolTreePresentationService.build_diagnostics_tree(_build_exposed_tools(tools_by_category), tools_by_category)
+	var agent_presentation := ToolTreePresentationService.build_agent_tool_tree(_build_exposed_tools(tools_by_category), [], tools_by_category)
 	_override_presentation_action_metadata(presentation, "system_dap_debugger.configuration_done", "tool_action_custom_node_label", "tool_action_custom_node_desc")
 	_poison_raw_tool_definitions_after_presentation(tools_by_category)
 	var base_model := {
@@ -153,8 +150,6 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var agent_model := base_model.duplicate(true)
 	agent_model["active_tool_presentation"] = agent_presentation
 	agent_model["agent_tool_presentation"] = agent_presentation
-	agent_model["internal_executor_presentation"] = internal_presentation
-	agent_model["tool_diagnostics_presentation"] = diagnostics_presentation
 	agent_model["toolTree"] = agent_presentation.get("toolTree", [])
 	agent_model["toolGroups"] = agent_presentation.get("toolGroups", [])
 	_instance.apply_model(agent_model)
@@ -163,20 +158,11 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var tool_count_label = _instance.get_node("HeaderCard/HeaderMargin/HeaderContent/ToolCountLabel") as Label
 	if tool_count_label == null or tool_count_label.text != "Enabled 26/26":
 		return _failure("Tools tab Agent Tools view should count only canonical public tools and user tools.")
-	var agent_button = _instance.get_node("HeaderCard/HeaderMargin/HeaderContent/ViewModeRow/AgentToolsButton") as Button
-	var internal_button = _instance.get_node("HeaderCard/HeaderMargin/HeaderContent/ViewModeRow/InternalExecutorsButton") as Button
-	var diagnostics_button = _instance.get_node("HeaderCard/HeaderMargin/HeaderContent/ViewModeRow/DiagnosticsButton") as Button
-	if agent_button == null or internal_button == null or diagnostics_button == null:
-		return _failure("Tools tab should expose Agent/Internal/Diagnostics view mode buttons.")
-	if not agent_button.button_pressed or internal_button.button_pressed or diagnostics_button.button_pressed:
-		return _failure("Tools tab should default to the Agent Tools view mode.")
+	if _instance.has_node("HeaderCard/HeaderMargin/HeaderContent/ViewModeRow"):
+		return _failure("Tools tab should remove the obsolete Agent/Internal/Diagnostics view mode row.")
 	_instance.size = Vector2(320, 640)
 	_instance.call("_apply_responsive_layout")
 	await tree.process_frame
-	if agent_button.custom_minimum_size.x <= 0.0 or internal_button.custom_minimum_size.x <= 0.0 or diagnostics_button.custom_minimum_size.x <= 0.0:
-		return _failure("Tools tab view mode buttons should keep stable minimum widths in narrow Dock layouts.")
-	if agent_button.tooltip_text != "Agent Tools" or internal_button.tooltip_text != "Internal" or diagnostics_button.tooltip_text != "Diagnostics":
-		return _failure("Tools tab view mode buttons should expose localized tooltips for clipped narrow labels.")
 	var tool_tree = _instance.get_node("ContentSplit/TopPane/ToolListOuterMargin/ToolListPanel/ToolListOverlay/ToolListMargin/ToolTree") as Tree
 	if tool_tree == null:
 		return _failure("Tools tab rendering test could not resolve the tree control.")
@@ -199,6 +185,13 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Tools tab Agent Tools view should group canonical runtime/debugging tools.")
 	if _find_child_by_metadata(root, "tool", "runtime_step") != null or _find_child_by_metadata(root, "tool", "plugin_runtime_state") != null:
 		return _failure("Tools tab Agent Tools view should hide lower-level executor tools from the default call surface.")
+	var agent_runtime_control := _find_child_by_metadata(runtime_group, "tool", "system_runtime_control")
+	var runtime_architecture := _find_child_by_metadata(agent_runtime_control, "category", "system_runtime_control:implemented_by") if agent_runtime_control != null else null
+	var runtime_atomic := _find_child_by_metadata(runtime_architecture, "atomic", "runtime_control") if runtime_architecture != null else null
+	if runtime_architecture == null or runtime_atomic == null:
+		return _failure("Tools tab Agent Tools view should nest runtime executor architecture under the public tool row.")
+	if runtime_atomic.is_editable(1):
+		return _failure("Tools tab Agent Tools architecture rows should be read-only.")
 	var agent_project_state := _find_child_by_metadata(project_group, "tool", "system_project_state")
 	if agent_project_state == null:
 		return _failure("Tools tab Agent Tools view should render canonical public project tools.")
@@ -213,42 +206,6 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Tools tab Agent Tools group labels should fall back to human-readable text when locale keys are not present.")
 	if not preview_text.text.contains("7 tools") or not preview_text.text.contains("Project State"):
 		return _failure("Tools tab Agent Tools group preview should count and list public_tool children.")
-	internal_button.pressed.emit()
-	await tree.process_frame
-	if agent_button.button_pressed or not internal_button.button_pressed or diagnostics_button.button_pressed:
-		return _failure("Tools tab should keep view mode buttons mutually exclusive after selecting Internal.")
-	var expected_internal_tool_count := _count_presentation_kind(internal_presentation.get("toolTree", []), "executor_tool")
-	if tool_count_label.text != "Enabled %d/%d" % [expected_internal_tool_count, expected_internal_tool_count]:
-		return _failure("Tools tab Internal view should count executor_tool entries from the active internal presentation.")
-	root = tool_tree.get_root()
-	var internal_core := _find_child_by_metadata(root, "domain", "core")
-	var internal_plugin := _find_child_by_metadata(root, "domain", "plugin")
-	if internal_core == null or internal_plugin == null:
-		return _failure("Tools tab Internal view should render executor domain roots.")
-	var internal_runtime := _find_child_by_metadata(internal_core, "category", "runtime")
-	var internal_runtime_control := _find_child_by_metadata(internal_runtime, "tool", "runtime_control") if internal_runtime != null else null
-	if internal_runtime_control == null:
-		return _failure("Tools tab Internal view should expose lower-level executor tools only after switching modes.")
-	if _find_child_by_metadata(root, "category", "project_context") != null:
-		return _failure("Tools tab Internal view should not mix Agent Tools groups into the executor tree.")
-	if internal_runtime_control.is_editable(1):
-		return _failure("Tools tab Internal view should be read-only and not expose tool enable toggles.")
-	diagnostics_button.pressed.emit()
-	await tree.process_frame
-	if agent_button.button_pressed or internal_button.button_pressed or not diagnostics_button.button_pressed:
-		return _failure("Tools tab should keep view mode buttons mutually exclusive after selecting Diagnostics.")
-	root = tool_tree.get_root()
-	var diagnostic_public := _find_child_by_metadata(root, "category", "public_tools")
-	var diagnostic_legacy := _find_child_by_metadata(root, "category", "legacy_tools")
-	if diagnostic_public == null or diagnostic_legacy == null:
-		return _failure("Tools tab Diagnostics view should render public and legacy diagnostic groups.")
-	if _find_child_by_metadata(diagnostic_legacy, "tool", "system_help") == null:
-		return _failure("Tools tab Diagnostics view should expose removed public tool guidance under diagnostics only.")
-	agent_button.pressed.emit()
-	await tree.process_frame
-	root = tool_tree.get_root()
-	if _find_child_by_metadata(root, "category", "project_context") == null or _find_child_by_metadata(root, "category", "legacy_tools") != null:
-		return _failure("Tools tab should restore the Agent Tools tree after switching back from diagnostics.")
 
 	_instance.apply_model(base_model)
 	await tree.process_frame
@@ -936,6 +893,9 @@ func _find_child_by_metadata(parent: TreeItem, kind: String, key: String) -> Tre
 			var meta := metadata as Dictionary
 			if str(meta.get("kind", "")) == kind and str(meta.get("key", "")) == key:
 				return child
+		var nested := _find_child_by_metadata(child, kind, key)
+		if nested != null:
+			return nested
 		child = child.get_next()
 	return null
 

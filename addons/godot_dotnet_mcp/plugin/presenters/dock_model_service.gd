@@ -181,14 +181,11 @@ func build_model() -> Dictionary:
 		"editor_scale": _resolve_editor_scale(),
 		"log_levels": MCPDebugBuffer.get_available_levels(),
 		"current_log_level": _normalize_log_level(str(settings.get("log_level", MCPDebugBuffer.get_minimum_level()))),
-		"current_tools_view": str(_get_state_value("current_tools_view", "agent_tools")),
 		"builtin_profiles": ToolProfileCatalog.get_builtin_profiles(),
 		"custom_profiles": _state.custom_tool_profiles,
 		"domain_defs": _get_domain_defs(catalog_snapshot),
 		"tool_presentation": tool_presentation,
 		"agent_tool_presentation": catalog_snapshot.get("agent_tool_presentation", {}),
-		"internal_executor_presentation": catalog_snapshot.get("internal_executor_presentation", {}),
-		"tool_diagnostics_presentation": catalog_snapshot.get("tool_diagnostics_presentation", {}),
 		"mcp_resources": mcp_catalog_projection.get("mcp_resources", []),
 		"mcp_resource_templates": mcp_catalog_projection.get("mcp_resource_templates", []),
 		"mcp_prompts": mcp_catalog_projection.get("mcp_prompts", []),
@@ -363,14 +360,7 @@ func _build_tool_catalog_model_signature(settings: Dictionary, presentation_view
 
 
 func _resolve_tool_presentation_views() -> Array[String]:
-	var view := str(_get_state_value("current_tools_view", "agent_tools"))
-	match view:
-		"internal_executors":
-			return ["internal_executors"]
-		"tool_diagnostics":
-			return ["tool_diagnostics"]
-		_:
-			return ["agent_tools"]
+	return ["agent_tools"]
 
 
 func _build_mcp_catalog_projection() -> Dictionary:

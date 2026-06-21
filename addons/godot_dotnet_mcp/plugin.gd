@@ -889,18 +889,6 @@ func _on_current_tab_changed(index: int) -> void:
 	_refresh_dock()
 
 
-func _on_tool_view_changed(view_id: String) -> void:
-	if _state == null:
-		return
-	var normalized := view_id.strip_edges()
-	if not ["agent_tools", "internal_executors", "tool_diagnostics"].has(normalized):
-		normalized = "agent_tools"
-	if str(_state.current_tools_view) == normalized:
-		return
-	_state.current_tools_view = normalized
-	_refresh_dock()
-
-
 func _on_port_changed(value: int) -> void:
 	_state.settings["port"] = value
 	_save_settings()
