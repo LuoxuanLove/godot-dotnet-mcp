@@ -106,8 +106,9 @@ func build_loader_lifecycle_context(loader) -> Dictionary:
 		"update_reload_status": _loader_callable(loader, "_update_reload_status"),
 		"sync_load_error_incidents": _loader_callable(loader, "_sync_load_error_incidents"),
 		"refresh_runtime_context": _loader_callable(loader, "_refresh_runtime_context"),
-		"get_tool_definitions": _loader_callable(loader, "get_tool_definitions"),
-		"get_exposed_tool_definitions": _loader_callable(loader, "get_exposed_tool_definitions"),
+		"is_category_visible": _loader_callable(loader, "_is_category_visible"),
+		"is_tool_enabled": _loader_callable(loader, "is_tool_enabled"),
+		"is_exposed_tool_definition": _loader_callable(loader, "_is_exposed_tool_definition"),
 		"get_tool_load_error_count": _loader_callable(loader, "_get_tool_load_error_count")
 	})
 
