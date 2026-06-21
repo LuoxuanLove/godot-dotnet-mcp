@@ -1127,6 +1127,10 @@ func _on_update_check_requested(background_refresh: bool = false) -> void:
 		_update_refs_background_serials[serial] = true
 	else:
 		_update_refs_discovery_loaded = false
+		_state.update_refs_refresh_state = "idle"
+		_state.update_refs_refresh_error = ""
+		_state.update_refs_refresh_serial = serial
+		_update_refs_background_serials.clear()
 	_update_refs_pending = {
 		"serial": serial,
 		"background": background_refresh,

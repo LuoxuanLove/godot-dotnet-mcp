@@ -72,6 +72,13 @@ class RequestParentProbePlugin extends PluginScript:
 		update_check_background_flags.append(background_refresh)
 
 
+class ForegroundRefsProbePlugin extends PluginScript:
+	var refs_requests: Array[Dictionary] = []
+
+	func _start_update_refs_request(kind: String, url: String, serial: int) -> void:
+		refs_requests.append({"kind": kind, "url": url, "serial": serial})
+
+
 class SyncReloadProbePlugin extends PluginScript:
 	var sync_result := {"success": true, "written": 3}
 	var marker_error := OK
@@ -655,6 +662,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		refs_completion_compare_probe.free()
 		return _failure("plugin.gd should not let background refs completion preempt a foreground compare request.")
 	refs_completion_compare_probe.free()
+
+	var foreground_refs_probe := ForegroundRefsProbePlugin.new()
+	foreground_refs_probe._state.update_refs_state = "success"
+	foreground_refs_probe._state.update_refs_refresh_state = "loading"
+	foreground_refs_probe._state.update_refs_refresh_serial = 1
+	foreground_refs_probe._update_refs_background_serials[1] = true
+	foreground_refs_probe._on_update_check_requested(false)
+	if foreground_refs_probe._state.update_refs_refresh_state != "idle" or foreground_refs_probe._state.update_refs_refresh_serial != foreground_refs_probe._update_refs_request_serial or not foreground_refs_probe._update_refs_background_serials.is_empty() or foreground_refs_probe.refs_requests.size() != 3:
+		foreground_refs_probe.free()
+		return _failure("plugin.gd should clear stale background refs refresh state when a foreground refs discovery supersedes it.")
+	foreground_refs_probe.free()
 
 	var background_failure_probe := PluginScript.new()
 	background_failure_probe._state.update_refs_state = "success"
