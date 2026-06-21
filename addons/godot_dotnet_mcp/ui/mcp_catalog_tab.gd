@@ -735,19 +735,48 @@ func _diagnostic_kind(entry: Dictionary, entry_kind: String) -> String:
 
 func _build_signature(model: Dictionary) -> String:
 	set_meta("_mcp_catalog_preview", model.get("mcp_catalog_preview", {}))
-	return JSON.stringify({
-		"language": str(model.get("current_language", "")),
-		"mode": _catalog_mode,
-		"view": _active_view,
-		"resources": model.get("mcp_resources", []),
-		"templates": model.get("mcp_resource_templates", []),
-		"prompts": model.get("mcp_prompts", []),
-		"resource_presentation": model.get("mcp_resource_presentation", {}),
-		"prompt_presentation": model.get("mcp_prompt_presentation", {}),
-		"counts": model.get("mcp_catalog_counts", {}),
-		"preview": model.get("mcp_catalog_preview", {}),
-		"argument_values": _argument_values
-	})
+	return "\n".join([
+		"language=%s" % _signature_scalar(str(model.get("current_language", ""))),
+		"mode=%s" % _signature_scalar(_catalog_mode),
+		"view=%s" % _signature_scalar(_active_view),
+		"resources=%s" % _signature_value(model.get("mcp_resources", [])),
+		"templates=%s" % _signature_value(model.get("mcp_resource_templates", [])),
+		"prompts=%s" % _signature_value(model.get("mcp_prompts", [])),
+		"resource_presentation=%s" % _signature_value(model.get("mcp_resource_presentation", {})),
+		"prompt_presentation=%s" % _signature_value(model.get("mcp_prompt_presentation", {})),
+		"counts=%s" % _signature_value(model.get("mcp_catalog_counts", {})),
+		"preview=%s" % _signature_value(model.get("mcp_catalog_preview", {})),
+		"argument_values=%s" % _signature_value(_argument_values)
+	])
+
+
+func _signature_value(value) -> String:
+	if value == null:
+		return "n:"
+	if value is bool:
+		return "b:%s" % ("1" if bool(value) else "0")
+	if value is int or value is float:
+		return "num:%s" % str(value)
+	if value is Dictionary:
+		var dict_value := value as Dictionary
+		var keys: Array[String] = []
+		for key in dict_value.keys():
+			keys.append(str(key))
+		keys.sort()
+		var entries: Array[String] = []
+		for key in keys:
+			entries.append("%s=%s" % [_signature_scalar(key), _signature_value(dict_value.get(key))])
+		return "d:{%s}" % "|".join(entries)
+	if value is Array:
+		var entries: Array[String] = []
+		for item in value as Array:
+			entries.append(_signature_value(item))
+		return "a:[%s]" % "|".join(entries)
+	return "s:%s" % _signature_scalar(str(value))
+
+
+func _signature_scalar(value: String) -> String:
+	return "%s:%s" % [value.length(), value]
 
 
 func _apply_editor_scale(scale: float) -> void:

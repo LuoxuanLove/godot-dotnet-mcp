@@ -39,6 +39,7 @@ Target version: 2.0.0.
 - Changed Dock catalog model refresh checks to use deterministic lightweight signatures instead of serializing every tool entry, reducing repeated Dock refresh work while still detecting nested schema and presentation metadata changes.
 - Changed shared tool presentation signatures to avoid JSON serialization of presentation nodes, groups, and metadata maps while preserving nested metadata invalidation.
 - Changed Config tab client-card refresh checks to use deterministic lightweight signatures instead of serializing nested card and localization payloads during client setup status updates.
+- Changed Dock Resources and Prompts catalog refresh checks to use deterministic lightweight signatures instead of serializing full protocol entry, presentation, preview, and argument-value payloads during tab refreshes.
 - Changed C# semantic tooling to use the isolated Roslyn runtime process as the only production runtime path, so source-tree or direct-copy installs no longer auto-load the plugin's in-process C# facade inside the host project.
 - Changed User-tool polling to skip synchronous scans when runtime loading is disabled and to split large directory walks into budgeted slices so idle refresh stays responsive.
 - Changed User-tool watch and fallback runtime scanning to use a dedicated scan service, keeping file metadata traversal, slice budgets, and scan diagnostics separate from watch polling and reload coordination.
