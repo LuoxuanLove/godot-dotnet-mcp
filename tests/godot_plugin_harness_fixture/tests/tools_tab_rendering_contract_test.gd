@@ -423,9 +423,20 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var search_edit = _instance.get_node("ContentSplit/TopPane/SearchOuterMargin/ToolSearchEdit") as LineEdit
 	if search_edit == null:
 		return _failure("Tools tab rendering test could not resolve the search edit control.")
+	search_edit.text = "no matching tool should render synchronously"
+	_instance.call("_on_search_text_changed", search_edit.text)
+	if not bool(_instance.get("_search_render_queued")):
+		return _failure("Tools tab search should queue tree rendering instead of rebuilding synchronously.")
+	var immediate_root = tool_tree.get_root()
+	if _find_child_by_metadata(immediate_root, "domain", "core") == null:
+		return _failure("Tools tab search should not clear and rebuild the tree during the text-changed callback.")
 	search_edit.text = "contract fixture for system_dap_debugger"
 	_instance.call("_on_search_text_changed", search_edit.text)
+	if not bool(_instance.get("_search_render_queued")):
+		return _failure("Tools tab search should keep one queued render for same-frame query bursts.")
 	await tree.process_frame
+	if bool(_instance.get("_search_render_queued")):
+		return _failure("Tools tab search should flush the queued render on the next frame.")
 	var searched_root = tool_tree.get_root()
 	var searched_core_domain = _find_child_by_metadata(searched_root, "domain", "core")
 	var searched_system_category = _find_child_by_metadata(searched_core_domain, "category", "system")

@@ -100,6 +100,7 @@ var _icon_texture_cache: Dictionary = {}
 var _icon_texture_cache_order: Array[String] = []
 var _active_tools_view := VIEW_AGENT_TOOLS
 var _view_buttons: Dictionary = {}
+var _search_render_queued := false
 
 
 func _ready() -> void:
@@ -908,6 +909,16 @@ func _on_tree_item_collapsed(item: TreeItem) -> void:
 
 
 func _on_search_text_changed(_new_text: String) -> void:
+	if _current_model.is_empty():
+		return
+	if _search_render_queued:
+		return
+	_search_render_queued = true
+	call_deferred("_flush_search_render")
+
+
+func _flush_search_render() -> void:
+	_search_render_queued = false
 	if _current_model.is_empty():
 		return
 	_render_tool_tree(_current_model)
