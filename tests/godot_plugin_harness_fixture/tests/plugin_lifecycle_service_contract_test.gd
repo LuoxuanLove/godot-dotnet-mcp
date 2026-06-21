@@ -4,6 +4,7 @@ extends RefCounted
 
 const PluginLifecycleServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_lifecycle_service.gd")
 const PluginLifecycleContextServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/plugin_lifecycle_context_service.gd")
+const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 
 
 class FakeLifecycleContext:
@@ -236,10 +237,28 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var disable_context := FakeLifecycleContext.new()
 	service.disable_plugin(disable_context.build())
+	var expected_disable := [
+		"set_process_enabled:false",
+		"save_settings",
+		"stop_user_tool_watch_service",
+		"remove_client_executable_dialog",
+		"uninstall_editor_debugger_bridge",
+		"remove_performance_monitors",
+		"dispose_action_router",
+		"dispose_server_controller",
+		"dispose_lifecycle_services",
+		"is_runtime_bridge_currently_owned"
+	]
+	if not _array_starts_with(disable_context.calls, expected_disable):
+		return _failure("Plugin lifecycle service should release runtime-owned resources during disable without removing the runtime bridge autoload.", {"calls": disable_context.calls})
 	if not disable_context.calls.has("is_runtime_bridge_currently_owned"):
 		return _failure("Plugin lifecycle service should query runtime bridge ownership during disable.")
+	if disable_context.calls.has("remove_runtime_bridge_autoload"):
+		return _failure("Plugin lifecycle service should keep the runtime bridge autoload installed during disable.")
 	if disable_context.finished_operations.is_empty() or str((disable_context.finished_operations[0] as Dictionary).get("phase", "")) != "_disable_plugin":
 		return _failure("Plugin lifecycle service should finish the disable diagnostic operation.")
+	if not PluginSelfDiagnosticStore.get_timeline().is_empty():
+		return _failure("Plugin lifecycle service should clear static self-diagnostic state after disable teardown.")
 
 	return {
 		"name": "plugin_lifecycle_service_contracts",
