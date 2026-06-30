@@ -38,6 +38,63 @@ const TOOL_DESCRIPTION_KEYWORD_REQUIREMENTS := {
 	"tool_system_project_state_desc": ["summary", "sections"]
 }
 
+const SCENE_TOOL_LOCALIZATION_KEYS: Array[String] = [
+	"tool_system_scene_tree_name",
+	"tool_system_scene_tree_desc",
+	"tool_system_scene_patch_name",
+	"tool_system_scene_patch_desc",
+	"tool_action_system_scene_tree_get_tree_name",
+	"tool_action_system_scene_tree_get_tree_desc",
+	"tool_action_system_scene_tree_get_selected_name",
+	"tool_action_system_scene_tree_get_selected_desc",
+	"tool_action_system_scene_tree_select_name",
+	"tool_action_system_scene_tree_select_desc",
+	"tool_action_system_scene_tree_add_node_name",
+	"tool_action_system_scene_tree_add_node_desc",
+	"tool_action_system_scene_tree_remove_node_name",
+	"tool_action_system_scene_tree_remove_node_desc",
+	"tool_action_system_scene_tree_rename_node_name",
+	"tool_action_system_scene_tree_rename_node_desc",
+	"tool_action_system_scene_tree_reparent_node_name",
+	"tool_action_system_scene_tree_reparent_node_desc",
+	"tool_action_system_scene_tree_reorder_node_name",
+	"tool_action_system_scene_tree_reorder_node_desc",
+	"tool_action_system_scene_tree_attach_script_name",
+	"tool_action_system_scene_tree_attach_script_desc",
+	"tool_action_system_scene_tree_set_property_name",
+	"tool_action_system_scene_tree_set_property_desc",
+	"tool_action_system_scene_tree_get_property_name",
+	"tool_action_system_scene_tree_get_property_desc",
+	"tool_action_system_scene_tree_set_transform_name",
+	"tool_action_system_scene_tree_set_transform_desc",
+	"tool_action_system_scene_patch_add_node_name",
+	"tool_action_system_scene_patch_add_node_desc",
+	"tool_action_system_scene_patch_remove_node_name",
+	"tool_action_system_scene_patch_remove_node_desc",
+	"tool_action_system_scene_patch_rename_node_name",
+	"tool_action_system_scene_patch_rename_node_desc",
+	"tool_action_system_scene_patch_reparent_node_name",
+	"tool_action_system_scene_patch_reparent_node_desc",
+	"tool_action_system_scene_patch_attach_script_name",
+	"tool_action_system_scene_patch_attach_script_desc",
+	"tool_action_system_scene_patch_set_property_name",
+	"tool_action_system_scene_patch_set_property_desc",
+	"tool_action_system_scene_patch_update_property_name",
+	"tool_action_system_scene_patch_update_property_desc"
+]
+
+const SCENE_PATCH_REPARENT_KEYWORDS := {
+	"de": "Elternknoten",
+	"es": "padre",
+	"fr": "parent",
+	"ja": "親",
+	"ko": "부모",
+	"pt": "pai",
+	"ru": "родител",
+	"zh_CN": "父节点",
+	"zh_TW": "父節點"
+}
+
 
 class FakeServerContext extends RefCounted:
 	var _tool_access_provider
@@ -105,6 +162,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var description_keyword_gaps := _find_tool_description_keyword_gaps(localization, locale_codes)
 	if not description_keyword_gaps.is_empty():
 		return _failure("Visible tool descriptions are missing schema keywords: %s" % ", ".join(description_keyword_gaps.slice(0, 120)))
+
+	var scene_tool_english_fallbacks := _find_scene_tool_english_fallbacks(localization, locale_codes)
+	if not scene_tool_english_fallbacks.is_empty():
+		return _failure("Scene tree and scene patch localization keys should not fall back to English in non-English locales: %s" % ", ".join(scene_tool_english_fallbacks.slice(0, 120)))
+
+	var missing_scene_tool_raw_keys := _find_missing_scene_tool_raw_keys(locale_codes)
+	if not missing_scene_tool_raw_keys.is_empty():
+		return _failure("Scene tree and scene patch localization keys must be declared by every locale dictionary: %s" % ", ".join(missing_scene_tool_raw_keys.slice(0, 120)))
+
+	var scene_patch_reparent_semantic_gaps := _find_scene_patch_reparent_semantic_gaps(localization)
+	if not scene_patch_reparent_semantic_gaps.is_empty():
+		return _failure("Scene patch descriptions must preserve reparent semantics: %s" % ", ".join(scene_patch_reparent_semantic_gaps))
 
 	var missing := _find_missing_key_groups(localization, locale_codes, required_key_groups)
 	if not missing.is_empty():
@@ -295,6 +364,49 @@ func _find_tool_description_keyword_gaps(localization, locale_codes: Array[Strin
 				var keyword_text := str(keyword)
 				if not text.contains(keyword_text):
 					gaps.append("%s:%s missing '%s'" % [locale_name, key, keyword_text])
+	gaps.sort()
+	return gaps
+
+
+func _find_scene_tool_english_fallbacks(localization, locale_codes: Array[String]) -> Array[String]:
+	var fallbacks: Array[String] = []
+	var english_text_by_key := {}
+	for key in SCENE_TOOL_LOCALIZATION_KEYS:
+		english_text_by_key[key] = str(localization.get_text_for("en", key))
+	for locale_name in locale_codes:
+		if locale_name == "en":
+			continue
+		for key in SCENE_TOOL_LOCALIZATION_KEYS:
+			var localized := str(localization.get_text_for(locale_name, key))
+			if localized == str(english_text_by_key.get(key, "")):
+				fallbacks.append("%s:%s" % [locale_name, key])
+	fallbacks.sort()
+	return fallbacks
+
+
+func _find_missing_scene_tool_raw_keys(locale_codes: Array[String]) -> Array[String]:
+	var missing: Array[String] = []
+	for locale_name in locale_codes:
+		var file_path := str(LocalizationServiceScript.LANGUAGE_FILES.get(locale_name, ""))
+		var locale_script = ResourceLoader.load(file_path, "Script", ResourceLoader.CACHE_MODE_REPLACE)
+		var raw_translations = locale_script.get("TRANSLATIONS") if locale_script is Script else {}
+		if not (raw_translations is Dictionary):
+			missing.append("%s:<dictionary>" % locale_name)
+			continue
+		for key in SCENE_TOOL_LOCALIZATION_KEYS:
+			if not (raw_translations as Dictionary).has(key):
+				missing.append("%s:%s" % [locale_name, key])
+	missing.sort()
+	return missing
+
+
+func _find_scene_patch_reparent_semantic_gaps(localization) -> Array[String]:
+	var gaps: Array[String] = []
+	for locale_name in SCENE_PATCH_REPARENT_KEYWORDS:
+		var keyword := str(SCENE_PATCH_REPARENT_KEYWORDS[locale_name])
+		var description := str(localization.get_text_for(str(locale_name), "tool_system_scene_patch_desc"))
+		if not description.contains(keyword):
+			gaps.append("%s:tool_system_scene_patch_desc missing '%s'" % [locale_name, keyword])
 	gaps.sort()
 	return gaps
 
