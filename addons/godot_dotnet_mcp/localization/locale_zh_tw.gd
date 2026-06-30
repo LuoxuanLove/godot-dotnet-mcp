@@ -917,7 +917,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_scene_inspect_name": "場景檢查",
 	"tool_system_scene_inspect_desc": "統一的唯讀場景檢查入口，可執行校驗、分析或同時返回兩個獨立載荷。",
 	"tool_system_scene_patch_name": "場景修改",
-	"tool_system_scene_patch_desc": "對場景節點進行添加、刪除、屬性變更等批量操作。",
+	"tool_system_scene_patch_desc": "對場景節點進行新增、刪除、屬性設定或重設父節點等批次操作。",
 	"tool_system_script_analyze_name": "腳本分析",
 	"tool_system_script_analyze_desc": "分析 GDScript 或 C# 腳本的結構、符號與導出成員。",
 	"tool_system_script_patch_name": "腳本修改",

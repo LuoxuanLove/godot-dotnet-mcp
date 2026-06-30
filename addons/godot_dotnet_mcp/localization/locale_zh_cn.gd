@@ -957,7 +957,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_scene_inspect_name": "场景检查",
 	"tool_system_scene_inspect_desc": "统一的只读场景检查入口，可执行校验、分析或同时返回两个独立载荷。",
 	"tool_system_scene_patch_name": "场景修改",
-	"tool_system_scene_patch_desc": "对场景节点进行添加、删除、属性变更等批量操作。",
+	"tool_system_scene_patch_desc": "对场景节点进行添加、删除、属性设置或重设父节点等批量操作。",
 	"tool_system_scene_tree_name": "场景树",
 	"tool_system_scene_tree_desc": "检查和修改当前编辑场景树：选择、添加、移除、重命名、重设父节点、排序、挂载脚本、设置属性和移动节点。",
 	"tool_system_script_analyze_name": "脚本分析",

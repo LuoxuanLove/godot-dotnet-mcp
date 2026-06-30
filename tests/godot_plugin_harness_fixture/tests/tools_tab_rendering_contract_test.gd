@@ -509,7 +509,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Tools tab should localize scene tree action names instead of falling back to English.")
 	_instance.call("_apply_selection_metadata", scene_tree_action.get_metadata(0))
 	await tree.process_frame
-	if not preview_text.text.contains("动作: 调整节点顺序") or not preview_text.text.contains("当前编辑场景树中节点的同级顺序。"):
+	if not preview_text.text.contains("工具动作: 调整节点顺序") or not preview_text.text.contains("当前编辑场景树中节点的同级顺序。"):
 		return _failure("Tools tab should localize scene tree action previews for both name and description.")
 	var scene_patch_tool = _find_child_by_metadata(system_category, "tool", "system_scene_patch")
 	if scene_patch_tool == null:
@@ -519,7 +519,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Tools tab should localize scene patch action names instead of falling back to English.")
 	_instance.call("_apply_selection_metadata", scene_patch_action.get_metadata(0))
 	await tree.process_frame
-	if not preview_text.text.contains("动作: 更新属性") or not preview_text.text.contains("预览在场景修改中更新已有属性。"):
+	if not preview_text.text.contains("工具动作: 更新属性") or not preview_text.text.contains("预览在场景修改中更新已有属性。"):
 		return _failure("Tools tab should localize scene patch action previews for both name and description.")
 	var catalog_error := _assert_system_catalog_rendered(system_category)
 	if not catalog_error.is_empty():

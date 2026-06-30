@@ -83,6 +83,18 @@ const SCENE_TOOL_LOCALIZATION_KEYS: Array[String] = [
 	"tool_action_system_scene_patch_update_property_desc"
 ]
 
+const SCENE_PATCH_REPARENT_KEYWORDS := {
+	"de": "Elternknoten",
+	"es": "padre",
+	"fr": "parent",
+	"ja": "親",
+	"ko": "부모",
+	"pt": "pai",
+	"ru": "родител",
+	"zh_CN": "父节点",
+	"zh_TW": "父節點"
+}
+
 
 class FakeServerContext extends RefCounted:
 	var _tool_access_provider
@@ -154,6 +166,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var scene_tool_english_fallbacks := _find_scene_tool_english_fallbacks(localization, locale_codes)
 	if not scene_tool_english_fallbacks.is_empty():
 		return _failure("Scene tree and scene patch localization keys should not fall back to English in non-English locales: %s" % ", ".join(scene_tool_english_fallbacks.slice(0, 120)))
+
+	var missing_scene_tool_raw_keys := _find_missing_scene_tool_raw_keys(locale_codes)
+	if not missing_scene_tool_raw_keys.is_empty():
+		return _failure("Scene tree and scene patch localization keys must be declared by every locale dictionary: %s" % ", ".join(missing_scene_tool_raw_keys.slice(0, 120)))
+
+	var scene_patch_reparent_semantic_gaps := _find_scene_patch_reparent_semantic_gaps(localization)
+	if not scene_patch_reparent_semantic_gaps.is_empty():
+		return _failure("Scene patch descriptions must preserve reparent semantics: %s" % ", ".join(scene_patch_reparent_semantic_gaps))
 
 	var missing := _find_missing_key_groups(localization, locale_codes, required_key_groups)
 	if not missing.is_empty():
@@ -362,6 +382,33 @@ func _find_scene_tool_english_fallbacks(localization, locale_codes: Array[String
 				fallbacks.append("%s:%s" % [locale_name, key])
 	fallbacks.sort()
 	return fallbacks
+
+
+func _find_missing_scene_tool_raw_keys(locale_codes: Array[String]) -> Array[String]:
+	var missing: Array[String] = []
+	for locale_name in locale_codes:
+		var file_path := str(LocalizationServiceScript.LANGUAGE_FILES.get(locale_name, ""))
+		var locale_script = ResourceLoader.load(file_path, "Script", ResourceLoader.CACHE_MODE_REPLACE)
+		var raw_translations = locale_script.get("TRANSLATIONS") if locale_script is Script else {}
+		if not (raw_translations is Dictionary):
+			missing.append("%s:<dictionary>" % locale_name)
+			continue
+		for key in SCENE_TOOL_LOCALIZATION_KEYS:
+			if not (raw_translations as Dictionary).has(key):
+				missing.append("%s:%s" % [locale_name, key])
+	missing.sort()
+	return missing
+
+
+func _find_scene_patch_reparent_semantic_gaps(localization) -> Array[String]:
+	var gaps: Array[String] = []
+	for locale_name in SCENE_PATCH_REPARENT_KEYWORDS:
+		var keyword := str(SCENE_PATCH_REPARENT_KEYWORDS[locale_name])
+		var description := str(localization.get_text_for(str(locale_name), "tool_system_scene_patch_desc"))
+		if not description.contains(keyword):
+			gaps.append("%s:tool_system_scene_patch_desc missing '%s'" % [locale_name, keyword])
+	gaps.sort()
+	return gaps
 
 
 func _failure(message: String) -> Dictionary:

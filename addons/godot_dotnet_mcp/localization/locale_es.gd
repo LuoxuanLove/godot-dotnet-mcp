@@ -688,7 +688,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_scene_inspect_name": "Inspección de escena",
 	"tool_system_scene_inspect_desc": "Entrada unificada de solo lectura para validar, analizar o devolver ambos resultados de escena por separado.",
 	"tool_system_scene_patch_name": "Parche de escena",
-	"tool_system_scene_patch_desc": "Aplique operaciones por lotes a nodos de escena: agregar, eliminar, establecer propiedades o reparar.",
+	"tool_system_scene_patch_desc": "Aplique operaciones por lotes a nodos de escena: agregar, eliminar, establecer propiedades o cambiar el nodo padre.",
 	"tool_system_script_analyze_name": "Análisis de guión",
 	"tool_system_script_analyze_desc": "Analice la estructura, los símbolos y los miembros exportados de un script GDScript o C#.",
 	"tool_system_script_patch_name": "Parche de guión",

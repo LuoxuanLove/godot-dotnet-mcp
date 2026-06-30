@@ -688,7 +688,7 @@ const TRANSLATIONS: Dictionary = {
 	"tool_system_scene_inspect_name": "Szenenprüfung",
 	"tool_system_scene_inspect_desc": "Einheitlicher schreibgeschützter Einstieg für Szenenvalidierung, Szenenanalyse oder beide getrennten Ergebnisse.",
 	"tool_system_scene_patch_name": "Szenen-Patch",
-	"tool_system_scene_patch_desc": "Wenden Sie Stapelvorgänge auf Szenenknoten an: Hinzufügen, Löschen, Festlegen von Eigenschaften oder Neuanordnen.",
+	"tool_system_scene_patch_desc": "Wenden Sie Stapelvorgänge auf Szenenknoten an: Hinzufügen, Löschen, Festlegen von Eigenschaften oder Ändern des Elternknotens.",
 	"tool_system_script_analyze_name": "Skriptanalyse",
 	"tool_system_script_analyze_desc": "Analysieren Sie die Struktur, Symbole und exportierten Mitglieder eines GDScript- oder C#-Skripts.",
 	"tool_system_script_patch_name": "Skript-Patch",
