@@ -38,6 +38,51 @@ const TOOL_DESCRIPTION_KEYWORD_REQUIREMENTS := {
 	"tool_system_project_state_desc": ["summary", "sections"]
 }
 
+const SCENE_TOOL_LOCALIZATION_KEYS: Array[String] = [
+	"tool_system_scene_tree_name",
+	"tool_system_scene_tree_desc",
+	"tool_system_scene_patch_name",
+	"tool_system_scene_patch_desc",
+	"tool_action_system_scene_tree_get_tree_name",
+	"tool_action_system_scene_tree_get_tree_desc",
+	"tool_action_system_scene_tree_get_selected_name",
+	"tool_action_system_scene_tree_get_selected_desc",
+	"tool_action_system_scene_tree_select_name",
+	"tool_action_system_scene_tree_select_desc",
+	"tool_action_system_scene_tree_add_node_name",
+	"tool_action_system_scene_tree_add_node_desc",
+	"tool_action_system_scene_tree_remove_node_name",
+	"tool_action_system_scene_tree_remove_node_desc",
+	"tool_action_system_scene_tree_rename_node_name",
+	"tool_action_system_scene_tree_rename_node_desc",
+	"tool_action_system_scene_tree_reparent_node_name",
+	"tool_action_system_scene_tree_reparent_node_desc",
+	"tool_action_system_scene_tree_reorder_node_name",
+	"tool_action_system_scene_tree_reorder_node_desc",
+	"tool_action_system_scene_tree_attach_script_name",
+	"tool_action_system_scene_tree_attach_script_desc",
+	"tool_action_system_scene_tree_set_property_name",
+	"tool_action_system_scene_tree_set_property_desc",
+	"tool_action_system_scene_tree_get_property_name",
+	"tool_action_system_scene_tree_get_property_desc",
+	"tool_action_system_scene_tree_set_transform_name",
+	"tool_action_system_scene_tree_set_transform_desc",
+	"tool_action_system_scene_patch_add_node_name",
+	"tool_action_system_scene_patch_add_node_desc",
+	"tool_action_system_scene_patch_remove_node_name",
+	"tool_action_system_scene_patch_remove_node_desc",
+	"tool_action_system_scene_patch_rename_node_name",
+	"tool_action_system_scene_patch_rename_node_desc",
+	"tool_action_system_scene_patch_reparent_node_name",
+	"tool_action_system_scene_patch_reparent_node_desc",
+	"tool_action_system_scene_patch_attach_script_name",
+	"tool_action_system_scene_patch_attach_script_desc",
+	"tool_action_system_scene_patch_set_property_name",
+	"tool_action_system_scene_patch_set_property_desc",
+	"tool_action_system_scene_patch_update_property_name",
+	"tool_action_system_scene_patch_update_property_desc"
+]
+
 
 class FakeServerContext extends RefCounted:
 	var _tool_access_provider
@@ -105,6 +150,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var description_keyword_gaps := _find_tool_description_keyword_gaps(localization, locale_codes)
 	if not description_keyword_gaps.is_empty():
 		return _failure("Visible tool descriptions are missing schema keywords: %s" % ", ".join(description_keyword_gaps.slice(0, 120)))
+
+	var scene_tool_english_fallbacks := _find_scene_tool_english_fallbacks(localization, locale_codes)
+	if not scene_tool_english_fallbacks.is_empty():
+		return _failure("Scene tree and scene patch localization keys should not fall back to English in non-English locales: %s" % ", ".join(scene_tool_english_fallbacks.slice(0, 120)))
 
 	var missing := _find_missing_key_groups(localization, locale_codes, required_key_groups)
 	if not missing.is_empty():
@@ -297,6 +346,22 @@ func _find_tool_description_keyword_gaps(localization, locale_codes: Array[Strin
 					gaps.append("%s:%s missing '%s'" % [locale_name, key, keyword_text])
 	gaps.sort()
 	return gaps
+
+
+func _find_scene_tool_english_fallbacks(localization, locale_codes: Array[String]) -> Array[String]:
+	var fallbacks: Array[String] = []
+	var english_text_by_key := {}
+	for key in SCENE_TOOL_LOCALIZATION_KEYS:
+		english_text_by_key[key] = str(localization.get_text_for("en", key))
+	for locale_name in locale_codes:
+		if locale_name == "en":
+			continue
+		for key in SCENE_TOOL_LOCALIZATION_KEYS:
+			var localized := str(localization.get_text_for(locale_name, key))
+			if localized == str(english_text_by_key.get(key, "")):
+				fallbacks.append("%s:%s" % [locale_name, key])
+	fallbacks.sort()
+	return fallbacks
 
 
 func _failure(message: String) -> Dictionary:

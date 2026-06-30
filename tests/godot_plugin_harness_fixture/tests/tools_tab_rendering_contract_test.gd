@@ -90,6 +90,10 @@ class FakeLocalization extends RefCounted:
 		"tool_system_editor_evidence_name": "编辑器取证",
 		"tool_system_editor_evidence_desc": "捕获自描述的编辑器视觉证据。",
 		"tool_system_userdata_maintenance_name": "用户数据维护",
+		"tool_system_scene_tree_name": "场景树",
+		"tool_system_scene_tree_desc": "检查和修改当前编辑场景树。",
+		"tool_system_scene_patch_name": "场景修改",
+		"tool_system_scene_patch_desc": "对场景节点进行添加、删除、属性变更等批量操作。",
 		"tool_system_runtime_step_name": "运行时步进",
 		"tool_runtime_step_name": "步进",
 		"tool_runtime_step_desc": "内部运行时步进：应用可选运行时输入、等待指定帧数，并按需捕获一帧画面。",
@@ -98,6 +102,44 @@ class FakeLocalization extends RefCounted:
 		"tool_plugin_runtime_state_name": "插件状态",
 		"tool_project_info_name": "Project Info",
 		"tool_user_sample_tool_name": "Sample Tool",
+		"tool_action_system_scene_tree_get_tree_name": "获取场景树",
+		"tool_action_system_scene_tree_get_tree_desc": "返回当前正在编辑的场景树。",
+		"tool_action_system_scene_tree_get_selected_name": "读取选中节点",
+		"tool_action_system_scene_tree_get_selected_desc": "读取当前场景树中的选中项。",
+		"tool_action_system_scene_tree_select_name": "选中节点",
+		"tool_action_system_scene_tree_select_desc": "在当前编辑场景树中选中一个节点。",
+		"tool_action_system_scene_tree_add_node_name": "添加节点",
+		"tool_action_system_scene_tree_add_node_desc": "向当前编辑场景树添加一个节点。",
+		"tool_action_system_scene_tree_remove_node_name": "移除节点",
+		"tool_action_system_scene_tree_remove_node_desc": "从当前编辑场景树移除一个节点。",
+		"tool_action_system_scene_tree_rename_node_name": "重命名节点",
+		"tool_action_system_scene_tree_rename_node_desc": "重命名当前编辑场景树中的节点。",
+		"tool_action_system_scene_tree_reparent_node_name": "重新设定父节点",
+		"tool_action_system_scene_tree_reparent_node_desc": "将节点移动到当前编辑场景树中的新父节点下。",
+		"tool_action_system_scene_tree_reorder_node_name": "调整节点顺序",
+		"tool_action_system_scene_tree_reorder_node_desc": "调整当前编辑场景树中节点的同级顺序。",
+		"tool_action_system_scene_tree_attach_script_name": "挂载脚本",
+		"tool_action_system_scene_tree_attach_script_desc": "为当前编辑场景树中选中的节点挂载脚本。",
+		"tool_action_system_scene_tree_set_property_name": "设置属性",
+		"tool_action_system_scene_tree_set_property_desc": "设置当前编辑场景树中的属性。",
+		"tool_action_system_scene_tree_get_property_name": "读取属性",
+		"tool_action_system_scene_tree_get_property_desc": "读取当前编辑场景树中的属性。",
+		"tool_action_system_scene_tree_set_transform_name": "设置变换",
+		"tool_action_system_scene_tree_set_transform_desc": "设置当前编辑场景树中节点的变换。",
+		"tool_action_system_scene_patch_add_node_name": "添加节点",
+		"tool_action_system_scene_patch_add_node_desc": "预览向场景修改中添加节点。",
+		"tool_action_system_scene_patch_remove_node_name": "移除节点",
+		"tool_action_system_scene_patch_remove_node_desc": "预览从场景修改中移除节点。",
+		"tool_action_system_scene_patch_rename_node_name": "重命名节点",
+		"tool_action_system_scene_patch_rename_node_desc": "预览在场景修改中重命名节点。",
+		"tool_action_system_scene_patch_reparent_node_name": "重新设定父节点",
+		"tool_action_system_scene_patch_reparent_node_desc": "预览在场景修改中重新设定节点父节点。",
+		"tool_action_system_scene_patch_attach_script_name": "挂载脚本",
+		"tool_action_system_scene_patch_attach_script_desc": "预览在场景修改中挂载脚本。",
+		"tool_action_system_scene_patch_set_property_name": "设置属性",
+		"tool_action_system_scene_patch_set_property_desc": "预览在场景修改中设置属性。",
+		"tool_action_system_scene_patch_update_property_name": "更新属性",
+		"tool_action_system_scene_patch_update_property_desc": "预览在场景修改中更新已有属性。",
 		"tool_ctx_copy_input_schema_json": "Copy Input Schema JSON",
 		"tool_ctx_copy_output_schema_json": "Copy Output Schema JSON",
 		"tool_preview_output": "Output",
@@ -459,6 +501,26 @@ func run_case(tree: SceneTree) -> Dictionary:
 	await tree.process_frame
 	if not preview_text.text.contains("工具动作: 节点自带动作名") or not preview_text.text.contains("节点自带动作描述。"):
 		return _failure("Tools tab action preview should consume label and description keys from shared presentation node metadata.")
+	var scene_tree_tool = _find_child_by_metadata(system_category, "tool", "system_scene_tree")
+	if scene_tree_tool == null:
+		return _failure("Tools tab should render the scene tree system tool.")
+	var scene_tree_action := _find_child_by_metadata(scene_tree_tool, "action", "system_scene_tree.reorder_node")
+	if scene_tree_action == null or scene_tree_action.get_text(0) != "调整节点顺序":
+		return _failure("Tools tab should localize scene tree action names instead of falling back to English.")
+	_instance.call("_apply_selection_metadata", scene_tree_action.get_metadata(0))
+	await tree.process_frame
+	if not preview_text.text.contains("动作: 调整节点顺序") or not preview_text.text.contains("当前编辑场景树中节点的同级顺序。"):
+		return _failure("Tools tab should localize scene tree action previews for both name and description.")
+	var scene_patch_tool = _find_child_by_metadata(system_category, "tool", "system_scene_patch")
+	if scene_patch_tool == null:
+		return _failure("Tools tab should render the scene patch system tool.")
+	var scene_patch_action := _find_child_by_metadata(scene_patch_tool, "action", "system_scene_patch.update_property")
+	if scene_patch_action == null or scene_patch_action.get_text(0) != "更新属性":
+		return _failure("Tools tab should localize scene patch action names instead of falling back to English.")
+	_instance.call("_apply_selection_metadata", scene_patch_action.get_metadata(0))
+	await tree.process_frame
+	if not preview_text.text.contains("动作: 更新属性") or not preview_text.text.contains("预览在场景修改中更新已有属性。"):
+		return _failure("Tools tab should localize scene patch action previews for both name and description.")
 	var catalog_error := _assert_system_catalog_rendered(system_category)
 	if not catalog_error.is_empty():
 		return _failure(catalog_error)
@@ -745,6 +807,10 @@ func _system_actions_for(full_name: String) -> Array:
 	match full_name:
 		"system_dap_debugger":
 			return ["status", "get_settings", "set_settings", "initialize", "launch", "attach", "configuration_done", "disconnect", "terminate", "threads", "set_breakpoint", "remove_breakpoint", "list_breakpoints", "pause", "continue", "step_over", "stack_trace", "output"]
+		"system_scene_patch":
+			return ["add_node", "remove_node", "set_property", "attach_script", "reparent_node", "rename_node", "update_property"]
+		"system_scene_tree":
+			return ["get_tree", "get_selected", "select", "add_node", "remove_node", "rename_node", "reparent_node", "reorder_node", "attach_script", "set_property", "get_property", "set_transform"]
 		"system_userdata_maintenance":
 			return ["ensure_layout", "list_capture_cache", "cleanup_capture_cache", "cleanup_legacy_cache"]
 		"system_runtime_control":
