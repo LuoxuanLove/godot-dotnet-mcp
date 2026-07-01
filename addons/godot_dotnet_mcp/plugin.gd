@@ -918,7 +918,7 @@ func _on_language_changed(language_code: String) -> void:
 
 func _on_update_source_changed(source: String) -> void:
 	_ensure_runtime_state()
-	_clear_pending_update_sync()
+	_cancel_pending_update_sync("Update sync target changed before verification completed.")
 	_state.settings["update_source"] = _normalize_update_source(source)
 	if _state.settings["update_source"] == "custom_branch":
 		_state.settings["update_custom_branch"] = "dev"
@@ -1112,6 +1112,12 @@ func _clear_pending_update_sync() -> void:
 	_update_sync_pending_refs_refresh_required = false
 
 
+func _cancel_pending_update_sync(message: String) -> void:
+	if _state != null and _update_sync_after_refs_discovery_pending:
+		_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_pending_sync_failure(message))
+	_clear_pending_update_sync()
+
+
 func _prepare_pending_update_sync(target: Dictionary) -> void:
 	if _state == null:
 		return
@@ -1232,7 +1238,7 @@ func _get_update_request_parent() -> Node:
 
 func _on_update_custom_branch_changed(branch: String) -> void:
 	_ensure_runtime_state()
-	_clear_pending_update_sync()
+	_cancel_pending_update_sync("Update sync target changed before verification completed.")
 	_state.settings["update_custom_branch"] = branch
 	_save_settings()
 	_mark_update_selection_refresh_pending()

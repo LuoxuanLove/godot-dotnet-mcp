@@ -157,7 +157,18 @@ class SyncStartProbePlugin extends PluginScript:
 class PendingSyncProbePlugin extends SyncStartProbePlugin:
 	var compare_requests: Array[Dictionary] = []
 	var version_requests: Array[Dictionary] = []
+	var refs_refresh_requests: Array[bool] = []
 	var dock_refresh_count := 0
+
+	func _on_update_check_requested(background_refresh: bool = false) -> void:
+		refs_refresh_requests.append(background_refresh)
+		_update_refs_request_serial += 1
+		if background_refresh:
+			_state.update_refs_refresh_state = "loading"
+			_state.update_refs_refresh_serial = _update_refs_request_serial
+			_update_refs_background_serials[_update_refs_request_serial] = true
+		else:
+			_state.update_refs_state = "loading"
 
 	func _resolve_current_update_commit() -> String:
 		return "current-sync-sha"
@@ -541,6 +552,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		stale_selection_probe.free()
 		return _failure("MCP plugin update sync should keep the already queued Dock sync as the single loading operation.")
 	stale_selection_probe.free()
+
+	var target_change_cancel_probe := PendingSyncProbePlugin.new()
+	target_change_cancel_probe._state.settings["update_source"] = "custom_branch"
+	target_change_cancel_probe._state.settings["update_custom_branch"] = "feature/cancel-old"
+	target_change_cancel_probe._state.update_refs_state = "success"
+	target_change_cancel_probe._state.update_refs_last_checked_unix = int(Time.get_unix_time_from_system())
+	target_change_cancel_probe._update_refs_discovery_loaded = true
+	target_change_cancel_probe._state.update_ref_commits = {
+		"feature/cancel-old": "old-sha",
+		"feature/cancel-new": "new-sha"
+	}
+	target_change_cancel_probe._state.update_compare_state = "success"
+	target_change_cancel_probe._state.update_compare_refresh_state = "idle"
+	target_change_cancel_probe._state.update_compare_target_ref = "feature/other"
+	target_change_cancel_probe._state.update_compare_target_commit = "other-sha"
+	target_change_cancel_probe._on_update_sync_requested()
+	target_change_cancel_probe._on_update_custom_branch_changed("feature/cancel-new")
+	if target_change_cancel_probe._update_sync_after_refs_discovery_pending or str(target_change_cancel_probe._state.update_sync_state) != "error" or str(target_change_cancel_probe._state.update_sync_error).is_empty():
+		target_change_cancel_probe.free()
+		return _failure("Changing the update target during pending sync should fail the accepted sync instead of leaving Settings stuck in loading.")
+	target_change_cancel_probe.free()
 
 	var pending_refs_probe := PendingSyncProbePlugin.new()
 	pending_refs_probe._state.settings["update_source"] = "custom_branch"
