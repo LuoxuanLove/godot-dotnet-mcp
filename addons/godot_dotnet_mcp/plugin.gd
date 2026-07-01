@@ -1018,6 +1018,8 @@ func _should_refresh_update_refs_before_sync() -> bool:
 		return false
 	if str(_state.update_refs_state) == "loading" or str(_state.update_refs_refresh_state) == "loading":
 		return true
+	if str(_state.update_refs_refresh_state) == "error" or str(_state.update_refs_refresh_state) == "unavailable":
+		return true
 	if str(_state.update_refs_state) != "success" or not _update_refs_discovery_loaded:
 		return true
 	return _should_refresh_update_refs_in_background()

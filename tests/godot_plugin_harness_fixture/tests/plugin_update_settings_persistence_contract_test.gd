@@ -574,6 +574,26 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Changing the update target during pending sync should fail the accepted sync instead of leaving Settings stuck in loading.")
 	target_change_cancel_probe.free()
 
+	var refs_error_probe := PendingSyncProbePlugin.new()
+	refs_error_probe._state.settings["update_source"] = "custom_branch"
+	refs_error_probe._state.settings["update_custom_branch"] = "feature/refs-error"
+	refs_error_probe._state.update_refs_state = "success"
+	refs_error_probe._state.update_refs_refresh_state = "error"
+	refs_error_probe._state.update_refs_refresh_error = "previous refs refresh failed"
+	refs_error_probe._state.update_refs_last_checked_unix = int(Time.get_unix_time_from_system())
+	refs_error_probe._update_refs_discovery_loaded = true
+	refs_error_probe._state.update_ref_commits = {"feature/refs-error": "target-sha"}
+	refs_error_probe._state.update_compare_state = "success"
+	refs_error_probe._state.update_compare_refresh_state = "idle"
+	refs_error_probe._state.update_compare_last_checked_unix = int(Time.get_unix_time_from_system())
+	refs_error_probe._state.update_compare_target_ref = "feature/refs-error"
+	refs_error_probe._state.update_compare_target_commit = "target-sha"
+	refs_error_probe._on_update_sync_requested()
+	if refs_error_probe.archive_requests.size() != 0 or not refs_error_probe._update_sync_after_refs_discovery_pending or refs_error_probe.refs_refresh_requests != [true] or str(refs_error_probe._state.update_refs_refresh_state) != "loading":
+		refs_error_probe.free()
+		return _failure("Dock update sync should force a new refs refresh after a background refs refresh error instead of syncing a stale verified target.")
+	refs_error_probe.free()
+
 	var pending_refs_probe := PendingSyncProbePlugin.new()
 	pending_refs_probe._state.settings["update_source"] = "custom_branch"
 	pending_refs_probe._state.settings["update_custom_branch"] = "feature/pending-refs"
