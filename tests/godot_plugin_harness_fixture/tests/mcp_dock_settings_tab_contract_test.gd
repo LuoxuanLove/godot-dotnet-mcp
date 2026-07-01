@@ -85,6 +85,7 @@ class Recorder extends RefCounted:
 	var port := 0
 	var update_source := ""
 	var update_custom_branch := ""
+	var update_interaction_refresh_count := 0
 	var update_check_count := 0
 	var update_apply_count := 0
 
@@ -96,6 +97,9 @@ class Recorder extends RefCounted:
 
 	func on_update_custom_branch_changed(value: String) -> void:
 		update_custom_branch = value
+
+	func on_update_interaction_refresh_requested() -> void:
+		update_interaction_refresh_count += 1
 
 	func on_update_check_requested() -> void:
 		update_check_count += 1
@@ -145,6 +149,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_instance.port_changed.connect(Callable(recorder, "on_port_changed"))
 	_instance.update_source_changed.connect(Callable(recorder, "on_update_source_changed"))
 	_instance.update_custom_branch_changed.connect(Callable(recorder, "on_update_custom_branch_changed"))
+	_instance.update_interaction_refresh_requested.connect(Callable(recorder, "on_update_interaction_refresh_requested"))
 	_instance.update_check_requested.connect(Callable(recorder, "on_update_check_requested"))
 	_instance.update_apply_requested.connect(Callable(recorder, "on_update_apply_requested"))
 	_instance.apply_model({
@@ -216,6 +221,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should not display removed current version, plugin path, or commit summary rows after Dock projection.")
 	if _find_label_containing(labels, "Synced dev.") == null or _find_label_containing(labels, "Current plugin 1.0.1 [abcdef1] -> selected target 1.4.0 [1234567]") == null or _find_label_containing(labels, "selected target dev") != null or _find_label_containing(labels, "current ahead 0 / target ahead 1") == null:
 		return _failure("Settings tab should display sync success together with explicit current-to-target update hashes and commit difference direction.")
+	source_option.emit_signal("pressed")
+	custom_branch_value.emit_signal("pressed")
+	if recorder.update_interaction_refresh_count != 2 or recorder.update_source != "" or recorder.update_custom_branch != "":
+		return _failure("MCP Dock should request background update refresh when Settings update selectors are pressed without changing selection.")
 	prepare_button.text = "准备"
 	prepare_button.visible = true
 	prepare_button.disabled = false
@@ -255,7 +264,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	custom_branch_value.select(1)
 	custom_branch_value.emit_signal("item_selected", 1)
 	apply_button.emit_signal("pressed")
-	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/dock" or recorder.update_check_count != 0 or recorder.update_apply_count != 1:
+	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/dock" or recorder.update_interaction_refresh_count != 2 or recorder.update_check_count != 0 or recorder.update_apply_count != 1:
 		return _failure("Settings tab update setting and Sync changes should route through MCP Dock signals without a user-visible Check action.")
 
 	return {"name": "mcp_dock_settings_tab_contracts", "success": true, "error": ""}

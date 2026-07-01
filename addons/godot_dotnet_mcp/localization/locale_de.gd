@@ -459,6 +459,8 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_prepare": "Vorbereiten",
 	"settings_update_apply": "Synchronisieren",
 	"settings_update_sync_loading": "Synchronisiere %s...",
+	"settings_update_sync_refreshing_refs": "Aktualisiere neueste Update-Refs...",
+	"settings_update_sync_verifying_target": "Prüfe Synchronisierungsziel...",
 	"settings_update_sync_resolving_target": "Resolving update target...",
 	"settings_update_sync_downloading_archive": "Downloading update archive...",
 	"settings_update_sync_writing_files": "Writing plugin files...",
