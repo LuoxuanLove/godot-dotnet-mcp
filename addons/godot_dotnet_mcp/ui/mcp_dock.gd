@@ -21,6 +21,7 @@ signal log_level_changed(level: String)
 signal language_changed(language_code: String)
 signal update_source_changed(source: String)
 signal update_custom_branch_changed(branch: String)
+signal update_interaction_refresh_requested
 signal update_check_requested
 signal update_apply_requested
 signal start_requested
@@ -386,6 +387,7 @@ func _connect_settings_tab() -> void:
 	_connect_signal_once(_settings_tab, "language_changed", _on_settings_tab_language_changed)
 	_connect_signal_once(_settings_tab, "update_source_changed", _on_settings_tab_update_source_changed)
 	_connect_signal_once(_settings_tab, "update_custom_branch_changed", _on_settings_tab_update_custom_branch_changed)
+	_connect_signal_once(_settings_tab, "update_interaction_refresh_requested", _on_settings_tab_update_interaction_refresh_requested)
 	_connect_signal_once(_settings_tab, "update_check_requested", _on_settings_tab_update_check_requested)
 	_connect_signal_once(_settings_tab, "update_apply_requested", _on_settings_tab_update_apply_requested)
 
@@ -579,6 +581,10 @@ func _on_settings_tab_update_source_changed(source: String) -> void:
 
 func _on_settings_tab_update_custom_branch_changed(branch: String) -> void:
 	update_custom_branch_changed.emit(branch)
+
+
+func _on_settings_tab_update_interaction_refresh_requested() -> void:
+	update_interaction_refresh_requested.emit()
 
 
 func _on_settings_tab_update_check_requested() -> void:

@@ -47,7 +47,7 @@ const PENDING_FOCUS_SNAPSHOT_KEY := "_pending_focus_snapshot"
 const RUNTIME_BRIDGE_AUTOLOAD_NAME := "MCPRuntimeBridge"
 const RUNTIME_BRIDGE_AUTOLOAD_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_bridge.gd"
 const UPDATE_BACKGROUND_REFRESH_TICK_INTERVAL_SEC := 5.0
-const UPDATE_REFS_BACKGROUND_REFRESH_TTL_SEC := 90
+const UPDATE_REFS_BACKGROUND_REFRESH_TTL_SEC := 300
 const UPDATE_COMPARE_BACKGROUND_REFRESH_TTL_SEC := 30
 
 var _state = null
@@ -99,6 +99,9 @@ var _update_refs_discovery_loaded := false
 var _update_refs_discovery_retry_pending := false
 var _update_refs_background_serials := {}
 var _update_sync_after_refs_discovery_pending := false
+var _update_sync_pending_target_ref := ""
+var _update_sync_pending_target_kind := ""
+var _update_sync_pending_refs_refresh_required := false
 var _update_compare_request_serial := 0
 var _update_compare_background_serials := {}
 var _update_ref_version_request_serial := 0
@@ -730,7 +733,10 @@ func _build_dock_refresh_status_signature() -> String:
 		"update_compare_behind_by",
 		"update_selection_refresh_pending",
 		"update_selection_refresh_pending_ref",
-		"update_sync_state"
+		"update_sync_state",
+		"update_sync_status",
+		"update_sync_pending_target_ref",
+		"update_sync_pending_target_kind"
 	]:
 		parts.append("%s=%s" % [key, str(data.get(key, ""))])
 	return "|".join(parts)
@@ -807,7 +813,10 @@ func _build_dock_refresh_status_signature_data() -> Dictionary:
 		"update_compare_behind_by": int(_get_state_value("update_compare_behind_by", -1)),
 		"update_selection_refresh_pending": bool(_get_state_value("update_selection_refresh_pending", false)),
 		"update_selection_refresh_pending_ref": str(_get_state_value("update_selection_refresh_pending_ref", "")),
-		"update_sync_state": str(_get_state_value("update_sync_state", "idle"))
+		"update_sync_state": str(_get_state_value("update_sync_state", "idle")),
+		"update_sync_status": str(_get_state_value("update_sync_status", "")),
+		"update_sync_pending_target_ref": str(_update_sync_pending_target_ref),
+		"update_sync_pending_target_kind": str(_update_sync_pending_target_kind)
 	}
 
 
@@ -909,7 +918,7 @@ func _on_language_changed(language_code: String) -> void:
 
 func _on_update_source_changed(source: String) -> void:
 	_ensure_runtime_state()
-	_update_sync_after_refs_discovery_pending = false
+	_clear_pending_update_sync()
 	_state.settings["update_source"] = _normalize_update_source(source)
 	if _state.settings["update_source"] == "custom_branch":
 		_state.settings["update_custom_branch"] = "dev"
@@ -1004,6 +1013,29 @@ func _maybe_refresh_update_compare_in_background() -> bool:
 	return _refresh_update_compare_for_current_target(true)
 
 
+func _should_refresh_update_refs_before_sync() -> bool:
+	if _state == null:
+		return false
+	if str(_state.update_refs_state) == "loading" or str(_state.update_refs_refresh_state) == "loading":
+		return true
+	if str(_state.update_refs_state) != "success" or not _update_refs_discovery_loaded:
+		return true
+	return _should_refresh_update_refs_in_background()
+
+
+func _should_queue_update_sync_for_verification(target: Dictionary) -> bool:
+	if _state == null:
+		return false
+	if _should_refresh_update_refs_before_sync():
+		return true
+	if _should_refresh_update_compare_in_background():
+		return true
+	var compare_refresh_state := str(_state.update_compare_refresh_state)
+	if compare_refresh_state == "loading" or compare_refresh_state == "error" or compare_refresh_state == "unavailable":
+		return true
+	return not _is_update_sync_target_verified(target, true)
+
+
 func _start_background_update_refs_refresh() -> bool:
 	if _state == null:
 		return false
@@ -1013,6 +1045,12 @@ func _start_background_update_refs_refresh() -> bool:
 		return false
 	_on_update_check_requested(true)
 	return true
+
+
+func _on_update_interaction_refresh_requested() -> void:
+	_ensure_runtime_state()
+	if _start_background_update_refs_refresh():
+		_refresh_dock()
 
 
 func _mark_update_selection_refresh_pending() -> void:
@@ -1067,6 +1105,105 @@ func _is_update_sync_target_verified(target: Dictionary = {}, require_compare: b
 	return true
 
 
+func _clear_pending_update_sync() -> void:
+	_update_sync_after_refs_discovery_pending = false
+	_update_sync_pending_target_ref = ""
+	_update_sync_pending_target_kind = ""
+	_update_sync_pending_refs_refresh_required = false
+
+
+func _prepare_pending_update_sync(target: Dictionary) -> void:
+	if _state == null:
+		return
+	var target_ref := str(target.get("ref", "")).strip_edges()
+	if target_ref.is_empty():
+		_clear_pending_update_sync()
+		_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_pending_sync_failure(
+			_localization.get_text("settings_update_sync_no_target") if _localization != null else "Select an update target before syncing."
+		))
+		return
+	_update_sync_after_refs_discovery_pending = true
+	_update_sync_pending_target_ref = target_ref
+	_update_sync_pending_target_kind = str(target.get("kind", "branch"))
+	_update_sync_pending_refs_refresh_required = _should_refresh_update_refs_before_sync()
+	_state.update_sync_state = "loading"
+	_state.update_sync_error = ""
+	_state.update_sync_target_ref = target_ref
+	_state.update_sync_target_kind = _update_sync_pending_target_kind
+	if _update_sync_pending_refs_refresh_required:
+		_state.update_sync_status = _get_localized_text("settings_update_sync_refreshing_refs")
+		_state.update_sync_progress = 0.04
+	else:
+		_state.update_sync_status = _get_localized_text("settings_update_sync_verifying_target")
+		_state.update_sync_progress = 0.1
+
+
+func _ensure_pending_update_sync_verification() -> bool:
+	if _state == null or not _update_sync_after_refs_discovery_pending:
+		return false
+	if _update_sync_pending_refs_refresh_required:
+		_state.update_sync_status = _get_localized_text("settings_update_sync_refreshing_refs")
+		_state.update_sync_progress = max(float(_state.update_sync_progress), 0.04)
+		if str(_state.update_refs_state) == "loading" or str(_state.update_refs_refresh_state) == "loading":
+			_update_sync_pending_refs_refresh_required = false
+			_refresh_dock()
+			return true
+		if not _start_pending_sync_refs_refresh():
+			_fail_pending_update_sync_after_refs_discovery("No active update refs request host.")
+			_refresh_dock()
+			return false
+		_update_sync_pending_refs_refresh_required = false
+		_refresh_dock()
+		return true
+	if str(_state.update_refs_state) == "loading" or str(_state.update_refs_refresh_state) == "loading":
+		_state.update_sync_status = _get_localized_text("settings_update_sync_refreshing_refs")
+		_state.update_sync_progress = max(float(_state.update_sync_progress), 0.04)
+		_refresh_dock()
+		return true
+	if str(_state.update_compare_state) == "loading" or str(_state.update_compare_refresh_state) == "loading":
+		_state.update_sync_status = _get_localized_text("settings_update_sync_verifying_target")
+		_state.update_sync_progress = max(float(_state.update_sync_progress), 0.1)
+		_refresh_dock()
+		return true
+	if str(_state.update_refs_state) != "success" or not _update_refs_discovery_loaded:
+		_state.update_sync_status = _get_localized_text("settings_update_sync_refreshing_refs")
+		_state.update_sync_progress = max(float(_state.update_sync_progress), 0.04)
+		if not _start_pending_sync_refs_refresh():
+			_fail_pending_update_sync_after_refs_discovery("No active update refs request host.")
+			_refresh_dock()
+			return false
+		return true
+	var target := _resolve_update_sync_target()
+	var target_ref := str(target.get("ref", "")).strip_edges()
+	if target_ref.is_empty():
+		_clear_pending_update_sync()
+		_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_pending_sync_failure(
+			_localization.get_text("settings_update_sync_no_target") if _localization != null else "Select an update target before syncing."
+		))
+		return false
+	_update_sync_pending_target_ref = target_ref
+	_update_sync_pending_target_kind = str(target.get("kind", "branch"))
+	if _is_update_sync_target_verified(target, true):
+		return _continue_pending_update_sync_after_refs_discovery()
+	_state.update_sync_status = _get_localized_text("settings_update_sync_verifying_target")
+	_state.update_sync_progress = max(float(_state.update_sync_progress), 0.1)
+	if not _refresh_update_compare_for_current_target(true):
+		_fail_pending_update_sync_after_refs_discovery("Selected update target could not be verified before sync.")
+		return false
+	return true
+
+
+func _start_pending_sync_refs_refresh() -> bool:
+	if _state == null:
+		return false
+	if str(_state.update_refs_state) == "loading" or str(_state.update_refs_refresh_state) == "loading":
+		return true
+	if _get_update_request_parent() == null:
+		return false
+	_on_update_check_requested(true)
+	return true
+
+
 func _ensure_saved_update_source_discovery_requested() -> bool:
 	if _state == null:
 		return false
@@ -1095,7 +1232,7 @@ func _get_update_request_parent() -> Node:
 
 func _on_update_custom_branch_changed(branch: String) -> void:
 	_ensure_runtime_state()
-	_update_sync_after_refs_discovery_pending = false
+	_clear_pending_update_sync()
 	_state.settings["update_custom_branch"] = branch
 	_save_settings()
 	_mark_update_selection_refresh_pending()
@@ -1167,12 +1304,10 @@ func _on_update_sync_requested() -> void:
 		_state.update_sync_progress = 0.0
 		_refresh_dock()
 		return
-	if not _is_update_sync_target_verified(target, true):
-		_state.update_sync_state = "error"
-		_state.update_sync_error = "Selected update target is still being verified; wait for the background refresh to finish before syncing."
-		_state.update_sync_status = ""
-		_state.update_sync_progress = 0.0
+	if _should_queue_update_sync_for_verification(target):
+		_prepare_pending_update_sync(target)
 		_refresh_dock()
+		_ensure_pending_update_sync_verification()
 		return
 	_request_update_sync(target, "dock")
 
@@ -1180,21 +1315,20 @@ func _on_update_sync_requested() -> void:
 func _request_update_sync(target: Dictionary, source: String = "unknown") -> bool:
 	if _state == null:
 		return false
-	if str(_state.update_sync_state) == "loading":
-		_refresh_dock()
-		return false
 	var target_ref := str(target.get("ref", "")).strip_edges()
 	if target_ref.is_empty():
 		return false
-	var require_verified_compare := source != "refs_discovery"
-	if not _is_update_sync_target_verified(target, require_verified_compare):
-		_state.update_sync_state = "error"
-		_state.update_sync_error = "Selected update target is still being verified; wait for the background refresh to finish before syncing."
-		_state.update_sync_status = ""
-		_state.update_sync_progress = 0.0
+	var continuing_pending_sync := source == "refs_discovery" and str(_state.update_sync_state) == "loading" and str(_state.update_sync_target_ref).strip_edges() == target_ref
+	if str(_state.update_sync_state) == "loading" and not continuing_pending_sync:
 		_refresh_dock()
 		return false
-	_update_sync_after_refs_discovery_pending = false
+	var should_queue_verification := _should_queue_update_sync_for_verification(target) if source != "refs_discovery" else not _is_update_sync_target_verified(target, true)
+	if should_queue_verification:
+		_prepare_pending_update_sync(target)
+		_refresh_dock()
+		_ensure_pending_update_sync_verification()
+		return false
+	_clear_pending_update_sync()
 	_update_sync_request_serial += 1
 	var serial := _update_sync_request_serial
 	_state.update_sync_state = "loading"
@@ -1501,6 +1635,7 @@ func _fail_pending_update_sync_after_refs_discovery(message: String) -> void:
 	if not _update_sync_after_refs_discovery_pending or _state == null:
 		return
 	_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_pending_sync_failure(message))
+	_clear_pending_update_sync()
 
 
 func _mark_update_sync_failed(message: String, serial: int) -> void:
@@ -1721,6 +1856,7 @@ func _finalize_update_refs_discovery_if_ready(serial: int) -> void:
 			_state.update_refs_refresh_state = "error"
 			_state.update_refs_refresh_error = "; ".join(errors)
 			_state.update_refs_refresh_serial = serial
+			_fail_pending_update_sync_after_refs_discovery("Update target discovery failed before sync: %s" % _state.update_refs_refresh_error)
 		else:
 			_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_refs_failure(errors))
 			_reset_update_compare_state()
@@ -1740,11 +1876,15 @@ func _continue_pending_update_sync_after_refs_discovery() -> bool:
 	var target := _resolve_update_sync_target()
 	var target_ref := str(target.get("ref", "")).strip_edges()
 	if target_ref.is_empty():
+		_clear_pending_update_sync()
 		_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_pending_sync_failure(
 			_localization.get_text("settings_update_sync_no_target") if _localization != null else "Select an update target before syncing."
 		))
 		return false
-	_update_sync_after_refs_discovery_pending = false
+	if not _is_update_sync_target_verified(target, true):
+		_ensure_pending_update_sync_verification()
+		return true
+	_clear_pending_update_sync()
 	return _request_update_sync(target, "refs_discovery")
 
 
@@ -1767,6 +1907,8 @@ func _refresh_update_compare_for_current_target(background_refresh: bool = false
 			_state.update_compare_refresh_state = "unavailable"
 			_state.update_compare_refresh_error = str(compare_snapshot.get("error", ""))
 			_state.update_compare_last_checked_unix = int(Time.get_unix_time_from_system())
+			if _update_sync_after_refs_discovery_pending:
+				_fail_pending_update_sync_after_refs_discovery("Update target verification failed before sync: %s" % _state.update_compare_refresh_error)
 			return true
 		_state.update_compare_ahead_by = int(compare_snapshot.get("ahead_by", -1))
 		_state.update_compare_behind_by = int(compare_snapshot.get("behind_by", -1))
@@ -1782,6 +1924,9 @@ func _refresh_update_compare_for_current_target(background_refresh: bool = false
 		if bool(_state.update_selection_refresh_pending) and str(_state.update_selection_refresh_pending_ref).strip_edges() == target_ref:
 			_state.update_selection_refresh_pending = false
 			_state.update_selection_refresh_pending_ref = ""
+		if _update_sync_after_refs_discovery_pending and _is_update_sync_target_verified(target, true):
+			_continue_pending_update_sync_after_refs_discovery()
+			return true
 		return true
 	if not background_refresh:
 		_state.update_compare_ahead_by = int(compare_snapshot.get("ahead_by", -1))
@@ -1859,6 +2004,8 @@ func _on_update_compare_request_completed(result: int, response_code: int, _head
 		_state.update_selection_refresh_pending = false
 		_state.update_selection_refresh_pending_ref = ""
 	_update_compare_background_serials.erase(serial)
+	if _update_sync_after_refs_discovery_pending and _continue_pending_update_sync_after_refs_discovery():
+		return
 	_refresh_dock()
 
 
@@ -1870,6 +2017,7 @@ func _mark_update_compare_failed(message: String, serial: int) -> void:
 		_state.update_compare_refresh_error = message
 		_state.update_compare_refresh_serial = serial
 		_update_compare_background_serials.erase(serial)
+		_fail_pending_update_sync_after_refs_discovery("Update target verification failed before sync: %s" % message)
 		_refresh_dock()
 		return
 	_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_compare_failure(message))
@@ -2026,7 +2174,11 @@ func start_plugin_update_sync_from_tools() -> Dictionary:
 			"data": unavailable_data,
 			"message": "Plugin update sync request host is unavailable"
 		})
-	_request_update_sync(target, "tool")
+	if _should_queue_update_sync_for_verification(target):
+		_prepare_pending_update_sync(target)
+		_ensure_pending_update_sync_verification()
+	else:
+		_request_update_sync(target, "tool")
 	var data := _build_plugin_update_status_snapshot()
 	data["accepted"] = str(_state.update_sync_state) == "loading"
 	data["action_status"] = _resolve_plugin_update_request_status("sync", bool(data.get("accepted", false)))
@@ -2100,6 +2252,8 @@ func _build_plugin_update_tool_context(target: Dictionary = {}) -> Dictionary:
 		"request_host_available": _get_update_request_parent() != null,
 		"discovery_retry_pending": _update_refs_discovery_retry_pending,
 		"pending_sync_after_refs_discovery": _update_sync_after_refs_discovery_pending,
+		"pending_sync_target_ref": str(_update_sync_pending_target_ref),
+		"pending_sync_target_kind": str(_update_sync_pending_target_kind),
 		"refs_state": str(_state.update_refs_state),
 		"refs_status": str(_state.update_refs_status),
 		"refs_error": str(_state.update_refs_error),

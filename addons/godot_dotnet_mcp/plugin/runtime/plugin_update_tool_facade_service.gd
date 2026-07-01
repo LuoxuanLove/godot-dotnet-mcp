@@ -48,6 +48,8 @@ func build_status_snapshot(context: Dictionary) -> Dictionary:
 		"request_host_available": bool(context.get("request_host_available", false)),
 		"discovery_retry_pending": bool(context.get("discovery_retry_pending", false)),
 		"pending_sync_after_refs_discovery": bool(context.get("pending_sync_after_refs_discovery", false)),
+		"pending_sync_target_ref": str(context.get("pending_sync_target_ref", "")),
+		"pending_sync_target_kind": str(context.get("pending_sync_target_kind", "")),
 		"selection_refresh_pending": bool(context.get("selection_refresh_pending", false)),
 		"selection_refresh_pending_ref": str(context.get("selection_refresh_pending_ref", "")),
 		"next_action": "poll_update_status" if bool(context.get("pending_sync_after_refs_discovery", false)) else "",

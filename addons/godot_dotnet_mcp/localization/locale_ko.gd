@@ -626,6 +626,8 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_prepare": "준비",
 	"settings_update_apply": "동기화",
 	"settings_update_sync_loading": "%s 동기화 중...",
+	"settings_update_sync_refreshing_refs": "최신 업데이트 참조를 새로 고치는 중...",
+	"settings_update_sync_verifying_target": "동기화 대상을 확인하는 중...",
 	"settings_update_sync_resolving_target": "동기화 대상 확인 중...",
 	"settings_update_sync_downloading_archive": "업데이트 아카이브 다운로드 중...",
 	"settings_update_sync_writing_files": "플러그인 파일 쓰는 중...",

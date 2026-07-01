@@ -6,6 +6,7 @@ signal log_level_changed(level: String)
 signal language_changed(language_code: String)
 signal update_source_changed(source: String)
 signal update_custom_branch_changed(branch: String)
+signal update_interaction_refresh_requested
 signal update_check_requested
 signal update_apply_requested
 
@@ -68,6 +69,8 @@ func _ready() -> void:
 	_language_option.item_selected.connect(_on_language_option_selected)
 	_source_option.item_selected.connect(_on_source_option_selected)
 	_custom_branch_value.item_selected.connect(_on_custom_branch_option_selected)
+	_source_option.pressed.connect(_on_update_selector_pressed)
+	_custom_branch_value.pressed.connect(_on_update_selector_pressed)
 	_check_button.pressed.connect(_on_check_button_pressed)
 	_apply_button.pressed.connect(_on_apply_button_pressed)
 	_check_button.text = ""
@@ -280,6 +283,10 @@ func _on_custom_branch_option_selected(index: int) -> void:
 	if branch.is_empty():
 		return
 	update_custom_branch_changed.emit(branch)
+
+
+func _on_update_selector_pressed() -> void:
+	update_interaction_refresh_requested.emit()
 
 
 

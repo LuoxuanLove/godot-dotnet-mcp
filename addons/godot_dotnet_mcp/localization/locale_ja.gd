@@ -460,6 +460,8 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_prepare": "準備",
 	"settings_update_apply": "同期",
 	"settings_update_sync_loading": "%s を同期中...",
+	"settings_update_sync_refreshing_refs": "最新の更新参照を更新中...",
+	"settings_update_sync_verifying_target": "同期対象を検証中...",
 	"settings_update_sync_resolving_target": "同期対象を解決中...",
 	"settings_update_sync_downloading_archive": "更新アーカイブをダウンロード中...",
 	"settings_update_sync_writing_files": "プラグインファイルを書き込み中...",

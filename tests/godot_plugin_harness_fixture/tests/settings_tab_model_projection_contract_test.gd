@@ -191,23 +191,23 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"update_selection_refresh_pending": true,
 		"plugin_freshness": {}
 	})
-	if bool((stale_selection_projection.get("updates", {}) as Dictionary).get("apply_enabled", true)):
-		return _failure("Settings projection should disable update Sync while the newly selected target is still refreshing.")
+	if not bool((stale_selection_projection.get("updates", {}) as Dictionary).get("apply_enabled", false)):
+		return _failure("Settings projection should keep update Sync enabled while the newly selected target is still refreshing so the sync request can wait for verification.")
 
-	var failed_compare_refresh_projection: Dictionary = service.project({
+	var background_compare_refresh_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "custom_branch", "update_custom_branch": "feature/settings"},
 		"update_refs_state": "success",
-		"update_refs_refresh_state": "idle",
+		"update_refs_refresh_state": "loading",
 		"update_refs_commits": {"feature/settings": "1234567890abcdef"},
 		"update_compare_state": "success",
-		"update_compare_refresh_state": "error",
+		"update_compare_refresh_state": "loading",
 		"update_compare_target_ref": "feature/settings",
 		"update_compare_target_commit": "1234567890abcdef",
 		"plugin_freshness": {}
 	})
-	if bool((failed_compare_refresh_projection.get("updates", {}) as Dictionary).get("apply_enabled", true)):
-		return _failure("Settings projection should disable update Sync after a failed background compare refresh.")
+	if not bool((background_compare_refresh_projection.get("updates", {}) as Dictionary).get("apply_enabled", false)):
+		return _failure("Settings projection should keep update Sync enabled while background refs or compare refreshes are loading.")
 
 	var refresh_loading_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),

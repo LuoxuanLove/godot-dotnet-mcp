@@ -27,6 +27,7 @@ func build_dock_signal_bindings() -> Array[Dictionary]:
 		{"signal": "language_changed", "callable": Callable(self, "language_changed")},
 		{"signal": "update_source_changed", "callable": Callable(self, "update_source_changed")},
 		{"signal": "update_custom_branch_changed", "callable": Callable(self, "update_custom_branch_changed")},
+		{"signal": "update_interaction_refresh_requested", "callable": Callable(self, "update_interaction_refresh_requested")},
 		{"signal": "update_check_requested", "callable": Callable(self, "update_check_requested")},
 		{"signal": "update_apply_requested", "callable": Callable(self, "update_apply_requested")},
 		{"signal": "start_requested", "callable": Callable(self, "start_requested")},
@@ -76,6 +77,10 @@ func update_source_changed(source: String) -> void:
 
 func update_custom_branch_changed(branch: String) -> void:
 	_call_plugin_method("_on_update_custom_branch_changed", [branch])
+
+
+func update_interaction_refresh_requested() -> void:
+	_call_plugin_method("_on_update_interaction_refresh_requested")
 
 
 
