@@ -60,8 +60,6 @@ func _normalize_update_source(source: String) -> String:
 
 
 func save_plugin_settings(settings_path: String, settings: Dictionary) -> void:
-	var settings_dir := settings_path.get_base_dir()
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(settings_dir))
 	var write_result := _write_json_file_atomically(settings_path, settings)
 	if not bool(write_result.get("success", false)):
 		push_warning("[MCP] Failed to persist plugin settings: %s" % str(write_result))
@@ -112,16 +110,6 @@ func load_custom_profiles(profile_dir: String) -> Dictionary:
 
 
 func save_custom_profile(profile_dir: String, profile_name: String, disabled_tools: Array) -> Dictionary:
-	var user_dir = DirAccess.open("user://")
-	if user_dir == null:
-		return {"success": false}
-
-	var relative_dir = profile_dir.trim_prefix("user://")
-	if not user_dir.dir_exists(relative_dir):
-		var dir_error = user_dir.make_dir_recursive(relative_dir)
-		if dir_error != OK:
-			return {"success": false}
-
 	var slug = _slugify_profile_name(profile_name)
 	var file_path = _build_profile_file_path(profile_dir, slug)
 	var write_result := _write_json_file_atomically(file_path, {
@@ -217,10 +205,6 @@ func export_tool_config(file_path: String, profile_id: String, disabled_tools: A
 	var normalized_path = _normalize_tool_config_exchange_path(file_path)
 	if normalized_path.is_empty():
 		return {"success": false, "error_code": "config_path_required"}
-
-	var ensure_result = _ensure_parent_dir(normalized_path)
-	if not bool(ensure_result.get("success", false)):
-		return ensure_result
 
 	var write_result := _write_json_file_atomically(normalized_path, {
 		"format_version": 1,
@@ -340,27 +324,6 @@ func _read_custom_profile_file(file_path: String) -> Dictionary:
 		return {"success": false, "error_code": "profile_parse_failed"}
 
 	return {"success": true, "data": data}
-
-
-func _ensure_parent_dir(file_path: String) -> Dictionary:
-	var dir_path = file_path.get_base_dir()
-	if dir_path.is_empty() or dir_path == ".":
-		return {"success": true}
-
-	var absolute_dir = ProjectSettings.globalize_path(dir_path)
-	if DirAccess.dir_exists_absolute(absolute_dir):
-		return {"success": true}
-
-	var error = DirAccess.make_dir_recursive_absolute(absolute_dir)
-	if error != OK:
-		return {
-			"success": false,
-			"error_code": "config_dir_create_failed",
-			"dir_path": dir_path,
-			"file_path": file_path
-		}
-
-	return {"success": true}
 
 
 func _write_json_file_atomically(file_path: String, payload: Dictionary) -> Dictionary:

@@ -150,6 +150,8 @@ func _verify_settings_store_atomic_writes() -> String:
 			return "FileWriteTransaction should centralize settings/fallback atomic write behavior: %s" % required_transaction
 	for forbidden in [
 		"func save_plugin_settings(settings_path: String, settings: Dictionary) -> void:\n\tvar settings_dir := settings_path.get_base_dir()\n\tDirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(settings_dir))\n\tvar file = FileAccess.open(settings_path, FileAccess.WRITE)",
+		"func _ensure_parent_dir(",
+		"make_dir_recursive",
 		"func export_tool_config(file_path: String, profile_id: String, disabled_tools: Array) -> Dictionary:"
 	]:
 		if forbidden.begins_with("func export_tool_config"):

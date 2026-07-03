@@ -527,6 +527,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	)
 	if wildcard_json_tie_request_post.has("_raw_body"):
 		return _failure("HTTP request router should keep JSON response mode when wildcard Accept does not prefer SSE.")
+	if str(wildcard_json_tie_request_post.get("jsonrpc", "")) != "2.0" or not wildcard_json_tie_request_post.has("result"):
+		return _failure("HTTP request router should return a JSON-RPC result when wildcard Accept keeps JSON response mode.")
 	var wildcard_sse_preferred_request_post: Dictionary = await response_post_router.route_request_async(
 		"POST",
 		"/mcp",
