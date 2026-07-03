@@ -1653,6 +1653,18 @@ func _mark_update_sync_failed(message: String, serial: int) -> void:
 	_refresh_dock()
 
 
+func _format_update_sync_failure(sync_result: Dictionary) -> String:
+	var message := str(sync_result.get("error", "Update sync failed."))
+	if sync_result.has("dirty") and bool(sync_result.get("dirty", false)):
+		message += " Addon tree may be partially updated."
+	if sync_result.has("recovered") and not bool(sync_result.get("recovered", true)):
+		message += " Rollback did not fully recover the previous files."
+	var rollback_error := str(sync_result.get("rollback_error", "")).strip_edges()
+	if not rollback_error.is_empty():
+		message += " Rollback error: %s" % rollback_error
+	return message
+
+
 func _on_update_archive_sync_request_attempt_completed(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray, target: Dictionary, serial: int, attempts: Array, attempt_index: int, failures: Array) -> void:
 	if _state == null or serial != _update_sync_request_serial:
 		return
@@ -1683,7 +1695,7 @@ func _complete_update_archive_sync_download(target: Dictionary, serial: int, att
 			next_failures.append("%s downloaded an unusable archive: %s" % [str(attempt.get("label", "archive request")), str(sync_result.get("error", "archive sync failed"))])
 			_start_update_archive_sync_request_attempt(target, serial, attempts, attempt_index + 1, next_failures)
 			return
-		_mark_update_sync_failed(str(sync_result.get("error", "Update sync failed.")), serial)
+		_mark_update_sync_failed(_format_update_sync_failure(sync_result), serial)
 		return
 	var marker_error := _write_update_sync_marker(target, int(sync_result.get("written", 0)))
 	if marker_error != OK:
