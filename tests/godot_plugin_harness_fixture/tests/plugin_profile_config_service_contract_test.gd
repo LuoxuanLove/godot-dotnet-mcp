@@ -129,13 +129,25 @@ func _verify_settings_store_atomic_writes() -> String:
 		return "SettingsStore source should be readable."
 	for required in [
 		"func _write_json_file_atomically(",
-		"DirAccess.rename_absolute",
-		"write_verify_failed",
-		"backup_failed",
-		"replace_failed"
+		"FileWriteTransaction.write_text_atomically(",
+		"Failed to persist plugin settings"
 	]:
 		if source.find(required) == -1:
 			return "SettingsStore should persist settings/profile/export JSON with verified atomic writes: %s" % required
+	var transaction_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/config/file_write_transaction.gd")
+	if transaction_source.is_empty():
+		return "FileWriteTransaction source should be readable."
+	for required_transaction in [
+		"static func write_text_atomically(",
+		"static func build_sidecar_path(",
+		"DirAccess.rename_absolute",
+		"write_verify_failed",
+		"backup_failed",
+		"replace_failed",
+		"return sidecar_name"
+	]:
+		if transaction_source.find(required_transaction) == -1:
+			return "FileWriteTransaction should centralize settings/fallback atomic write behavior: %s" % required_transaction
 	for forbidden in [
 		"func save_plugin_settings(settings_path: String, settings: Dictionary) -> void:\n\tvar settings_dir := settings_path.get_base_dir()\n\tDirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(settings_dir))\n\tvar file = FileAccess.open(settings_path, FileAccess.WRITE)",
 		"func export_tool_config(file_path: String, profile_id: String, disabled_tools: Array) -> Dictionary:"

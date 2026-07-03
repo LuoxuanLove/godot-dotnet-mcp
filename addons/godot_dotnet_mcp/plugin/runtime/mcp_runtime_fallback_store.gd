@@ -3,6 +3,7 @@ extends RefCounted
 class_name MCPRuntimeFallbackStore
 
 const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
+const FileWriteTransaction = preload("res://addons/godot_dotnet_mcp/plugin/config/file_write_transaction.gd")
 
 var _fallback_file_path := MCPUserDataPaths.RUNTIME_EVENTS_PATH
 var _max_stored_events := 300
@@ -120,52 +121,8 @@ func _read_fallback_events() -> Array[Dictionary]:
 
 
 func _write_fallback_events(events: Array[Dictionary]) -> bool:
-	return _write_text_atomically(_fallback_file_path, JSON.stringify(events))
-
-
-func _write_text_atomically(file_path: String, text: String) -> bool:
-	var dir_path := file_path.get_base_dir()
-	if not dir_path.is_empty() and dir_path != ".":
-		var dir_error := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir_path))
-		if dir_error != OK:
-			return false
-	var temp_path := _build_sidecar_path(file_path, "tmp")
-	var backup_path := _build_sidecar_path(file_path, "bak")
-	var temp_file := FileAccess.open(temp_path, FileAccess.WRITE)
-	if temp_file == null:
-		return false
-	temp_file.store_string(text)
-	temp_file.close()
-	if FileAccess.get_file_as_string(temp_path) != text:
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
-		return false
-	var absolute_path := ProjectSettings.globalize_path(file_path)
-	var absolute_temp_path := ProjectSettings.globalize_path(temp_path)
-	var absolute_backup_path := ProjectSettings.globalize_path(backup_path)
-	var had_existing := FileAccess.file_exists(file_path)
-	if FileAccess.file_exists(backup_path):
-		DirAccess.remove_absolute(absolute_backup_path)
-	if had_existing:
-		var backup_error := DirAccess.rename_absolute(absolute_path, absolute_backup_path)
-		if backup_error != OK:
-			DirAccess.remove_absolute(absolute_temp_path)
-			return false
-	var replace_error := DirAccess.rename_absolute(absolute_temp_path, absolute_path)
-	if replace_error != OK:
-		if had_existing and FileAccess.file_exists(backup_path):
-			DirAccess.rename_absolute(absolute_backup_path, absolute_path)
-		DirAccess.remove_absolute(absolute_temp_path)
-		return false
-	if had_existing and FileAccess.file_exists(backup_path):
-		DirAccess.remove_absolute(absolute_backup_path)
-	return true
-
-
-func _build_sidecar_path(file_path: String, extension: String) -> String:
-	var dir_path := file_path.get_base_dir()
-	var file_name := file_path.get_file()
-	var suffix := "%s-%s" % [str(Time.get_ticks_usec()), str(randi())]
-	return "%s/.%s.%s.%s" % [dir_path, file_name, suffix, extension]
+	var result: Dictionary = FileWriteTransaction.write_text_atomically(_fallback_file_path, JSON.stringify(events))
+	return bool(result.get("success", false))
 
 
 func _trim_cached_events() -> void:

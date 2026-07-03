@@ -93,14 +93,24 @@ func _verify_fallback_store_atomic_writes() -> String:
 		return "Fallback store source should be readable."
 	for required in [
 		"func _write_fallback_events(events: Array[Dictionary]) -> bool:",
-		"func _write_text_atomically(",
-		"DirAccess.rename_absolute",
+		"FileWriteTransaction.write_text_atomically(",
 		"_pending_events.clear()"
 	]:
 		if source.find(required) == -1:
 			return "Fallback store should use verified atomic writes before clearing pending events: %s" % required
 	if source.find("_write_fallback_events(_fallback_cache)\n\t_pending_events.clear()") != -1:
 		return "Fallback store should not clear pending events after an unchecked direct write."
+	var transaction_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/config/file_write_transaction.gd")
+	if transaction_source.is_empty():
+		return "FileWriteTransaction source should be readable."
+	for required in [
+		"static func write_text_atomically(",
+		"static func build_sidecar_path(",
+		"DirAccess.rename_absolute",
+		"return sidecar_name"
+	]:
+		if transaction_source.find(required) == -1:
+			return "FileWriteTransaction should own verified writes and relative sidecar paths: %s" % required
 	return ""
 
 

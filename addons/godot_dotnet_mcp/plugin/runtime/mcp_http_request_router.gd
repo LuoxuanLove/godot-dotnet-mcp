@@ -639,22 +639,24 @@ func _accepts_mcp_response(accept_header: String) -> bool:
 	var normalized := accept_header.strip_edges().to_lower()
 	if normalized.is_empty():
 		return false
-	var accepts_json := false
-	var accepts_sse := false
+	var wildcard_q := -1.0
+	var json_q := -1.0
+	var sse_q := -1.0
 	for raw_part in normalized.split(",", false):
 		var parsed := _parse_accept_part(str(raw_part))
 		var media_range := str(parsed.get("media_range", ""))
 		var quality := float(parsed.get("q", 1.0))
-		if quality <= 0.0:
-			continue
 		if media_range == "*/*":
-			accepts_json = true
-			accepts_sse = true
+			wildcard_q = max(wildcard_q, quality)
 		elif media_range == "application/json":
-			accepts_json = true
+			json_q = max(json_q, quality)
 		elif media_range == "text/event-stream":
-			accepts_sse = true
-	return accepts_json and accepts_sse
+			sse_q = max(sse_q, quality)
+	if json_q < 0.0:
+		json_q = wildcard_q
+	if sse_q < 0.0:
+		sse_q = wildcard_q
+	return json_q > 0.0 and sse_q > 0.0
 
 
 func _prefers_sse_response(accept_header: String) -> bool:

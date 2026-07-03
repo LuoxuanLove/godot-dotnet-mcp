@@ -349,6 +349,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var sse_q_zero_accept_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json;q=1, text/event-stream;q=0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
 	if int(sse_q_zero_accept_response.get("status", 0)) != 406:
 		return _failure("HTTP request router should reject POST /mcp requests that declare text/event-stream with q=0.")
+	var wildcard_accept_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "*/*", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(wildcard_accept_response.get("status", 0)) == 406:
+		return _failure("HTTP request router should allow wildcard Accept headers when no required response type is explicitly rejected.")
+	var wildcard_json_rejected_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "*/*, application/json;q=0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(wildcard_json_rejected_response.get("status", 0)) != 406:
+		return _failure("HTTP request router should reject wildcard Accept headers that explicitly reject application/json.")
+	var wildcard_sse_rejected_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "*/*, text/event-stream;q=0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(wildcard_sse_rejected_response.get("status", 0)) != 406:
+		return _failure("HTTP request router should reject wildcard Accept headers that explicitly reject text/event-stream.")
 
 	var missing_protocol_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream"})
 	if int(missing_protocol_response.get("status", 0)) != 400 or str(missing_protocol_response.get("error", "")) != "Missing MCP protocol version":

@@ -5,6 +5,7 @@ class_name SettingsStore
 const PluginRuntimeState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
 const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/system_tree_catalog.gd")
 const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tree_collapse_state.gd")
+const FileWriteTransaction = preload("res://addons/godot_dotnet_mcp/plugin/config/file_write_transaction.gd")
 const TOOL_CONFIG_EXCHANGE_ROOT := "user://godot_dotnet_mcp/config_exchange"
 
 
@@ -61,7 +62,9 @@ func _normalize_update_source(source: String) -> String:
 func save_plugin_settings(settings_path: String, settings: Dictionary) -> void:
 	var settings_dir := settings_path.get_base_dir()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(settings_dir))
-	_write_json_file_atomically(settings_path, settings)
+	var write_result := _write_json_file_atomically(settings_path, settings)
+	if not bool(write_result.get("success", false)):
+		push_warning("[MCP] Failed to persist plugin settings: %s" % str(write_result))
 
 
 func load_custom_profiles(profile_dir: String) -> Dictionary:
@@ -365,40 +368,4 @@ func _write_json_file_atomically(file_path: String, payload: Dictionary) -> Dict
 	if not bool(ensure_result.get("success", false)):
 		return ensure_result
 	var text := JSON.stringify(payload, "\t")
-	var temp_path := _build_sidecar_path(file_path, "tmp")
-	var backup_path := _build_sidecar_path(file_path, "bak")
-	var temp_file := FileAccess.open(temp_path, FileAccess.WRITE)
-	if temp_file == null:
-		return {"success": false, "error_code": "write_open_failed", "file_path": file_path}
-	temp_file.store_string(text)
-	temp_file.close()
-	if FileAccess.get_file_as_string(temp_path) != text:
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
-		return {"success": false, "error_code": "write_verify_failed", "file_path": file_path}
-	var absolute_path := ProjectSettings.globalize_path(file_path)
-	var absolute_temp_path := ProjectSettings.globalize_path(temp_path)
-	var absolute_backup_path := ProjectSettings.globalize_path(backup_path)
-	var had_existing := FileAccess.file_exists(file_path)
-	if FileAccess.file_exists(backup_path):
-		DirAccess.remove_absolute(absolute_backup_path)
-	if had_existing:
-		var backup_error := DirAccess.rename_absolute(absolute_path, absolute_backup_path)
-		if backup_error != OK:
-			DirAccess.remove_absolute(absolute_temp_path)
-			return {"success": false, "error_code": "backup_failed", "file_path": file_path}
-	var replace_error := DirAccess.rename_absolute(absolute_temp_path, absolute_path)
-	if replace_error != OK:
-		if had_existing and FileAccess.file_exists(backup_path):
-			DirAccess.rename_absolute(absolute_backup_path, absolute_path)
-		DirAccess.remove_absolute(absolute_temp_path)
-		return {"success": false, "error_code": "replace_failed", "file_path": file_path}
-	if had_existing and FileAccess.file_exists(backup_path):
-		DirAccess.remove_absolute(absolute_backup_path)
-	return {"success": true, "file_path": file_path}
-
-
-func _build_sidecar_path(file_path: String, extension: String) -> String:
-	var dir_path := file_path.get_base_dir()
-	var file_name := file_path.get_file()
-	var suffix := "%s-%s" % [str(Time.get_ticks_usec()), str(randi())]
-	return "%s/.%s.%s.%s" % [dir_path, file_name, suffix, extension]
+	return FileWriteTransaction.write_text_atomically(file_path, text)
