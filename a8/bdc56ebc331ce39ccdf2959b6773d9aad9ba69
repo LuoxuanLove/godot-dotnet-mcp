@@ -1,0 +1,70 @@
+docs/en/process/release-notes/release-notes-v2.0.0.md
+  s_23543e5ed94f7d::t_6a9e6c2c96d3ff 41,45,66
+docs/ja/プロセス/リリースノート/リリースノート-v2.0.0.md
+  s_23543e5ed94f7d::t_6a9e6c2c96d3ff 39,43,64
+README.md
+  s_23543e5ed94f7d::t_6a9e6c2c96d3ff 53
+addons/godot_dotnet_mcp/dotnet_bridge/README.md
+  s_23543e5ed94f7d::t_6a9e6c2c96d3ff 4,10
+tests/godot_plugin_harness_fixture/tests/roslyn_parsing_contract_test.gd
+  s_23543e5ed94f7d::t_2cace12364b690 31-34
+addons/godot_dotnet_mcp/dotnet_bridge/Properties/PublishProfiles/WinX64SelfContained.pubxml
+  s_23543e5ed94f7d::t_7ffad5eae9c557 8-10
+scripts/test_dotnet_bridge_safe_writes.ps1
+  s_23543e5ed94f7d::t_2cace12364b690 71-121
+tests/godot_plugin_harness_fixture/tests/plugin_roslyn_service_contract_test.gd
+  s_23543e5ed94f7d::t_2cace12364b690 230-231,267-269
+docs/zh-CN/流程/发布说明/发布说明-v2.0.0.md
+  s_23543e5ed94f7d::t_6a9e6c2c96d3ff 39,64
+docs/ko/프로세스/릴리스-노트/릴리스-노트-v2.0.0.md
+  s_23543e5ed94f7d::t_6a9e6c2c96d3ff 39,43,64
+docs/ja/変更履歴.md
+  s_23543e5ed94f7d::t_6a9e6c2c96d3ff 13-14
+docs/zh-CN/变更日志.md
+  s_23543e5ed94f7d::t_6a9e6c2c96d3ff 14-15
+addons/godot_dotnet_mcp/README.zh-CN.md
+  s_23543e5ed94f7d::t_6a9e6c2c96d3ff 71
+docs/en/CHANGELOG.md
+  s_23543e5ed94f7d::t_6a9e6c2c96d3ff 13-14
+addons/godot_dotnet_mcp/plugin/runtime/roslyn_runtime/roslyn-runtime-manifest.json
+  s_23543e5ed94f7d::t_7ffad5eae9c557 6,10-14
+scripts/validate_roslyn_runtime_bundle.ps1
+  s_23543e5ed94f7d::t_7ffad5eae9c557 43-44,52-54,120
+addons/godot_dotnet_mcp/plugin/runtime/plugin_roslyn_service.gd
+  s_23543e5ed94f7d::t_9c67078a47cdb3 94-95
+  s_23543e5ed94f7d::t_023ac8f535b888 408,426
+  s_23543e5ed94f7d::t_7ffad5eae9c557 11,386,389-390,471,474-475,914-915
+docs/ko/변경-로그.md
+  s_23543e5ed94f7d::t_6a9e6c2c96d3ff 13-14
+addons/godot_dotnet_mcp/README.md
+  s_23543e5ed94f7d::t_6a9e6c2c96d3ff 73
+addons/godot_dotnet_mcp/dotnet_bridge/CsPluginPatchTool.cs
+  s_23543e5ed94f7d::t_fc1926de20fd0b 11,37,63-66,71-72,321-326,332,334-343
+scripts/validate_refactor_guardrails.ps1
+  s_23543e5ed94f7d::t_7ffad5eae9c557 288
+tests/godot_plugin_harness_fixture/tests/plugin_roslyn_service_exported_runtime_contract_test.gd
+  s_23543e5ed94f7d::t_2cace12364b690 59-62
+addons/godot_dotnet_mcp/dotnet_bridge/BridgeWorkspace.cs
+  s_23543e5ed94f7d::t_c6fc6b657e9b80 405-420,479-494
+  s_23543e5ed94f7d::t_732706abdfff61 495
+addons/godot_dotnet_mcp/dotnet_bridge/BridgeToolCatalog.cs
+  s_23543e5ed94f7d::t_0739ef9bf2861a 16,277-312
+  s_23543e5ed94f7d::t_8e4b890ea7ea06 313-315
+  s_23543e5ed94f7d::t_6f1fbfa8d2dd8d 316
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a8bdc56ebc331ce39ccdf2959b6773d9aad9ba69",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
