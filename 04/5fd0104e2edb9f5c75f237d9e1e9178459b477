@@ -1,0 +1,174 @@
+tests/godot_plugin_harness_fixture/tests/tool_catalog_snapshot_service_contract_test.gd
+  s_23543e5ed94f7d::t_b787693ecedc64 242-249
+docs/ko/인터페이스/도구-페이지-구현.md
+  s_23543e5ed94f7d::t_528cd1d9ce3f97 225
+addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_loader_supervisor.gd
+  s_23543e5ed94f7d::t_2c4299d4c8d4ce 78-79,91-94,171-182
+  s_23543e5ed94f7d::t_b339014b726d64 183-184
+tests/godot_plugin_harness_fixture/tests/plugin_runtime_state_contract_test.gd
+  s_23543e5ed94f7d::t_1b5d4aaf1a31a4 4,37-38
+docs/en/CHANGELOG.md
+  s_23543e5ed94f7d::t_84aaf065d6d2b3 95
+  s_23543e5ed94f7d::t_7b711a8569c3e8 93-94,96-97,126
+addons/godot_dotnet_mcp/tools/core/tool_lsp_diagnostics_adapter.gd
+  s_23543e5ed94f7d::t_5b7498391fcf88 58-62,69-70
+addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd
+  s_23543e5ed94f7d::t_4d8cf919c1eaa2 6,29,33
+tests/godot_plugin_harness_fixture/tests/http_server_contract_test.gd
+  s_23543e5ed94f7d::t_d6eb49fc16d264 287-288,290,321-324,326,341-342,344,364-367,382-385,387,403-406,429-430,433,453-454
+  s_23543e5ed94f7d::t_272ceb5568b39b 572-587
+docs/ja/付録/ディレクトリツリーとファイル責務.md
+  s_23543e5ed94f7d::t_dcd3a219da9fe6 159,175,204
+addons/godot_dotnet_mcp/tools/debug/executor.gd
+  s_23543e5ed94f7d::t_8cef75bdaf465f 610
+addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_request_service.gd
+  s_23543e5ed94f7d::t_64c3da44163ec3 12-13,31-32,69,72-73,79-87,120-130,133-142
+  s_23543e5ed94f7d::t_1ed7dde2c1656d 70-71
+  s_23543e5ed94f7d::t_34b243084d3f7c 131-132
+  s_23543e5ed94f7d::t_1aa7c5544ae2d8 143-144
+addons/godot_dotnet_mcp/plugin/runtime/gdscript_lsp_diagnostics_service.gd
+  s_23543e5ed94f7d::t_5b7498391fcf88 195-200
+addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_router.gd
+  s_23543e5ed94f7d::t_57d87aa6096d1b 613-614,822-824,828-839
+  s_23543e5ed94f7d::t_e09561e3f02b68 816-818,825-827
+  s_23543e5ed94f7d::t_e4c3a424056050 608,618-619,621
+  s_23543e5ed94f7d::t_d68b29e563ecac 620,622-623
+  s_23543e5ed94f7d::t_2395f07977aa8f 375,437,439-454,478
+  s_23543e5ed94f7d::t_950a7fa12514d2 8-9,23,42-43,59,70-71
+  s_23543e5ed94f7d::t_301b0727bd62c1 72-73
+  s_23543e5ed94f7d::t_c9d812c24c5f89 624-625
+  s_23543e5ed94f7d::t_0bf8ccec02afba 840-841
+docs/zh-CN/附录/目录树与文件职责.md
+  s_23543e5ed94f7d::t_138371bc9ae851 160,176,205
+addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router.gd
+  s_23543e5ed94f7d::t_121c23b59f5a64 62,110,504-505,508-511
+  s_23543e5ed94f7d::t_10928f3eb48346 160,165,168,170,174,182,205
+  s_23543e5ed94f7d::t_63dd8076956530 23-30,35,39-46,50,54,61,79-80,111,211-217,231
+  s_23543e5ed94f7d::t_f617a3cdbe53e1 33-34,47-48,51-52,220,232-233,502-503,506-507,512
+  s_23543e5ed94f7d::t_d1e877e2c30897 184,208-210,219,221-230,252,300,310,327-328
+  s_23543e5ed94f7d::t_07882aa3469476 490-501,517-518
+  s_23543e5ed94f7d::t_a67f1dcfa942e3 17-21,77-78,93-94,108-109
+  s_23543e5ed94f7d::t_e4f73bc67e65a2 7,146-154,384,392,399-401,475-487
+  s_23543e5ed94f7d::t_06e0d8e790e18b 31,37,56-57,63-64
+  s_23543e5ed94f7d::t_4bf3a6db5db948 32,36,38,49,53,55,58-60,65,218,513-516
+  s_23543e5ed94f7d::t_b8f2ba5cd7691c 286-292
+  s_23543e5ed94f7d::t_c19285b6ecccc2 22
+  s_23543e5ed94f7d::t_765ced172cc169 206-207
+  s_23543e5ed94f7d::t_a9b7ed2ddaee77 329-330
+  s_23543e5ed94f7d::t_3cf435a326420a 488-489
+tests/godot_plugin_harness_fixture/tests/tool_rpc_router_contract_test.gd
+  s_23543e5ed94f7d::t_247fd76e62d489 44-50,413-414,418,421,425,630-631,661-665,681-682,692-695,697,706-707,709,723-726,735-738,750-753,770-771,788-789,840-842,868-869,894-895,951-952,955-973
+  s_23543e5ed94f7d::t_f3de29c368928a 980
+  s_23543e5ed94f7d::t_08c286e3d9bb2e 419-420,974
+  s_23543e5ed94f7d::t_e0664c3dec0232 1029-1044
+  s_23543e5ed94f7d::t_5b93ea834d1962 416-417,422-423,975-979
+  s_23543e5ed94f7d::t_54cedeef131447 774
+  s_23543e5ed94f7d::t_eb5a28f3809e22 415
+  s_23543e5ed94f7d::t_0920aa865f3949 424
+  s_23543e5ed94f7d::t_b3f33c4504bcef 981
+docs/en/interface/tools-page.md
+  s_23543e5ed94f7d::t_ee51b504bc36db 249
+tests/godot_plugin_harness_fixture/tests/json_rpc_request_service_contract_test.gd
+  s_23543e5ed94f7d::t_b637fe03166351 13-14,17-20,210-241,254-261
+  s_23543e5ed94f7d::t_c51785f459978e 262-263
+docs/en/appendix/directory-tree-and-file-responsibilities.md
+  s_23543e5ed94f7d::t_88fe319ba1e250 159,175,204
+docs/zh-CN/界面/工具页实现.md
+  s_23543e5ed94f7d::t_831533ed58c710 251
+addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd
+  s_23543e5ed94f7d::t_4d8cf919c1eaa2 6,489
+tests/godot_plugin_harness_fixture/tests/tool_manifest_contract_test.gd
+  s_23543e5ed94f7d::t_1b5d4aaf1a31a4 8,10,24,60,63,65-70,113
+addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router_context.gd
+  s_23543e5ed94f7d::t_34bfe35eaa1ddd 12,23
+tests/godot_plugin_harness_fixture/tests/http_request_router_contract_test.gd
+  s_23543e5ed94f7d::t_ee6d79d789c30e 281-282
+  s_23543e5ed94f7d::t_e40e8805fc0884 212-221,298-305,307-309
+  s_23543e5ed94f7d::t_e7bed5367ef492 262-270
+  s_23543e5ed94f7d::t_2b71ec8dc171dc 306
+  s_23543e5ed94f7d::t_c6f4c7d6bec722 202,224,227,229-235,238,241-246,274-280,284-289,606,619
+  s_23543e5ed94f7d::t_e3e6587d800d1f 310
+addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_method_service.gd
+  s_23543e5ed94f7d::t_28d3f3ddbc3ec0 12-15,35-38,41-42,47,126-154
+  s_23543e5ed94f7d::t_5d2fa4f9decac3 155
+docs/ko/프로세스/릴리스-노트/릴리스-노트-v2.0.0.md
+  s_23543e5ed94f7d::t_dd2e37acad6b28 29-30,32,55-56,63
+  s_23543e5ed94f7d::t_f88bafd2591686 31
+  s_23543e5ed94f7d::t_58cddac362f1a2 64
+addons/godot_dotnet_mcp/tools/core/tool_loader_service_factory.gd
+  s_23543e5ed94f7d::t_4d8cf919c1eaa2 4,31
+addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd
+  s_23543e5ed94f7d::t_1b5d4aaf1a31a4 127-133
+tests/godot_plugin_harness_fixture/tests/tool_registry_entry_service_contract_test.gd
+  s_23543e5ed94f7d::t_06005368dd4973 47,55,94-103
+  s_23543e5ed94f7d::t_b06c01acb1aecf 25,45-46,56-62
+tests/godot_plugin_harness_fixture/tests/mcp_resources_prompts_contract_test.gd
+  s_23543e5ed94f7d::t_9f0f7180ef0ffa 105-106,117-121,130-140
+docs/ja/変更履歴.md
+  s_23543e5ed94f7d::t_46001200c3c5d4 90-91,93-94,123
+  s_23543e5ed94f7d::t_84aaf065d6d2b3 92
+tests/godot_plugin_harness_fixture/tests/tool_loader_contract_test.gd
+  s_23543e5ed94f7d::t_1b5d4aaf1a31a4 162
+  s_23543e5ed94f7d::t_5b7498391fcf88 605-606
+docs/zh-CN/流程/发布说明/发布说明-v2.0.0.md
+  s_23543e5ed94f7d::t_f88bafd2591686 31
+  s_23543e5ed94f7d::t_d0ef5c88e068d0 29-30,32,55-56,63
+  s_23543e5ed94f7d::t_b95d1bf6d2d2d7 64
+tests/godot_plugin_harness_fixture/tests/debug_tool_executor_contract_test.gd
+  s_23543e5ed94f7d::t_52d0bd0c90036b 41-43,133-137
+  s_23543e5ed94f7d::t_468997deb024d1 138-139
+docs/ja/プロセス/リリースノート/リリースノート-v2.0.0.md
+  s_23543e5ed94f7d::t_5e0d094ed54c51 29-30,32,55-56,63
+  s_23543e5ed94f7d::t_f88bafd2591686 31
+  s_23543e5ed94f7d::t_05ce0e1c3eb4a3 64
+addons/godot_dotnet_mcp/tools/core/tool_registry_entry_service.gd
+  s_23543e5ed94f7d::t_5fb314eb505b25 5-6,25-31
+  s_23543e5ed94f7d::t_13730cb13700e2 32
+docs/ko/부록/디렉터리-트리와-파일-책임.md
+  s_23543e5ed94f7d::t_6c40fe8752be32 159,175,204
+docs/ko/변경-로그.md
+  s_23543e5ed94f7d::t_97eeaa08c2a569 90-91,93-94,123
+  s_23543e5ed94f7d::t_84aaf065d6d2b3 92
+docs/zh-CN/变更日志.md
+  s_23543e5ed94f7d::t_fa7796043ed2f3 94-95,97-98,127
+  s_23543e5ed94f7d::t_84aaf065d6d2b3 96
+tests/godot_plugin_harness_fixture/tests/stdio_tool_activity_contract_test.gd
+  s_23543e5ed94f7d::t_043f2b6df804af 25-26,37-38,103-104,132,149-152,318-331
+  s_23543e5ed94f7d::t_93455e01424190 148
+  s_23543e5ed94f7d::t_7cfa107ab1ca05 332-333
+addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_snapshot_service.gd
+  s_23543e5ed94f7d::t_4d8cf919c1eaa2 159-178
+docs/en/process/release-notes/release-notes-v2.0.0.md
+  s_23543e5ed94f7d::t_f88bafd2591686 31
+  s_23543e5ed94f7d::t_8cce65fc893ff8 29-30,55-56,63
+  s_23543e5ed94f7d::t_4fcd31be931292 64
+tests/godot_plugin_harness_fixture/tests/stdio_tool_error_parity_contract_test.gd
+  s_23543e5ed94f7d::t_4f95fcefdc79ca 156-161,166-167,177-180,183-184,188-201
+  s_23543e5ed94f7d::t_28a2ccbbcbaa50 202-203
+addons/godot_dotnet_mcp/plugin/runtime/mcp_http_transport_service.gd
+  s_23543e5ed94f7d::t_5b4d0837214088 126
+  s_23543e5ed94f7d::t_e244d8298af372 412-421
+  s_23543e5ed94f7d::t_d7ae78fa6deeba 17-19,25-29,36-38,150,294-296,305,317-322
+  s_23543e5ed94f7d::t_e126f8e538c23d 323-324
+addons/godot_dotnet_mcp/plugin/runtime/mcp_http_server.gd
+  s_23543e5ed94f7d::t_c82ffbf922aa94 531,614-620
+  s_23543e5ed94f7d::t_cea450e8e77011 621-622
+docs/ja/インターフェース/ツールページ実装.md
+  s_23543e5ed94f7d::t_45301ba78b067d 247
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "045fd0104e2edb9f5c75f237d9e1e9178459b477",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
