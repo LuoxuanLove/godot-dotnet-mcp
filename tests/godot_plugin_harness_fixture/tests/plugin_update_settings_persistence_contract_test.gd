@@ -988,6 +988,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("plugin.gd should not schedule a lifecycle reload when archive files fail to sync into the addon.")
 	failed_copy_reload_probe.free()
 
+	var failed_rollback_reload_probe := SyncReloadProbePlugin.new()
+	failed_rollback_reload_probe._update_sync_request_serial = 17
+	failed_rollback_reload_probe.sync_result = {
+		"success": false,
+		"error": "copy failed",
+		"dirty": true,
+		"recovered": false,
+		"rollback_error": "restore failed"
+	}
+	await failed_rollback_reload_probe.complete_archive_request(HTTPRequest.RESULT_SUCCESS, 200, {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 17)
+	var failed_rollback_error := str(failed_rollback_reload_probe._state.update_sync_error)
+	if not failed_rollback_error.contains("copy failed") or not failed_rollback_error.contains("partially updated") or not failed_rollback_error.contains("Rollback did not fully recover") or not failed_rollback_error.contains("restore failed"):
+		failed_rollback_reload_probe.free()
+		return _failure("plugin.gd should surface dirty rollback diagnostics when archive sync rollback fails: %s" % failed_rollback_error)
+	failed_rollback_reload_probe.free()
+
 	var stale_serial_reload_probe := SyncReloadProbePlugin.new()
 	stale_serial_reload_probe._update_sync_request_serial = 14
 	stale_serial_reload_probe._state.update_sync_state = "pending"
@@ -1492,6 +1508,7 @@ func _run_update_sync_write_failure_rollback_contract() -> Dictionary:
 	_write_text(root.path_join("ui/mcp_dock.tscn"), "old scene")
 	var archive_error := _write_update_sync_fixture_archive(archive_path, {
 		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/plugin.cfg": "new cfg",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/new/nested/file.txt": "new nested",
 		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/plugin.gd": "new plugin",
 		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/ui/mcp_dock.tscn": "new scene"
 	})
@@ -1516,6 +1533,10 @@ func _run_update_sync_write_failure_rollback_contract() -> Dictionary:
 		probe.free()
 		_remove_tree(root)
 		return _failure("plugin.gd update sync write failures should report recovered clean state: %s" % str(sync_result))
+	if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(root.path_join("new"))):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync write failures should remove empty directories created before the failure.")
 	probe.free()
 	_remove_tree(root)
 	return {"success": true}
