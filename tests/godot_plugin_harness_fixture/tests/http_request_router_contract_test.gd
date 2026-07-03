@@ -519,6 +519,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router should echo the initialized session id for finite POST SSE responses.")
 	if sse_preferred_body.find("id: streamable-http-post-") == -1:
 		return _failure("HTTP request router should queue session POST SSE responses with resumable event ids.")
+	var wildcard_json_tie_request_post: Dictionary = await response_post_router.route_request_async(
+		"POST",
+		"/mcp",
+		JSON.stringify({"jsonrpc": "2.0", "id": 461, "method": "tools/list"}),
+		{"host": "localhost:3000", "content-type": "application/json", "accept": "*/*", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": response_post_session_id}
+	)
+	if wildcard_json_tie_request_post.has("_raw_body"):
+		return _failure("HTTP request router should keep JSON response mode when wildcard Accept does not prefer SSE.")
+	var wildcard_sse_preferred_request_post: Dictionary = await response_post_router.route_request_async(
+		"POST",
+		"/mcp",
+		JSON.stringify({"jsonrpc": "2.0", "id": 462, "method": "tools/list"}),
+		{"host": "localhost:3000", "content-type": "application/json", "accept": "*/*;q=0.1, text/event-stream;q=1.0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": response_post_session_id}
+	)
+	if str(wildcard_sse_preferred_request_post.get("_content_type", "")) != "text/event-stream; charset=utf-8":
+		return _failure("HTTP request router should prefer finite SSE when wildcard Accept is lower quality than text/event-stream.")
 	var initialized_post_sse: Dictionary = await response_post_router.route_request_async(
 		"POST",
 		"/mcp",

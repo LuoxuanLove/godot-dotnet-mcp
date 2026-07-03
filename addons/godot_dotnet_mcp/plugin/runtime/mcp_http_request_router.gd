@@ -636,9 +636,16 @@ func _is_json_content_type(content_type: String) -> bool:
 
 
 func _accepts_mcp_response(accept_header: String) -> bool:
+	var weights := _mcp_accept_response_weights(accept_header)
+	if weights.is_empty():
+		return false
+	return float(weights.get("json_q", -1.0)) > 0.0 and float(weights.get("sse_q", -1.0)) > 0.0
+
+
+func _mcp_accept_response_weights(accept_header: String) -> Dictionary:
 	var normalized := accept_header.strip_edges().to_lower()
 	if normalized.is_empty():
-		return false
+		return {}
 	var wildcard_q := -1.0
 	var json_q := -1.0
 	var sse_q := -1.0
@@ -656,20 +663,16 @@ func _accepts_mcp_response(accept_header: String) -> bool:
 		json_q = wildcard_q
 	if sse_q < 0.0:
 		sse_q = wildcard_q
-	return json_q > 0.0 and sse_q > 0.0
+	return {
+		"json_q": json_q,
+		"sse_q": sse_q
+	}
 
 
 func _prefers_sse_response(accept_header: String) -> bool:
-	var json_q := -1.0
-	var sse_q := -1.0
-	for raw_part in accept_header.split(",", false):
-		var parsed := _parse_accept_part(str(raw_part))
-		var media_range := str(parsed.get("media_range", ""))
-		var quality := float(parsed.get("q", 1.0))
-		if media_range == "text/event-stream":
-			sse_q = max(sse_q, quality)
-		elif media_range == "application/json":
-			json_q = max(json_q, quality)
+	var weights := _mcp_accept_response_weights(accept_header)
+	var json_q := float(weights.get("json_q", -1.0))
+	var sse_q := float(weights.get("sse_q", -1.0))
 	return sse_q > json_q and sse_q > 0.0
 
 

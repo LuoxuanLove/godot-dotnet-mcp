@@ -364,8 +364,5 @@ func _ensure_parent_dir(file_path: String) -> Dictionary:
 
 
 func _write_json_file_atomically(file_path: String, payload: Dictionary) -> Dictionary:
-	var ensure_result := _ensure_parent_dir(file_path)
-	if not bool(ensure_result.get("success", false)):
-		return ensure_result
 	var text := JSON.stringify(payload, "\t")
 	return FileWriteTransaction.write_text_atomically(file_path, text)
