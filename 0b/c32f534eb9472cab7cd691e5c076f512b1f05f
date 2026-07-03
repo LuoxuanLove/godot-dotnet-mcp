@@ -1,0 +1,29 @@
+addons/godot_dotnet_mcp/plugin.gd
+  s_23543e5ed94f7d::t_654b24c0fb60e6 1656-1667,1698
+addons/godot_dotnet_mcp/plugin/runtime/plugin_update_sync_mirror_service.gd
+  s_23543e5ed94f7d::t_654b24c0fb60e6 46,108,318-330,332,334-335,345-346,349-350,355,359-368
+  s_23543e5ed94f7d::t_88e2a0df2bf093 129-130,132
+  s_23543e5ed94f7d::t_9bce59e97c2f32 112,115,121,125,137,290-298,331,339,343-344,348,351-354,356-358,369
+tests/godot_plugin_harness_fixture/tests/plugin_update_settings_persistence_contract_test.gd
+  s_23543e5ed94f7d::t_654b24c0fb60e6 991-1006,1511,1536-1539
+tests/godot_plugin_harness_fixture/tests/plugin_update_sync_mirror_service_contract_test.gd
+  s_23543e5ed94f7d::t_a36a7de629e3ce 47-48,57-58,60-62,64-67,72-73,75-81,96,100-125,127
+  s_23543e5ed94f7d::t_654b24c0fb60e6 49-51,59,63,68-71,74,82-95
+  s_23543e5ed94f7d::t_71916056ca1037 52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0bc32f534eb9472cab7cd691e5c076f512b1f05f",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": null
+    }
+  }
+}
