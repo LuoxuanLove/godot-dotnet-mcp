@@ -724,7 +724,7 @@ func _entry_icon_status(entry: Dictionary) -> String:
 		return _text("mcp_catalog_icon_missing")
 	if src.length() > MAX_PROTOCOL_ICON_SRC_LENGTH:
 		return _text("mcp_catalog_icon_rejected")
-	return _text("mcp_catalog_icon_available")
+	return _text("mcp_catalog_icon_available") if _texture_from_icon_src(src) != null else _text("mcp_catalog_icon_rejected")
 
 
 func _entry_preview_status(entry_kind: String) -> String:

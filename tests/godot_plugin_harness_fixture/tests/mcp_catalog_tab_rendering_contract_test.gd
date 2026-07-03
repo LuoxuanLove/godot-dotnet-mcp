@@ -199,8 +199,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_select_entry(resources_tab, "resource", "godot-dotnet-mcp://state/editor")
 	await tree.process_frame
 	var diagnostics_text := _text_edit_text(resources_tab, "PreviewText")
-	if not diagnostics_text.contains("Source: resources/list") or not diagnostics_text.contains("Visibility: public") or not diagnostics_text.contains("Icon:"):
-		return _failure("Resources Diagnostics view should expose source, visibility, and icon status metadata.")
+	if not diagnostics_text.contains("Source: resources/list") or not diagnostics_text.contains("Visibility: public") or not diagnostics_text.contains("Icon: rejected"):
+		return _failure("Resources Diagnostics view should expose source, visibility, and decoded icon status metadata.")
 
 	var model_with_preview := model.duplicate(true)
 	model_with_preview["mcp_catalog_preview"] = {
