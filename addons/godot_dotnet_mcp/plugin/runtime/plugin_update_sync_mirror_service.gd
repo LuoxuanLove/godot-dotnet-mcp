@@ -76,7 +76,7 @@ func sync_archive_to_addon(archive_path: String, addon_root_path: String) -> Dic
 	if not completeness_error.is_empty():
 		reader.close()
 		return {"success": false, "error": completeness_error}
-	var written := 0
+	var entries: Array[Dictionary] = []
 	for file_path in files:
 		if file_path.ends_with("/") or not file_path.begins_with(archive_prefix):
 			continue
@@ -84,30 +84,60 @@ func sync_archive_to_addon(archive_path: String, addon_root_path: String) -> Dic
 		if should_skip_path(relative_path):
 			continue
 		var target_path := addon_root.path_join(relative_path).simplify_path()
+		if not is_path_inside_root(addon_root, target_path):
+			reader.close()
+			return {"success": false, "error": "Update archive entry escapes the plugin directory: %s" % relative_path}
 		if is_path_or_ancestor_link(addon_root, relative_path):
 			reader.close()
 			return {"success": false, "error": "Update archive target traverses a symlink, junction, or reparse point: %s" % relative_path}
+		entries.append({
+			"archive_path": str(file_path),
+			"relative_path": relative_path,
+			"target_path": target_path
+		})
+	if entries.is_empty():
+		reader.close()
+		return {"success": false, "error": "Branch archive contained no plugin files to sync."}
+	var written := 0
+	var rollback_state: Dictionary = {}
+	for entry in entries:
+		var relative_path := str(entry.get("relative_path", ""))
+		var target_path := str(entry.get("target_path", ""))
 		var target_dir := target_path.get_base_dir()
 		var dir_error := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(target_dir))
 		if dir_error != OK:
 			reader.close()
-			return {"success": false, "error": "Failed to create directory %s: %s" % [target_dir, dir_error]}
+			_rollback_written_files(rollback_state)
+			return _dirty_sync_error("Failed to create directory %s: %s" % [target_dir, dir_error])
 		if is_path_or_ancestor_link(addon_root, relative_path):
 			reader.close()
-			return {"success": false, "error": "Update archive target traverses a symlink, junction, or reparse point: %s" % relative_path}
+			_rollback_written_files(rollback_state)
+			return _dirty_sync_error("Update archive target traverses a symlink, junction, or reparse point: %s" % relative_path)
+		var archive_entry_path := str(entry.get("archive_path", ""))
+		var content := reader.read_file(archive_entry_path)
+		var backup_result := _remember_rollback_state(rollback_state, target_path)
+		if not bool(backup_result.get("success", false)):
+			reader.close()
+			_rollback_written_files(rollback_state)
+			return _dirty_sync_error(str(backup_result.get("error", "Failed to prepare rollback state for %s." % target_path)))
 		var output := FileAccess.open(target_path, FileAccess.WRITE)
 		if output == null:
 			reader.close()
-			return {"success": false, "error": "Failed to write %s: %s" % [target_path, FileAccess.get_open_error()]}
-		output.store_buffer(reader.read_file(file_path))
+			_rollback_written_files(rollback_state)
+			return _dirty_sync_error("Failed to write %s: %s" % [target_path, FileAccess.get_open_error()])
+		output.store_buffer(content)
 		output.close()
+		var verify = FileAccess.get_file_as_bytes(target_path)
+		if verify != content:
+			reader.close()
+			_rollback_written_files(rollback_state)
+			return _dirty_sync_error("Failed to verify written update file: %s" % target_path)
 		written += 1
 	reader.close()
-	if written == 0:
-		return {"success": false, "error": "Branch archive contained no plugin files to sync."}
 	var mirror_result := delete_stale_paths(addon_root, expected_files)
 	if not bool(mirror_result.get("success", false)):
-		return mirror_result
+		_rollback_written_files(rollback_state)
+		return _dirty_sync_error(str(mirror_result.get("error", "Failed to remove stale update files.")), true, false)
 	return {
 		"success": true,
 		"written": written,
@@ -249,6 +279,51 @@ func is_link_path(path: String) -> bool:
 	if parent == null:
 		return false
 	return parent.is_link(name)
+
+
+func _dirty_sync_error(message: String, dirty: bool = false, recovered: bool = true) -> Dictionary:
+	return {
+		"success": false,
+		"error": message,
+		"dirty": dirty,
+		"recovered": recovered
+	}
+
+
+func _remember_rollback_state(rollback_state: Dictionary, target_path: String) -> Dictionary:
+	if rollback_state.has(target_path):
+		return {"success": true}
+	var absolute_path := ProjectSettings.globalize_path(target_path)
+	var was_directory := DirAccess.dir_exists_absolute(absolute_path)
+	var existed := FileAccess.file_exists(target_path)
+	var content := PackedByteArray()
+	if existed:
+		content = FileAccess.get_file_as_bytes(target_path)
+		if content.is_empty() and FileAccess.get_open_error() != OK:
+			return {"success": false, "error": "Failed to read rollback backup for %s: %s" % [target_path, FileAccess.get_open_error()]}
+	rollback_state[target_path] = {
+		"existed": existed,
+		"was_directory": was_directory,
+		"content": content
+	}
+	return {"success": true}
+
+
+func _rollback_written_files(rollback_state: Dictionary) -> void:
+	for target_path in rollback_state.keys():
+		var state: Dictionary = rollback_state.get(target_path, {})
+		var existed := bool(state.get("existed", false))
+		var was_directory := bool(state.get("was_directory", false))
+		var absolute_path := ProjectSettings.globalize_path(str(target_path))
+		if existed:
+			var target_dir := str(target_path).get_base_dir()
+			DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(target_dir))
+			var file := FileAccess.open(str(target_path), FileAccess.WRITE)
+			if file != null:
+				file.store_buffer(state.get("content", PackedByteArray()))
+				file.close()
+		elif not was_directory:
+			DirAccess.remove_absolute(absolute_path)
 
 
 func _delete_stale_paths_recursive(addon_root: String, relative_dir: String, expected_files: Dictionary) -> Dictionary:

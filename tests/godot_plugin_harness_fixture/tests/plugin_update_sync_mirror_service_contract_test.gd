@@ -40,6 +40,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("PluginUpdateSyncMirrorService should allow paths inside the addon root.")
 	if service.is_path_inside_root("res://addons/godot_dotnet_mcp", "res://addons/other/plugin.gd"):
 		return _failure("PluginUpdateSyncMirrorService should reject paths outside the addon root.")
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_sync_mirror_service.gd")
+	for required in [
+		"_remember_rollback_state(",
+		"_rollback_written_files(",
+		"recovered"
+	]:
+		if source.find(required) == -1:
+			return _failure("PluginUpdateSyncMirrorService should expose rollback-backed mirror sync internals: %s" % required)
 	return {"name": "plugin_update_sync_mirror_service_contracts", "success": true, "error": ""}
 
 

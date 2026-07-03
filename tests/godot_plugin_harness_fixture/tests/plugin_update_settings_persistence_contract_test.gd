@@ -1275,6 +1275,12 @@ func _run_update_sync_mirror_contract() -> Dictionary:
 		_remove_tree(root)
 		_remove_tree(external_root)
 		return linked_write_result
+	var write_failure_rollback_result := _run_update_sync_write_failure_rollback_contract()
+	if not bool(write_failure_rollback_result.get("success", false)):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return write_failure_rollback_result
 	var sync_result: Dictionary = probe._sync_update_archive_to_addon(archive_path)
 	if not bool(sync_result.get("success", false)):
 		var error := str(sync_result.get("error", ""))
@@ -1470,6 +1476,48 @@ func _run_update_sync_linked_write_guard_contract(archive_path: String) -> Dicti
 	probe.free()
 	_remove_tree(root)
 	_remove_tree(external_root)
+	return {"success": true}
+
+
+func _run_update_sync_write_failure_rollback_contract() -> Dictionary:
+	var probe := MirrorSyncProbePlugin.new()
+	probe.addon_root = "res://tests_tmp/plugin_update_write_failure_rollback_contract/addons/godot_dotnet_mcp"
+	var root := probe._get_update_sync_addon_root()
+	var archive_path := "user://godot_dotnet_mcp/plugin_update_write_failure_rollback_contract.zip"
+	_remove_tree(root)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(root))
+	_write_text(root.path_join("plugin.cfg"), "old cfg")
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(root.path_join("plugin.gd")))
+	_write_text(root.path_join("plugin.gd/sentinel.txt"), "directory target")
+	_write_text(root.path_join("ui/mcp_dock.tscn"), "old scene")
+	var archive_error := _write_update_sync_fixture_archive(archive_path, {
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/plugin.cfg": "new cfg",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/plugin.gd": "new plugin",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/ui/mcp_dock.tscn": "new scene"
+	})
+	if archive_error != OK:
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync rollback contract could not create fixture archive: %s" % archive_error)
+	var sync_result: Dictionary = probe._sync_update_archive_to_addon(archive_path)
+	if bool(sync_result.get("success", false)):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync should fail when an archive file target is an existing directory.")
+	if str(FileAccess.get_file_as_string(root.path_join("plugin.cfg"))) != "old cfg":
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync should restore files written before a later archive write failure.")
+	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(root.path_join("plugin.gd"))) or not FileAccess.file_exists(root.path_join("plugin.gd/sentinel.txt")):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync should preserve the directory that caused a write failure.")
+	if not bool(sync_result.get("recovered", false)) or bool(sync_result.get("dirty", true)):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync write failures should report recovered clean state: %s" % str(sync_result))
+	probe.free()
+	_remove_tree(root)
 	return {"success": true}
 
 
