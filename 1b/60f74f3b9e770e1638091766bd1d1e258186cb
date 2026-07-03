@@ -1,0 +1,35 @@
+tests/godot_plugin_harness_fixture/tests/plugin_update_settings_persistence_contract_test.gd
+  s_23543e5ed94f7d::t_e86e8fee8a9fa8 1278-1283,1482-1517,1519-1520
+  s_23543e5ed94f7d::t_3d19787268baa9 1518
+  s_23543e5ed94f7d::t_56ea7f4db8ec79 1521-1523
+tests/godot_plugin_harness_fixture/tests/plugin_update_sync_mirror_service_contract_test.gd
+  s_23543e5ed94f7d::t_e86e8fee8a9fa8 43-50
+docs/en/CHANGELOG.md
+  s_23543e5ed94f7d::t_2234684b5fc9c9 76
+docs/ko/변경-로그.md
+  s_23543e5ed94f7d::t_2234684b5fc9c9 73
+addons/godot_dotnet_mcp/plugin/runtime/plugin_update_sync_mirror_service.gd
+  s_23543e5ed94f7d::t_9ffb71ece96bfe 79,87-89,93-105,110-111,114-122,126-128,130-134,139,285-287,290-295,298-305,307-315,317-324,326
+  s_23543e5ed94f7d::t_3eac57ded6d770 140,284,288-289,296-297,306,316,325
+  s_23543e5ed94f7d::t_01afdd1a83966f 327-328
+docs/zh-CN/变更日志.md
+  s_23543e5ed94f7d::t_2234684b5fc9c9 77
+docs/ja/変更履歴.md
+  s_23543e5ed94f7d::t_2234684b5fc9c9 73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1b60f74f3b9e770e1638091766bd1d1e258186cb",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
