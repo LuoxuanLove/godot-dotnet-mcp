@@ -102,6 +102,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("initialize serverInfo should include the protocol facts server name.")
 	if str((server_info as Dictionary).get("description", "")) != ProtocolFactsScript.get_server_description():
 		return _failure("initialize serverInfo should include the protocol facts server description.")
+	if (initialize_result as Dictionary).has("toolSchemaVersion"):
+		return _failure("initialize should not expose non-standard toolSchemaVersion at the top level.")
+	var initialize_meta = (initialize_result as Dictionary).get("_meta", {})
+	if not (initialize_meta is Dictionary) or str((initialize_meta as Dictionary).get("toolSchemaVersion", "")) != ProtocolFactsScript.get_tool_schema_version():
+		return _failure("initialize should expose the internal tool schema version through _meta.")
 	var capabilities = (initialize_result as Dictionary).get("capabilities", {})
 	var capability_failure := _validate_initialize_capabilities(capabilities, "initialize")
 	if not capability_failure.is_empty():
@@ -111,6 +116,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var fallback_result = fallback_initialize.get("result", {})
 	if not (fallback_result is Dictionary):
 		return _failure("fallback initialize should return a result object.")
+	if (fallback_result as Dictionary).has("toolSchemaVersion"):
+		return _failure("fallback initialize should not expose non-standard toolSchemaVersion at the top level.")
+	var fallback_meta = (fallback_result as Dictionary).get("_meta", {})
+	if not (fallback_meta is Dictionary) or str((fallback_meta as Dictionary).get("toolSchemaVersion", "")) != ProtocolFactsScript.get_tool_schema_version():
+		return _failure("fallback initialize should expose the internal tool schema version through _meta.")
 	capability_failure = _validate_initialize_capabilities((fallback_result as Dictionary).get("capabilities", {}), "fallback initialize")
 	if not capability_failure.is_empty():
 		return _failure(capability_failure)

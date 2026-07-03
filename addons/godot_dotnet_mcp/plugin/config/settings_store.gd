@@ -61,10 +61,7 @@ func _normalize_update_source(source: String) -> String:
 func save_plugin_settings(settings_path: String, settings: Dictionary) -> void:
 	var settings_dir := settings_path.get_base_dir()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(settings_dir))
-	var file = FileAccess.open(settings_path, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(settings, "\t"))
-		file.close()
+	_write_json_file_atomically(settings_path, settings)
 
 
 func load_custom_profiles(profile_dir: String) -> Dictionary:
@@ -124,15 +121,12 @@ func save_custom_profile(profile_dir: String, profile_name: String, disabled_too
 
 	var slug = _slugify_profile_name(profile_name)
 	var file_path = _build_profile_file_path(profile_dir, slug)
-	var file = FileAccess.open(file_path, FileAccess.WRITE)
-	if file == null:
-		return {"success": false}
-
-	file.store_string(JSON.stringify({
+	var write_result := _write_json_file_atomically(file_path, {
 		"name": profile_name,
 		"disabled_tools": disabled_tools
-	}, "\t"))
-	file.close()
+	})
+	if not bool(write_result.get("success", false)):
+		return {"success": false, "error_code": "profile_write_failed", "file_path": file_path}
 
 	return {
 		"success": true,
@@ -225,16 +219,13 @@ func export_tool_config(file_path: String, profile_id: String, disabled_tools: A
 	if not bool(ensure_result.get("success", false)):
 		return ensure_result
 
-	var file = FileAccess.open(normalized_path, FileAccess.WRITE)
-	if file == null:
-		return {"success": false, "error_code": "config_write_failed", "file_path": normalized_path}
-
-	file.store_string(JSON.stringify({
+	var write_result := _write_json_file_atomically(normalized_path, {
 		"format_version": 1,
 		"profile_id": profile_id,
 		"disabled_tools": disabled_tools.duplicate()
-	}, "\t"))
-	file.close()
+	})
+	if not bool(write_result.get("success", false)):
+		return {"success": false, "error_code": "config_write_failed", "file_path": normalized_path}
 
 	return {"success": true, "file_path": normalized_path}
 
@@ -367,3 +358,47 @@ func _ensure_parent_dir(file_path: String) -> Dictionary:
 		}
 
 	return {"success": true}
+
+
+func _write_json_file_atomically(file_path: String, payload: Dictionary) -> Dictionary:
+	var ensure_result := _ensure_parent_dir(file_path)
+	if not bool(ensure_result.get("success", false)):
+		return ensure_result
+	var text := JSON.stringify(payload, "\t")
+	var temp_path := _build_sidecar_path(file_path, "tmp")
+	var backup_path := _build_sidecar_path(file_path, "bak")
+	var temp_file := FileAccess.open(temp_path, FileAccess.WRITE)
+	if temp_file == null:
+		return {"success": false, "error_code": "write_open_failed", "file_path": file_path}
+	temp_file.store_string(text)
+	temp_file.close()
+	if FileAccess.get_file_as_string(temp_path) != text:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(temp_path))
+		return {"success": false, "error_code": "write_verify_failed", "file_path": file_path}
+	var absolute_path := ProjectSettings.globalize_path(file_path)
+	var absolute_temp_path := ProjectSettings.globalize_path(temp_path)
+	var absolute_backup_path := ProjectSettings.globalize_path(backup_path)
+	var had_existing := FileAccess.file_exists(file_path)
+	if FileAccess.file_exists(backup_path):
+		DirAccess.remove_absolute(absolute_backup_path)
+	if had_existing:
+		var backup_error := DirAccess.rename_absolute(absolute_path, absolute_backup_path)
+		if backup_error != OK:
+			DirAccess.remove_absolute(absolute_temp_path)
+			return {"success": false, "error_code": "backup_failed", "file_path": file_path}
+	var replace_error := DirAccess.rename_absolute(absolute_temp_path, absolute_path)
+	if replace_error != OK:
+		if had_existing and FileAccess.file_exists(backup_path):
+			DirAccess.rename_absolute(absolute_backup_path, absolute_path)
+		DirAccess.remove_absolute(absolute_temp_path)
+		return {"success": false, "error_code": "replace_failed", "file_path": file_path}
+	if had_existing and FileAccess.file_exists(backup_path):
+		DirAccess.remove_absolute(absolute_backup_path)
+	return {"success": true, "file_path": file_path}
+
+
+func _build_sidecar_path(file_path: String, extension: String) -> String:
+	var dir_path := file_path.get_base_dir()
+	var file_name := file_path.get_file()
+	var suffix := "%s-%s" % [str(Time.get_ticks_usec()), str(randi())]
+	return "%s/.%s.%s.%s" % [dir_path, file_name, suffix, extension]

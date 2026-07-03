@@ -275,6 +275,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP response service should keep raw SSE HTTP connections alive.")
 	if raw_sse_text.find("event: endpoint\ndata: {}\n\n") == -1:
 		return _failure("HTTP response service should write raw SSE bodies without JSON encoding.")
+	var unknown_status_text := _send_raw_response_over_loopback(service, {
+		"status": 499,
+		"_raw_body": "{}"
+	})
+	if unknown_status_text.find("HTTP/1.1 499 Unknown") == -1:
+		return _failure("HTTP response service should label unknown HTTP status codes as Unknown.")
 	var post_sse_text := _send_raw_response_over_loopback(service, {
 		"status": 200,
 		"_content_type": "text/event-stream; charset=utf-8",

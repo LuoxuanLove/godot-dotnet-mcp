@@ -47,7 +47,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not light_loader_status.is_empty():
 		return _failure("HTTP server light status should remain empty before service bundle creation.")
 
-	var expected_schema_version := ProtocolFactsScript.get_tool_schema_version()
 	var rpc_initialize: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
 		"id": 10,
@@ -57,8 +56,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var rpc_initialize_result = rpc_initialize.get("result", {})
 	if not (rpc_initialize_result is Dictionary):
 		return _failure("JSON-RPC initialize did not return a result object.")
-	if str((rpc_initialize_result as Dictionary).get("toolSchemaVersion", "")) != expected_schema_version:
-		return _failure("JSON-RPC initialize did not expose the current tool schema version.")
+	if (rpc_initialize_result as Dictionary).has("toolSchemaVersion"):
+		return _failure("JSON-RPC initialize should not expose non-standard toolSchemaVersion at the top level.")
+	var rpc_initialize_meta = (rpc_initialize_result as Dictionary).get("_meta", {})
+	if not (rpc_initialize_meta is Dictionary) or str((rpc_initialize_meta as Dictionary).get("toolSchemaVersion", "")) != ProtocolFactsScript.get_tool_schema_version():
+		return _failure("JSON-RPC initialize did not expose the current tool schema version through _meta.")
 	loader_status = _server.get_tool_loader_status()
 	if bool(loader_status.get("initialized", false)):
 		return _failure("JSON-RPC initialize should not register tools before a tool/resource request.")

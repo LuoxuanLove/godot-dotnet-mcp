@@ -204,9 +204,6 @@ func _validate_mcp_transport_headers(headers: Dictionary) -> Dictionary:
 	var session_guard := _validate_mcp_session_id_header(headers)
 	if not session_guard.is_empty():
 		return session_guard
-	var active_session_guard := _validate_mcp_existing_session(headers)
-	if not active_session_guard.is_empty():
-		return active_session_guard
 
 	var accept_header := str(headers.get("accept", "")).strip_edges()
 	if not _accepts_mcp_response(accept_header):
@@ -218,7 +215,8 @@ func _validate_mcp_transport_headers(headers: Dictionary) -> Dictionary:
 
 	var requested_version := str(headers.get("mcp-protocol-version", "")).strip_edges()
 	var supported_version := MCPProtocolFacts.get_protocol_version()
-	if requested_version.is_empty() and _is_initialize_request_body(str(headers.get("_request_body", ""))):
+	var is_initialize_request := _is_initialize_request_body(str(headers.get("_request_body", "")))
+	if requested_version.is_empty() and is_initialize_request:
 		return {}
 	if requested_version.is_empty():
 		return {
@@ -234,6 +232,17 @@ func _validate_mcp_transport_headers(headers: Dictionary) -> Dictionary:
 			"supported_protocol_version": supported_version,
 			"requested_protocol_version": requested_version
 		}
+
+	var requested_session := str(headers.get("mcp-session-id", "")).strip_edges()
+	if requested_session.is_empty() and not is_initialize_request:
+		return {
+			"error": "Missing MCP session id",
+			"status": 400,
+			"details": "POST /mcp requires an initialized Mcp-Session-Id after initialize."
+		}
+	var active_session_guard := _validate_mcp_existing_session(headers)
+	if not active_session_guard.is_empty():
+		return active_session_guard
 
 	return {}
 
@@ -402,7 +411,7 @@ func _build_mcp_session_terminated_response(headers: Dictionary) -> Dictionary:
 	var session_id := _resolve_mcp_session_id(headers)
 	var termination := _terminate_mcp_session(session_id)
 	return {
-		"status": 204,
+		"status": 200,
 		"_no_body": true,
 		"_mcp_session_id": session_id,
 		"_terminate_mcp_session_id": session_id,
@@ -637,7 +646,10 @@ func _accepts_mcp_response(accept_header: String) -> bool:
 		var quality := float(parsed.get("q", 1.0))
 		if quality <= 0.0:
 			continue
-		if media_range == "application/json":
+		if media_range == "*/*":
+			accepts_json = true
+			accepts_sse = true
+		elif media_range == "application/json":
 			accepts_json = true
 		elif media_range == "text/event-stream":
 			accepts_sse = true

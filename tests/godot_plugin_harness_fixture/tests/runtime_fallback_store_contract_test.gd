@@ -7,6 +7,10 @@ const FALLBACK_PATH := "user://godot_dotnet_mcp/test_runtime_fallback_store_cont
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	var source_guard := _verify_fallback_store_atomic_writes()
+	if not source_guard.is_empty():
+		return _failure(source_guard)
+
 	_cleanup_file()
 	_seed_events([
 		_build_event(10, "OLD A"),
@@ -81,6 +85,23 @@ func _seed_events(events: Array) -> void:
 func _cleanup_file() -> void:
 	if FileAccess.file_exists(FALLBACK_PATH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(FALLBACK_PATH))
+
+
+func _verify_fallback_store_atomic_writes() -> String:
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_fallback_store.gd")
+	if source.is_empty():
+		return "Fallback store source should be readable."
+	for required in [
+		"func _write_fallback_events(events: Array[Dictionary]) -> bool:",
+		"func _write_text_atomically(",
+		"DirAccess.rename_absolute",
+		"_pending_events.clear()"
+	]:
+		if source.find(required) == -1:
+			return "Fallback store should use verified atomic writes before clearing pending events: %s" % required
+	if source.find("_write_fallback_events(_fallback_cache)\n\t_pending_events.clear()") != -1:
+		return "Fallback store should not clear pending events after an unchecked direct write."
+	return ""
 
 
 func _failure(message: String) -> Dictionary:

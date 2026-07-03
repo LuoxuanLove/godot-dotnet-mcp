@@ -16,8 +16,10 @@ class FakeCallbacks:
 			"result": {
 				"idEcho": id,
 				"protocolVersion": MCPProtocolFacts.get_protocol_version(),
-				"toolSchemaVersion": MCPProtocolFacts.get_tool_schema_version(),
-				"serverInfo": MCPProtocolFacts.build_server_info()
+				"serverInfo": MCPProtocolFacts.build_server_info(),
+				"_meta": {
+					"toolSchemaVersion": MCPProtocolFacts.get_tool_schema_version()
+				}
 			},
 			"id": id
 		}
@@ -136,8 +138,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var initialize_result = initialize_response.get("result", {})
 	if not (initialize_result is Dictionary) or str((initialize_result as Dictionary).get("protocolVersion", "")) != MCPProtocolFacts.get_protocol_version():
 		return _failure("JSON-RPC router did not dispatch initialize requests.")
-	if str((initialize_result as Dictionary).get("toolSchemaVersion", "")) != MCPProtocolFacts.get_tool_schema_version():
-		return _failure("JSON-RPC router did not preserve the unified tool schema version.")
+	if (initialize_result as Dictionary).has("toolSchemaVersion"):
+		return _failure("JSON-RPC router should not preserve non-standard toolSchemaVersion at the initialize top level.")
+	var initialize_meta = (initialize_result as Dictionary).get("_meta", {})
+	if not (initialize_meta is Dictionary) or str((initialize_meta as Dictionary).get("toolSchemaVersion", "")) != MCPProtocolFacts.get_tool_schema_version():
+		return _failure("JSON-RPC router did not preserve the unified tool schema version through _meta.")
 	var server_info = (initialize_result as Dictionary).get("serverInfo", {})
 	if not (server_info is Dictionary) or str((server_info as Dictionary).get("name", "")) != MCPProtocolFacts.get_server_name():
 		return _failure("JSON-RPC router did not preserve the unified server info payload.")

@@ -61,6 +61,8 @@ Target version: 2.0.0.
 - Fixed Agent Tools group headings in the Dock Tools tab so localized interfaces no longer fall back to raw English labels such as `Project Context` or `Runtime Debugging`.
 - Fixed Dock Tools scene tree and scene patch action localization so labels like `Reorder Node` and `Update Property` no longer fall back to English in localized interfaces.
 - Fixed Settings update interactions so touching update source or branch selectors refreshes refs in the background, while Sync queues behind fresh refs/compare verification instead of staying unavailable during refresh.
+- Fixed Streamable HTTP session handling so non-initialize `POST /mcp` requests require an initialized `Mcp-Session-Id`, successful `DELETE /mcp` session termination returns HTTP 200 OK, and initialize keeps the internal tool schema version under `_meta`.
+- Fixed plugin settings, custom tool profiles, config exports, and fallback runtime event persistence to use verified temp-file replacement so failed writes do not silently clear pending data or truncate existing files.
 - Fixed Streamable HTTP Host validation so missing or blank Host headers are rejected before MCP requests reach the router.
 - Fixed the Dock Server overview so non-loopback and wildcard MCP listener hosts are flagged as external bind risks instead of appearing identical to the default loopback endpoint.
 - Fixed Streamable HTTP pending request buffering so TCP fragments stay byte-backed until decoding, reducing repeated UTF-8 conversions while preserving pipelined request handling.
