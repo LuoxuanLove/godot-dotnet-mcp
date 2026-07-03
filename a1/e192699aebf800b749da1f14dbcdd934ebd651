@@ -1,0 +1,51 @@
+tests/godot_plugin_harness_fixture/tests/http_server_contract_test.gd
+  s_23543e5ed94f7d::t_b2472da6cb0310 59-63
+tests/godot_plugin_harness_fixture/tests/mcp_resources_prompts_contract_test.gd
+  s_23543e5ed94f7d::t_b2472da6cb0310 105-109,119-123
+tests/godot_plugin_harness_fixture/tests/json_rpc_router_contract_test.gd
+  s_23543e5ed94f7d::t_b2472da6cb0310 19-22,141-145
+addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_method_service.gd
+  s_23543e5ed94f7d::t_ba07e941e975bd 37-40
+docs/ja/変更履歴.md
+  s_23543e5ed94f7d::t_5d2dd751728f61 62-63
+docs/ko/변경-로그.md
+  s_23543e5ed94f7d::t_5d2dd751728f61 62-63
+tests/godot_plugin_harness_fixture/tests/http_request_router_contract_test.gd
+  s_23543e5ed94f7d::t_b2472da6cb0310 361-364,366,370-371,375-376,378,384-385,387,400-401,424-427,447-448,474-476,481,491,504-507,556,563-564
+addons/godot_dotnet_mcp/plugin/config/settings_store.gd
+  s_23543e5ed94f7d::t_ba07e941e975bd 64,124,127-129,222,226-228,361-404
+docs/en/CHANGELOG.md
+  s_23543e5ed94f7d::t_5d2dd751728f61 64-65
+addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_fallback_store.gd
+  s_23543e5ed94f7d::t_ba07e941e975bd 44-53,122-168
+docs/zh-CN/变更日志.md
+  s_23543e5ed94f7d::t_5d2dd751728f61 65-66
+addons/godot_dotnet_mcp/plugin/runtime/mcp_http_response_service.gd
+  s_23543e5ed94f7d::t_ba07e941e975bd 334
+tests/godot_plugin_harness_fixture/tests/runtime_fallback_store_contract_test.gd
+  s_23543e5ed94f7d::t_b2472da6cb0310 10-13,90-104
+  s_23543e5ed94f7d::t_3c48710bda6437 105-106
+tests/godot_plugin_harness_fixture/tests/http_response_service_contract_test.gd
+  s_23543e5ed94f7d::t_b2472da6cb0310 278-283
+tests/godot_plugin_harness_fixture/tests/plugin_profile_config_service_contract_test.gd
+  s_23543e5ed94f7d::t_b2472da6cb0310 12-14,126-146
+  s_23543e5ed94f7d::t_380c60debad0cd 147-149
+addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_router.gd
+  s_23543e5ed94f7d::t_ba07e941e975bd 218-219,236-246,414,649-652
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a1e192699aebf800b749da1f14dbcdd934ebd651",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
