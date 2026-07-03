@@ -71,9 +71,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var missing_id_error: Dictionary = service.build_preview("resource", "")
 	if bool(missing_id_error.get("success", true)) or not str(missing_id_error.get("error", "")).contains("identifier"):
 		return _failure("Preview service should reject empty identifiers before calling protocol services.")
-	var unsupported_kind_error: Dictionary = service.build_preview("template", "godot-dotnet-mcp://scene/{path}")
-	if bool(unsupported_kind_error.get("success", true)) or not str(unsupported_kind_error.get("error", "")).contains("Unsupported"):
-		return _failure("Preview service should keep unsupported template previews explicit.")
+	var missing_template_arg_error: Dictionary = service.build_preview("template", "godot-dotnet-mcp://scene/{path}")
+	if bool(missing_template_arg_error.get("success", true)) or not str(missing_template_arg_error.get("error", "")).contains("path"):
+		return _failure("Template previews should return readable missing-argument errors instead of disabling the UI action.")
+	var template_preview: Dictionary = service.build_preview("template", "godot-dotnet-mcp://scene/{path}", {"path": "tests/headless_suite_entry.tscn", "empty": ""})
+	if not bool(template_preview.get("success", false)):
+		return _failure("Template previews should resolve URI placeholders and read the concrete resource.")
+	if str(template_preview.get("kind", "")) != "template" or str(template_preview.get("id", "")) != "godot-dotnet-mcp://scene/{path}":
+		return _failure("Template previews should preserve the template kind and original URI template.")
+	if str(template_preview.get("resolvedUri", "")) != "godot-dotnet-mcp://scene/tests/headless_suite_entry.tscn":
+		return _failure("Template previews should expose the resolved concrete resource URI.")
+	if not str(template_preview.get("text", "")).contains("[gd_scene"):
+		return _failure("Template previews should expose concrete resource text from resources/read.")
+	if (template_preview.get("arguments", {}) as Dictionary).has("empty") or str((template_preview.get("arguments", {}) as Dictionary).get("path", "")) != "tests/headless_suite_entry.tscn":
+		return _failure("Template previews should compact empty placeholder arguments while preserving supplied values.")
 
 	return {"name": "dock_mcp_catalog_preview_service_contracts", "success": true, "error": ""}
 
