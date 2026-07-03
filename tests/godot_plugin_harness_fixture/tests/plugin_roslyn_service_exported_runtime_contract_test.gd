@@ -41,10 +41,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"action": "replace_method_body",
 		"type_name": "ExportedRuntimeProbe",
 		"member_name": "Run",
-		"body": "GD.Print(\"patched\");"
+		"body": "GD.Print(\"patched\");",
+		"dry_run": false
 	})
 	if not bool(patch_result.get("success", false)):
 		return _failure("Exported PluginRoslynService should patch C# through isolated runtime process: %s" % str(patch_result.get("error", "")))
+	var patch_data: Dictionary = patch_result.get("data", {})
+	if bool(patch_data.get("dry_run", true)) or not bool(patch_data.get("written", false)):
+		return _failure("Exported PluginRoslynService should normalize dry_run=false into a persisted bridge write.")
 	if FileAccess.get_file_as_string(script_path).find("patched") == -1:
 		return _failure("Exported PluginRoslynService patch_file_async should write the patched body to disk.")
 

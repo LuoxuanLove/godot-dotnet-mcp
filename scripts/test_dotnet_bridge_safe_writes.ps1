@@ -86,7 +86,7 @@ try {
         throw "cs_plugin_patch dry-run failed with exit code $LASTEXITCODE. Output: $pluginPatchDryRunOutput"
     }
     $pluginPatchDryRunJson = Get-Content -LiteralPath $pluginPatchDryRunResponsePath -Raw -Encoding UTF8 | ConvertFrom-Json
-    if (-not [bool]$pluginPatchDryRunJson.success -or -not [bool]$pluginPatchDryRunJson.structuredContent.dryRun -or [bool]$pluginPatchDryRunJson.structuredContent.written) {
+    if ($pluginPatchDryRunJson.success -ne $true -or $pluginPatchDryRunJson.structuredContent.dryRun -ne $true -or $pluginPatchDryRunJson.structuredContent.written -ne $false) {
         throw "cs_plugin_patch should default to dryRun=true and written=false: $($pluginPatchDryRunJson | ConvertTo-Json -Depth 8)"
     }
     if ([System.IO.File]::ReadAllText($scriptPath).Contains("return 3;")) {
@@ -112,7 +112,7 @@ try {
         throw "cs_plugin_patch write failed with exit code $LASTEXITCODE. Output: $pluginPatchWriteOutput"
     }
     $pluginPatchWriteJson = Get-Content -LiteralPath $pluginPatchWriteResponsePath -Raw -Encoding UTF8 | ConvertFrom-Json
-    if (-not [bool]$pluginPatchWriteJson.success -or [bool]$pluginPatchWriteJson.structuredContent.dryRun -or -not [bool]$pluginPatchWriteJson.structuredContent.written) {
+    if ($pluginPatchWriteJson.success -ne $true -or $pluginPatchWriteJson.structuredContent.dryRun -ne $false -or $pluginPatchWriteJson.structuredContent.written -ne $true) {
         throw "cs_plugin_patch dryRun=false should report a persisted write: $($pluginPatchWriteJson | ConvertTo-Json -Depth 8)"
     }
     if (-not [System.IO.File]::ReadAllText($scriptPath).Contains("return 3;")) {

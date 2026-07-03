@@ -91,7 +91,10 @@ class RuntimeProcessRoslynFacade extends RefCounted:
 	func patch_file_async(script_path: String, request: Dictionary) -> Dictionary:
 		var bridge_request: Dictionary = request.duplicate(true)
 		bridge_request["path"] = script_path
-		if not bridge_request.has("dryRun") and not bridge_request.has("dry_run"):
+		if bridge_request.has("dry_run") and not bridge_request.has("dryRun"):
+			bridge_request["dryRun"] = bool(bridge_request.get("dry_run", false))
+		bridge_request.erase("dry_run")
+		if not bridge_request.has("dryRun"):
 			bridge_request["dryRun"] = false
 		var response: Dictionary = await _owner._execute_runtime_tool_async("cs_plugin_patch", bridge_request)
 		return _owner._convert_bridge_patch_response(response, script_path)
