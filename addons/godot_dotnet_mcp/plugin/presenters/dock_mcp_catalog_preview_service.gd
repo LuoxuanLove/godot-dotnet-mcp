@@ -37,6 +37,8 @@ func build_preview(kind: String, id: String, arguments: Dictionary = {}) -> Dict
 	match normalized_kind:
 		"resource":
 			return _build_resource_preview(normalized_id, arguments)
+		"template":
+			return _build_template_preview(normalized_id, arguments)
 		"prompt":
 			return _build_prompt_preview(normalized_id, arguments)
 		_:
@@ -69,6 +71,19 @@ func _build_resource_preview(uri: String, arguments: Dictionary) -> Dictionary:
 		"contents": contents.duplicate(true),
 		"arguments": arguments.duplicate(true)
 	}
+
+
+func _build_template_preview(uri_template: String, arguments: Dictionary) -> Dictionary:
+	var resolved := _resolve_template_uri(uri_template, arguments)
+	if not bool(resolved.get("success", false)):
+		return _error_preview("template", uri_template, str(resolved.get("error", "Resource template preview failed.")), arguments)
+	var resolved_uri := str(resolved.get("uri", ""))
+	var preview := _build_resource_preview(resolved_uri, arguments)
+	preview["kind"] = "template"
+	preview["id"] = uri_template
+	preview["resolvedUri"] = resolved_uri
+	preview["arguments"] = _compact_arguments(arguments)
+	return preview
 
 
 func _build_prompt_preview(name: String, arguments: Dictionary) -> Dictionary:
@@ -126,6 +141,44 @@ func _find_resource_metadata(uri: String) -> Dictionary:
 			if str(entry_dict.get("uri", entry_dict.get("uriTemplate", ""))) == uri:
 				return entry_dict.duplicate(true)
 	return {}
+
+
+func _resolve_template_uri(uri_template: String, arguments: Dictionary) -> Dictionary:
+	var placeholders := _template_placeholders(uri_template)
+	if placeholders.is_empty():
+		return {"success": true, "uri": uri_template}
+	var compacted := _compact_arguments(arguments)
+	var resolved := uri_template
+	var missing: Array[String] = []
+	for placeholder in placeholders:
+		var value := str(compacted.get(placeholder, "")).strip_edges()
+		if value.is_empty():
+			missing.append(placeholder)
+			continue
+		resolved = resolved.replace("{%s}" % placeholder, value)
+	if not missing.is_empty():
+		return {
+			"success": false,
+			"error": "Resource template preview requires argument(s): %s." % ", ".join(missing)
+		}
+	return {"success": true, "uri": resolved}
+
+
+func _template_placeholders(uri_template: String) -> Array[String]:
+	var placeholders: Array[String] = []
+	var search_from := 0
+	while true:
+		var start := uri_template.find("{", search_from)
+		if start == -1:
+			break
+		var end := uri_template.find("}", start + 1)
+		if end == -1:
+			break
+		var name := uri_template.substr(start + 1, end - start - 1).strip_edges()
+		if not name.is_empty() and not placeholders.has(name):
+			placeholders.append(name)
+		search_from = end + 1
+	return placeholders
 
 
 func _find_prompt_metadata(name: String) -> Dictionary:
