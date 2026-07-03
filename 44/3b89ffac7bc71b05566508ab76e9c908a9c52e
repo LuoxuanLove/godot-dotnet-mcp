@@ -1,0 +1,21 @@
+addons/godot_dotnet_mcp/ui/mcp_catalog_tab.gd
+  s_ebcde3b03f14f9::t_8fc97420b788b0 727
+tests/godot_plugin_harness_fixture/tests/mcp_catalog_tab_rendering_contract_test.gd
+  s_ebcde3b03f14f9::t_8fc97420b788b0 202-203
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "443b89ffac7bc71b05566508ab76e9c908a9c52e",
+  "prompts": {},
+  "sessions": {
+    "s_ebcde3b03f14f9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f28fa-d3d0-70f1-865e-098411d7acb2",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
