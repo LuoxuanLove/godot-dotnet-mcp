@@ -1,0 +1,21 @@
+tests/godot_plugin_harness_fixture/tests/http_request_router_contract_test.gd
+  s_23543e5ed94f7d::t_ebf886b4489cf1 530-531
+tests/godot_plugin_harness_fixture/tests/plugin_profile_config_service_contract_test.gd
+  s_23543e5ed94f7d::t_418c2e259ceadf 153-154
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "18393597033308a7df7d74ca77125bc7a34eeab8",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
