@@ -1,0 +1,31 @@
+tests/godot_plugin_harness_fixture/tests/http_request_router_contract_test.gd
+  s_23543e5ed94f7d::t_acb35317782e27 352-360
+addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_router.gd
+  s_23543e5ed94f7d::t_cd21c9de4a5d79 642-644,650,652,654-659
+tests/godot_plugin_harness_fixture/tests/runtime_fallback_store_contract_test.gd
+  s_23543e5ed94f7d::t_a5ab23db23df76 96,103-113
+tests/godot_plugin_harness_fixture/tests/plugin_profile_config_service_contract_test.gd
+  s_23543e5ed94f7d::t_0ae7ed9177f3a7 132-142,146-147,149-150
+addons/godot_dotnet_mcp/plugin/config/file_write_transaction.gd
+  s_23543e5ed94f7d::t_8ce9a7c0c44c48 1-51
+addons/godot_dotnet_mcp/plugin/config/settings_store.gd
+  s_23543e5ed94f7d::t_fcd9c71a971dff 8,65-67,371
+addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_fallback_store.gd
+  s_23543e5ed94f7d::t_c49ef7aa01374e 6,124-125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c49a8450674c75050d241180d238037fdfed59e4",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
