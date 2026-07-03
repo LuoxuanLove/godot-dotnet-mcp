@@ -8,6 +8,7 @@ const LOAD_MODE_PLACEHOLDER := "gdscript_placeholder"
 const LOAD_MODE_TESTING := "testing_double"
 const CACHE_LIMIT := 32
 const RUNTIME_PROCESS_TIMEOUT_MS := 15000
+const RUNTIME_DOTNET_REQUIREMENT := ".NET 8 runtime"
 const ERROR_TYPE_INVALID_ARGUMENT := "invalid_argument"
 const ERROR_TYPE_SOURCE_UNAVAILABLE := "source_unavailable"
 const ERROR_TYPE_RUNTIME_UNAVAILABLE := "runtime_unavailable"
@@ -90,6 +91,11 @@ class RuntimeProcessRoslynFacade extends RefCounted:
 	func patch_file_async(script_path: String, request: Dictionary) -> Dictionary:
 		var bridge_request: Dictionary = request.duplicate(true)
 		bridge_request["path"] = script_path
+		if bridge_request.has("dry_run") and not bridge_request.has("dryRun"):
+			bridge_request["dryRun"] = bool(bridge_request.get("dry_run", false))
+		bridge_request.erase("dry_run")
+		if not bridge_request.has("dryRun"):
+			bridge_request["dryRun"] = false
 		var response: Dictionary = await _owner._execute_runtime_tool_async("cs_plugin_patch", bridge_request)
 		return _owner._convert_bridge_patch_response(response, script_path)
 
@@ -380,10 +386,11 @@ func _build_runtime_unavailable_message(reason: String) -> String:
 	var manifest_state := "missing"
 	if FileAccess.file_exists(RUNTIME_MANIFEST_PATH):
 		manifest_state = "present"
-	return "%s. C# semantic support requires the isolated Roslyn runtime bundle at %s (manifest %s)." % [
+	return "%s. C# semantic support requires the framework-dependent Roslyn runtime files at %s (manifest %s) and a local %s available to the `dotnet` host." % [
 		reason,
 		RUNTIME_MANIFEST_PATH,
-		manifest_state
+		manifest_state,
+		RUNTIME_DOTNET_REQUIREMENT
 	]
 
 
@@ -401,7 +408,7 @@ func _execute_runtime_capabilities() -> Dictionary:
 	return {
 		"success": true,
 		"data": data,
-		"message": "Isolated Roslyn runtime bundle is ready."
+		"message": "Framework-dependent Roslyn runtime is ready."
 	}
 
 
@@ -419,7 +426,7 @@ func _execute_runtime_capabilities_async() -> Dictionary:
 	return {
 		"success": true,
 		"data": data,
-		"message": "Isolated Roslyn runtime bundle is ready."
+		"message": "Framework-dependent Roslyn runtime is ready."
 	}
 
 
@@ -464,10 +471,11 @@ func _execute_runtime_process_async(args: Array[String]) -> Dictionary:
 		_remove_file_if_exists(response_path)
 		return {
 			"success": false,
-			"error": "Failed to start isolated Roslyn runtime process.",
+			"error": _build_runtime_unavailable_message("Failed to start the `dotnet` host for the framework-dependent Roslyn runtime process"),
 			"exit_code": -1,
 			"stdout": "",
-			"error_code": "roslyn_runtime_process_start_failed"
+			"error_code": "roslyn_runtime_process_start_failed",
+			"runtime_requirement": RUNTIME_DOTNET_REQUIREMENT
 		}
 	var started := Time.get_ticks_msec()
 	while OS.is_process_running(pid):
@@ -906,6 +914,8 @@ func _base_metadata(degraded: bool) -> Dictionary:
 		"engine": "roslyn",
 		"mode": "syntax",
 		"semantic_runtime": "Roslyn",
+		"distribution": "framework-dependent",
+		"runtime_requirement": RUNTIME_DOTNET_REQUIREMENT,
 		"transport": transport,
 		"entrypoint": entrypoint,
 		"runtime_manifest_path": RUNTIME_MANIFEST_PATH,

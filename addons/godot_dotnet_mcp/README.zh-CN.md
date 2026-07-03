@@ -68,7 +68,7 @@ addons/godot_dotnet_mcp
 
 ### 方式二：直接复制
 
-将可安装的插件内容放到你的 Godot 项目内。请使用 Asset Library 下载内容或已准备好的可安装插件目录，不要直接复制原始仓库源码树；原始源码树包含内部 bridge 项目，这些内容不应进入宿主项目编译面。复制后的插件应保留 `plugin/runtime/roslyn_runtime/`，以便 C# 语义工具继续使用隔离的 Roslyn runtime bundle：
+将可安装的插件内容放到你的 Godot 项目内。请使用 Asset Library 下载内容或已准备好的可安装插件目录，不要直接复制原始仓库源码树；原始源码树包含内部 bridge 项目，这些内容不应进入宿主项目编译面。复制后的插件应保留 `plugin/runtime/roslyn_runtime/`，并确保机器上可用 .NET 8 runtime，以便 C# 语义工具运行 framework-dependent Roslyn bridge：
 
 ```text
 addons/godot_dotnet_mcp

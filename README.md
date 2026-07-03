@@ -50,7 +50,7 @@ If your work mostly happens in the Godot editor and the game runtime, not just i
 
 ### Direct Copy
 
-Copy the installable addon contents into your Godot project. Use the Asset Library download or a prepared installable addon tree, not a raw repository checkout; the raw source tree contains internal bridge projects that are intentionally kept out of a host project compile surface. Keep `plugin/runtime/roslyn_runtime/` in the copied addon so C# semantic tools retain their isolated Roslyn runtime bundle:
+Copy the installable addon contents into your Godot project. Use the Asset Library download or a prepared installable addon tree, not a raw repository checkout; the raw source tree contains internal bridge projects that are intentionally kept out of a host project compile surface. Keep `plugin/runtime/roslyn_runtime/` in the copied addon and ensure the .NET 8 runtime is available on the machine so C# semantic tools can run the framework-dependent Roslyn bridge:
 
 ```text
 addons/godot_dotnet_mcp

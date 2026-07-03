@@ -402,7 +402,22 @@ internal static class DotnetCliRunner
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
         var stderrTask = process.StandardError.ReadToEndAsync();
 
-        await process.WaitForExitAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            KillProcessTree(process);
+            throw;
+        }
+        finally
+        {
+            if (!process.HasExited && cancellationToken.IsCancellationRequested)
+            {
+                KillProcessTree(process);
+            }
+        }
         var stdout = await stdoutTask;
         var stderr = await stderrTask;
         stopwatch.Stop();
@@ -460,5 +475,22 @@ internal static class DotnetCliRunner
         return value.Contains(' ') || value.Contains('"')
             ? "\"" + value.Replace("\"", "\\\"", StringComparison.Ordinal) + "\""
             : value;
+    }
+
+    private static void KillProcessTree(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (NotSupportedException)
+        {
+        }
     }
 }

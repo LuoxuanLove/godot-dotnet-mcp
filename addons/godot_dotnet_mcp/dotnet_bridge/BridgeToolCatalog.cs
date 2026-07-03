@@ -13,6 +13,7 @@ internal static class BridgeToolCatalog
             CreateSolutionAnalyzeTool(),
             CreateCsprojWriteTool(),
             CreateCsFilePatchTool(),
+            CreateCsPluginPatchTool(),
         ];
     }
 
@@ -269,6 +270,46 @@ internal static class BridgeToolCatalog
                     },
                 },
                 required = new[] { "path", "patches" },
+                additionalProperties = false,
+            },
+        };
+    }
+
+    private static object CreateCsPluginPatchTool()
+    {
+        return new
+        {
+            name = "cs_plugin_patch",
+            description = "Apply Roslyn-backed plugin C# member patches with dry-run and write safety.",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    path = new { type = "string", description = "Path to a plugin .cs file." },
+                    dryRun = new { type = "boolean", description = "Preview changes without writing. Defaults to true." },
+                    action = new { type = "string", @enum = new[] { "upsert_method", "add_method", "upsert_field", "add_field", "replace_method_body", "delete_member", "rename_member" } },
+                    type_name = new { type = "string", description = "Target C# type name. Defaults to the file's primary type when omitted." },
+                    class_name = new { type = "string", description = "Alias for type_name." },
+                    member_name = new { type = "string", description = "Target method, field, or property name." },
+                    name = new { type = "string", description = "Alias for member_name." },
+                    new_name = new { type = "string", description = "New member name for rename_member." },
+                    member_type = new { type = "string", @enum = new[] { "auto", "method", "field", "property", "function", "variable" }, description = "Member kind for delete/rename actions. Defaults to auto." },
+                    signature_hint = new { type = "string", description = "Optional extra text used to disambiguate semantic member matches." },
+                    access = new { type = "string", description = "Access modifier for inserted members. Defaults to public." },
+                    modifiers = new { type = "array", items = new { type = "string" }, description = "Modifiers such as public/private/static." },
+                    return_type = new { type = "string", description = "Return type for method insert/upsert. Defaults to void." },
+                    parameters = new { type = "array", items = new { type = "string" }, description = "Method parameter fragments." },
+                    @params = new { type = "array", items = new { type = "string" }, description = "Alias for parameters." },
+                    body = new { type = "string", description = "Method body for method insert/upsert or replace_method_body." },
+                    field_type = new { type = "string", description = "Field type for field insert/upsert." },
+                    type = new { type = "string", description = "Alias for field_type." },
+                    value = new { type = "string", description = "Alias for initializer." },
+                    initializer = new { type = "string", description = "Field initializer for field insert/upsert." },
+                    exported = new { type = "boolean", description = "Whether an inserted field should be exported." },
+                    export = new { type = "boolean", description = "Alias for exported." },
+                },
+                required = new[] { "path", "action" },
                 additionalProperties = false,
             },
         };

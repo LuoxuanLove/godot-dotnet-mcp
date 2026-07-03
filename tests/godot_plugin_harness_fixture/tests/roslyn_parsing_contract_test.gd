@@ -28,6 +28,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Expected capabilities.transport='process_json', got '%s'" % str(capability_data.get("transport", "")))
 	if str(capability_data.get("entrypoint", "")).find("roslyn_runtime") == -1:
 		return _failure("Expected isolated Roslyn runtime entrypoint metadata, got '%s'" % str(capability_data.get("entrypoint", "")))
+	if str(capability_data.get("distribution", "")) != "framework-dependent":
+		return _failure("Expected framework-dependent Roslyn runtime distribution metadata, got '%s'" % str(capability_data.get("distribution", "")))
+	if str(capability_data.get("runtime_requirement", "")).find(".NET 8") == -1:
+		return _failure("Expected .NET 8 runtime requirement metadata, got '%s'" % str(capability_data.get("runtime_requirement", "")))
 
 	# --- Fixture 1: Valid C# with namespace, class, method ---
 	var temp_dir := "res://tests_tmp/roslyn_parsing_contracts"

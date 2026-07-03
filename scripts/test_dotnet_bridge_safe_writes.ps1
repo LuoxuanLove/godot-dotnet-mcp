@@ -68,6 +68,57 @@ try {
         throw "cs_file_patch did not persist the safe-write update."
     }
 
+    $pluginPatchRequestPath = Join-Path $stageRoot "cs-plugin-patch-request.json"
+    [System.IO.File]::WriteAllText(
+        $pluginPatchRequestPath,
+        (@{
+            path = $scriptPath
+            action = "replace_method_body"
+            type_name = "SafeWriteProbe"
+            member_name = "Value"
+            body = "return 3;"
+        } | ConvertTo-Json -Depth 8),
+        (New-Object System.Text.UTF8Encoding($false)))
+
+    $pluginPatchDryRunResponsePath = Join-Path $stageRoot "cs-plugin-patch-dry-run-response.json"
+    $pluginPatchDryRunOutput = & $bridgeExe --response-json-file $pluginPatchDryRunResponsePath --call-json-file cs_plugin_patch $pluginPatchRequestPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "cs_plugin_patch dry-run failed with exit code $LASTEXITCODE. Output: $pluginPatchDryRunOutput"
+    }
+    $pluginPatchDryRunJson = Get-Content -LiteralPath $pluginPatchDryRunResponsePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($pluginPatchDryRunJson.success -ne $true -or $pluginPatchDryRunJson.structuredContent.dryRun -ne $true -or $pluginPatchDryRunJson.structuredContent.written -ne $false) {
+        throw "cs_plugin_patch should default to dryRun=true and written=false: $($pluginPatchDryRunJson | ConvertTo-Json -Depth 8)"
+    }
+    if ([System.IO.File]::ReadAllText($scriptPath).Contains("return 3;")) {
+        throw "cs_plugin_patch dry-run should not persist source changes."
+    }
+
+    $pluginPatchWriteRequestPath = Join-Path $stageRoot "cs-plugin-patch-write-request.json"
+    [System.IO.File]::WriteAllText(
+        $pluginPatchWriteRequestPath,
+        (@{
+            path = $scriptPath
+            dryRun = $false
+            action = "replace_method_body"
+            type_name = "SafeWriteProbe"
+            member_name = "Value"
+            body = "return 3;"
+        } | ConvertTo-Json -Depth 8),
+        (New-Object System.Text.UTF8Encoding($false)))
+
+    $pluginPatchWriteResponsePath = Join-Path $stageRoot "cs-plugin-patch-write-response.json"
+    $pluginPatchWriteOutput = & $bridgeExe --response-json-file $pluginPatchWriteResponsePath --call-json-file cs_plugin_patch $pluginPatchWriteRequestPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "cs_plugin_patch write failed with exit code $LASTEXITCODE. Output: $pluginPatchWriteOutput"
+    }
+    $pluginPatchWriteJson = Get-Content -LiteralPath $pluginPatchWriteResponsePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($pluginPatchWriteJson.success -ne $true -or $pluginPatchWriteJson.structuredContent.dryRun -ne $false -or $pluginPatchWriteJson.structuredContent.written -ne $true) {
+        throw "cs_plugin_patch dryRun=false should report a persisted write: $($pluginPatchWriteJson | ConvertTo-Json -Depth 8)"
+    }
+    if (-not [System.IO.File]::ReadAllText($scriptPath).Contains("return 3;")) {
+        throw "cs_plugin_patch dryRun=false did not persist the safe-write update."
+    }
+
     $projectPath = Join-Path $stageRoot "SafeWriteProbe.csproj"
     [System.IO.File]::WriteAllText(
         $projectPath,
