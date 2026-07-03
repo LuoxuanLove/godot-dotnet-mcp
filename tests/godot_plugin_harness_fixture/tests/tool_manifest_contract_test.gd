@@ -1,19 +1,13 @@
 extends RefCounted
 
-const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
-const MCPToolRegistry = preload("res://addons/godot_dotnet_mcp/tools/tool_registry.gd")
 const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 const ToolCatalogService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_service.gd")
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
-	var domain_defs: Array = MCPToolManifest.TOOL_DOMAIN_DEFS
+	var domain_defs: Array = ToolCatalogManifest.TOOL_DOMAIN_DEFS
 	if JSON.stringify(domain_defs) != JSON.stringify(ToolCatalogManifest.get_domain_defs()):
-		return _failure("MCPToolManifest should expose ToolCatalogManifest domain definitions without maintaining a second source.")
-	if JSON.stringify(MCPToolManifest.ALL_TOOL_CATEGORIES) != JSON.stringify(ToolCatalogManifest.get_all_tool_categories()):
-		return _failure("MCPToolManifest should expose ToolCatalogManifest categories without maintaining a second source.")
-	if JSON.stringify(MCPToolManifest.PUBLIC_MCP_TOOL_CATEGORIES) != JSON.stringify(ToolCatalogManifest.get_public_mcp_tool_categories()):
-		return _failure("MCPToolManifest should expose ToolCatalogManifest public categories without maintaining a second source.")
+		return _failure("ToolCatalogManifest should expose domain definitions from one source.")
 	var manifest_categories := ToolCatalogManifest.get_all_tool_categories()
 	var manifest_builtin_categories := ToolCatalogManifest.get_builtin_categories()
 	if JSON.stringify(manifest_categories) != JSON.stringify(_collect_domain_categories(domain_defs).get("categories", [])):
@@ -27,7 +21,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("ToolCatalogManifest domain definitions should exactly cover builtin categories.")
 	if domain_defs.size() != 6:
 		return _failure("Tool manifest should define core, visual, gameplay, interface, plugin, and user domains.")
-	var public_categories: Array = MCPToolManifest.PUBLIC_MCP_TOOL_CATEGORIES
+	var public_categories: Array = ToolCatalogManifest.PUBLIC_MCP_TOOL_CATEGORIES
 	if public_categories != ["system", "user"]:
 		return _failure("Public MCP exposure should stay limited to high-level system tools and user extensions.")
 	if not ToolCatalogManifest.is_public_category("system") or ToolCatalogManifest.is_public_category("plugin_runtime"):
@@ -63,14 +57,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if catalog.find_domain_key_for_category(domain_defs, "user") != "user":
 		return _failure("User tools should resolve to the user domain.")
 
-	var registry := MCPToolRegistry.new()
+	var registry := ToolCatalogManifest.new()
 	var builtin_categories := registry.get_builtin_categories()
 	if JSON.stringify(registry.get_builtin_entries()) != JSON.stringify(ToolCatalogManifest.get_builtin_entries()):
-		return _failure("MCPToolRegistry should expose ToolCatalogManifest builtin entries without maintaining a second source.")
+		return _failure("ToolCatalogManifest registry interface should expose builtin entries from the manifest.")
 	if JSON.stringify(builtin_categories) != JSON.stringify(ToolCatalogManifest.get_builtin_categories()):
-		return _failure("MCPToolRegistry should expose ToolCatalogManifest builtin category order without maintaining a second source.")
-	if MCPToolRegistry.CUSTOM_TOOLS_DIR != ToolCatalogManifest.CUSTOM_TOOLS_DIR:
-		return _failure("MCPToolRegistry custom tools directory should come from ToolCatalogManifest.")
+		return _failure("ToolCatalogManifest registry interface should expose builtin category order from the manifest.")
+	if ToolCatalogManifest.CUSTOM_TOOLS_DIR != "res://addons/godot_dotnet_mcp/custom_tools":
+		return _failure("ToolCatalogManifest should define the custom tools directory.")
+	var registry_entries := registry.collect_entries()
+	if not (registry_entries.get("entries", []) is Array) or (registry_entries.get("entries", []) as Array).is_empty():
+		return _failure("ToolCatalogManifest should provide loader-compatible registry entries.")
 	if builtin_categories.has("plugin"):
 		return _failure("Tool registry should not register the legacy plugin aggregate category.")
 	for split_plugin_category in ["plugin_runtime", "plugin_evolution", "plugin_developer"]:
@@ -113,7 +110,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"error": "",
 		"details": {
 			"domain_count": domain_defs.size(),
-			"category_count": MCPToolManifest.ALL_TOOL_CATEGORIES.size(),
+			"category_count": ToolCatalogManifest.get_all_tool_categories().size(),
 			"registry_entry_count": registry.get_builtin_entries().size()
 		}
 	}

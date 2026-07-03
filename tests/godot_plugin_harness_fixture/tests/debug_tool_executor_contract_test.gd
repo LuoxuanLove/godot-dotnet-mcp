@@ -38,6 +38,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Debug dotnet automatic project discovery should skip plugin-owned DotnetBridge.csproj.")
 	if str(executor.call("_resolve_csproj_path", PLUGIN_BRIDGE_CSPROJ)) != PLUGIN_BRIDGE_CSPROJ:
 		return _failure("Debug dotnet explicit project resolution should still accept the requested plugin bridge project path.")
+	var build_server_guard := _assert_dotnet_build_disables_build_servers()
+	if not build_server_guard.is_empty():
+		return _failure(build_server_guard)
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
 	if tool_defs.size() != 8:
@@ -125,6 +128,13 @@ func cleanup_case(_tree: SceneTree) -> void:
 func _prepare_temp_root() -> void:
 	_remove_tree(TEMP_ROOT)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(TEMP_ROOT))
+
+
+func _assert_dotnet_build_disables_build_servers() -> String:
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/tools/debug/executor.gd")
+	if source.find('args.append("--disable-build-servers")') == -1:
+		return "Debug dotnet build should disable build servers so headless harness and editor sessions can exit cleanly."
+	return ""
 
 
 func _ensure_plugin_bridge_fixture() -> Dictionary:

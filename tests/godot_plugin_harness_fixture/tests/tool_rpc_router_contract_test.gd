@@ -41,6 +41,13 @@ class FakeToolLoader:
 				"properties": {
 					"action": {"type": "string", "enum": ["start", "stop"]}
 				}
+			},
+			"outputSchema": {
+				"type": "object",
+				"properties": {
+					"success": {"type": "boolean"},
+					"data": {"type": "object"}
+				}
 			}
 		}]
 
@@ -403,6 +410,19 @@ class FailingToolLoader:
 		}
 
 
+class SlowToolLoader:
+	extends FakeToolLoader
+
+	var completed := false
+
+	func execute_tool_async(_category: String, _tool_name: String, _arguments: Dictionary) -> Dictionary:
+		var started_msec := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - started_msec < 250:
+			await Engine.get_main_loop().process_frame
+		completed = true
+		return {"success": true, "data": {"completed": true}}
+
+
 class PlainActivityToolLoader:
 	extends FakeToolLoader
 
@@ -607,14 +627,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var parsed_dict: Dictionary = parsed
 	if not bool(parsed_dict.get("success", false)):
 		return _failure("Tool RPC router did not preserve the success flag in the serialized payload.")
-	var structured = success_result.get("structuredContent", {})
-	if not (structured is Dictionary):
-		return _failure("Tool RPC router should expose structuredContent for successful tool responses.")
-	var structured_dict: Dictionary = structured
-	if bool(structured_dict.get("success", false)) != bool(parsed_dict.get("success", false)):
-		return _failure("Tool RPC router structuredContent should match the compatibility text JSON success flag.")
-	if JSON.stringify(structured_dict.get("data", {})) != JSON.stringify(parsed_dict.get("data", {})):
-		return _failure("Tool RPC router structuredContent should match the compatibility text JSON data payload.")
+	if success_result.has("structuredContent"):
+		return _failure("Tool RPC router should omit structuredContent when the original tool definition has no explicit outputSchema.")
 	var parsed_data = parsed_dict.get("data", {})
 	if not (parsed_data is Dictionary) or str((parsed_data as Dictionary).get("tool", "")) != "project_state":
 		return _failure("Tool RPC router did not preserve the resolved tool name in the serialized payload.")
@@ -644,6 +658,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var lifecycle_data = (lifecycle_payload as Dictionary).get("data", {})
 	if not (lifecycle_data is Dictionary) or str((lifecycle_data as Dictionary).get("tool", "")) != "project_lifecycle":
 		return _failure("Tool RPC router should resolve system_project_lifecycle to the project_lifecycle implementation.")
+	var lifecycle_structured = lifecycle_result.get("structuredContent", {})
+	if not (lifecycle_structured is Dictionary):
+		return _failure("Tool RPC router should expose structuredContent when the original tool definition declares outputSchema.")
+	if JSON.stringify((lifecycle_structured as Dictionary).get("data", {})) != JSON.stringify(lifecycle_data):
+		return _failure("Tool RPC router structuredContent should mirror text JSON when outputSchema is declared.")
 
 	for removed_tool_name in ["system_project_run", "system_project_stop"]:
 		var removed_result: Dictionary = await router.build_tool_call_result_async({
@@ -659,10 +678,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(removed_help_result.get("isError", false)):
 		return _failure("Tool RPC router should return an error result for removed system_help legacy calls.")
-	var removed_help_structured = removed_help_result.get("structuredContent", {})
-	if not (removed_help_structured is Dictionary):
-		return _failure("Tool RPC router should expose structuredContent for removed system_help calls.")
-	var removed_help_data = (removed_help_structured as Dictionary).get("data", {})
+	var removed_help_payload := _tool_result_payload(removed_help_result)
+	var removed_help_data = removed_help_payload.get("data", {})
 	if not (removed_help_data is Dictionary) or not (((removed_help_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://guides/index")):
 		return _failure("Tool RPC router should preserve system_help replacement resource URIs.")
 
@@ -672,12 +689,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(removed_resource_manage_result.get("isError", false)):
 		return _failure("Tool RPC router should reject removed resource_manage legacy calls.")
-	var removed_resource_manage_structured = removed_resource_manage_result.get("structuredContent", {})
-	if not (removed_resource_manage_structured is Dictionary) or bool((removed_resource_manage_structured as Dictionary).get("success", true)):
-		return _failure("Tool RPC router removed resource_manage should return failing structuredContent.")
-	if str((removed_resource_manage_structured as Dictionary).get("error", "")).find("resource_manage") == -1:
+	var removed_resource_manage_payload := _tool_result_payload(removed_resource_manage_result)
+	if bool(removed_resource_manage_payload.get("success", true)):
+		return _failure("Tool RPC router removed resource_manage should return a failing payload.")
+	if str(removed_resource_manage_payload.get("error", "")).find("resource_manage") == -1:
 		return _failure("Tool RPC router removed resource_manage error should include the legacy tool name.")
-	if not _is_removed_resource_manage_tool(removed_resource_manage_structured, "resource_create"):
+	if not _is_removed_resource_manage_tool(removed_resource_manage_payload, "resource_create"):
 		return _failure("Tool RPC router removed resource_manage should expose removed_public_tool guidance and resource_create replacement.")
 	for resource_file_action in ["delete", "reload"]:
 		var removed_resource_file_result: Dictionary = await router.build_tool_call_result_async({
@@ -686,10 +703,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		})
 		if not bool(removed_resource_file_result.get("isError", false)):
 			return _failure("Tool RPC router should reject removed resource_manage %s legacy calls." % resource_file_action)
-		var removed_resource_file_structured = removed_resource_file_result.get("structuredContent", {})
-		if not _is_removed_resource_manage_tool(removed_resource_file_structured, "resource_file_ops"):
+		var removed_resource_file_payload := _tool_result_payload(removed_resource_file_result)
+		if not _is_removed_resource_manage_tool(removed_resource_file_payload, "resource_file_ops"):
 			return _failure("Tool RPC router removed resource_manage %s should point to resource_file_ops." % resource_file_action)
-		var removed_resource_file_arguments := _first_replacement_arguments(((removed_resource_file_structured as Dictionary).get("data", {}) if removed_resource_file_structured is Dictionary else {}))
+		var removed_resource_file_arguments := _first_replacement_arguments(removed_resource_file_payload.get("data", {}))
 		if str(removed_resource_file_arguments.get("action", "")) != resource_file_action:
 			return _failure("Tool RPC router removed resource_manage %s should preserve replacement action." % resource_file_action)
 		if str(removed_resource_file_arguments.get("source", "")) != "res://Tmp/removed_resource_manage.tres":
@@ -703,10 +720,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(removed_debug_log_result.get("isError", false)):
 		return _failure("Tool RPC router should reject removed debug_log legacy calls.")
-	var removed_debug_log_structured = removed_debug_log_result.get("structuredContent", {})
-	if not (removed_debug_log_structured is Dictionary) or bool((removed_debug_log_structured as Dictionary).get("success", true)):
-		return _failure("Tool RPC router removed debug_log should return failing structuredContent.")
-	if str((removed_debug_log_structured as Dictionary).get("error", "")).find("debug_log") == -1:
+	var removed_debug_log_payload := _tool_result_payload(removed_debug_log_result)
+	if bool(removed_debug_log_payload.get("success", true)):
+		return _failure("Tool RPC router removed debug_log should return a failing payload.")
+	if str(removed_debug_log_payload.get("error", "")).find("debug_log") == -1:
 		return _failure("Tool RPC router removed debug_log error should include the legacy tool name.")
 
 	var removed_catalog_result: Dictionary = await router.build_tool_call_result_async({
@@ -715,10 +732,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(removed_catalog_result.get("isError", false)):
 		return _failure("Tool RPC router should return isError=true for removed system_tool_catalog.")
-	var removed_catalog_structured = removed_catalog_result.get("structuredContent", {})
-	if not (removed_catalog_structured is Dictionary) or bool((removed_catalog_structured as Dictionary).get("success", true)):
-		return _failure("Tool RPC router removed system_tool_catalog should expose failing structuredContent.")
-	var removed_catalog_data = (removed_catalog_structured as Dictionary).get("data", {})
+	var removed_catalog_payload := _tool_result_payload(removed_catalog_result)
+	if bool(removed_catalog_payload.get("success", true)):
+		return _failure("Tool RPC router removed system_tool_catalog should expose a failing payload.")
+	var removed_catalog_data = removed_catalog_payload.get("data", {})
 	if not (removed_catalog_data is Dictionary) or str((removed_catalog_data as Dictionary).get("error_type", "")) != "removed_public_tool":
 		return _failure("Tool RPC router removed system_tool_catalog should expose removed_public_tool guidance.")
 	if not (((removed_catalog_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://tools/catalog/visible")):
@@ -730,10 +747,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(removed_activity_result.get("isError", false)):
 		return _failure("Tool RPC router should return isError=true for removed system_tool_activity.")
-	var removed_activity_structured = removed_activity_result.get("structuredContent", {})
-	if not (removed_activity_structured is Dictionary) or bool((removed_activity_structured as Dictionary).get("success", true)):
-		return _failure("Tool RPC router removed system_tool_activity should expose failing structuredContent.")
-	var removed_activity_data = (removed_activity_structured as Dictionary).get("data", {})
+	var removed_activity_payload := _tool_result_payload(removed_activity_result)
+	if bool(removed_activity_payload.get("success", true)):
+		return _failure("Tool RPC router removed system_tool_activity should expose a failing payload.")
+	var removed_activity_data = removed_activity_payload.get("data", {})
 	if not (removed_activity_data is Dictionary) or str((removed_activity_data as Dictionary).get("error_type", "")) != "removed_public_tool":
 		return _failure("Tool RPC router removed system_tool_activity should expose removed_public_tool guidance.")
 	if not (((removed_activity_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://activity/status")):
@@ -750,11 +767,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		})
 		if not bool(removed_plugin_result.get("isError", false)):
 			return _failure("Tool RPC router should return isError=true for removed %s." % str(removed_plugin_case.get("tool", "")))
-		var removed_plugin_structured = removed_plugin_result.get("structuredContent", {})
-		if not _is_removed_plugin_maintenance_tool(removed_plugin_structured, str(removed_plugin_case.get("tool", "")), str(removed_plugin_case.get("replacement_action", ""))):
+		var removed_plugin_payload := _tool_result_payload(removed_plugin_result)
+		if not _is_removed_plugin_maintenance_tool(removed_plugin_payload, str(removed_plugin_case.get("tool", "")), str(removed_plugin_case.get("replacement_action", ""))):
 			return _failure("Tool RPC router removed %s should point to system_plugin_maintenance." % str(removed_plugin_case.get("tool", "")))
 		if str(removed_plugin_case.get("replacement_action", "")) == "refresh_update_refs":
-			var removed_plugin_data = (removed_plugin_structured as Dictionary).get("data", {})
+			var removed_plugin_data = removed_plugin_payload.get("data", {})
 			var replacement_args := _first_replacement_arguments(removed_plugin_data)
 			if bool(replacement_args.get("force_refresh", true)):
 				return _failure("Tool RPC router removed system_plugin_update discover_refs should preserve force_refresh=false.")
@@ -768,8 +785,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		})
 		if not bool(removed_scene_result.get("isError", false)):
 			return _failure("Tool RPC router should return isError=true for removed %s." % str(removed_scene_case.get("tool", "")))
-		var removed_scene_structured = removed_scene_result.get("structuredContent", {})
-		if not _is_removed_scene_tool(removed_scene_structured, str(removed_scene_case.get("tool", "")), str(removed_scene_case.get("action", ""))):
+		var removed_scene_payload := _tool_result_payload(removed_scene_result)
+		if not _is_removed_scene_tool(removed_scene_payload, str(removed_scene_case.get("tool", "")), str(removed_scene_case.get("action", ""))):
 			return _failure("Tool RPC router removed %s should point to system_scene_inspect." % str(removed_scene_case.get("tool", "")))
 
 	callbacks.disabled_tools["system_project_lifecycle"] = true
@@ -820,9 +837,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(failing_result.get("isError", false)):
 		return _failure("Tool RPC router should mark failing tool execution as an error.")
-	var failing_structured = failing_result.get("structuredContent", {})
-	if not (failing_structured is Dictionary) or bool((failing_structured as Dictionary).get("success", true)):
-		return _failure("Tool RPC router should expose structuredContent for failing tool responses.")
+	var failing_payload := _tool_result_payload(failing_result)
+	if bool(failing_payload.get("success", true)):
+		return _failure("Tool RPC router should expose failing tool payloads through text JSON.")
 	var debug_events := MCPDebugBuffer.get_recent(1)
 	if debug_events.is_empty():
 		return _failure("Tool RPC router should record failing tool calls in the debug buffer.")
@@ -848,11 +865,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var plain_payload = JSON.parse_string(str(((plain_result.get("content", []) as Array)[0] as Dictionary).get("text", "")))
 	if not (plain_payload is Dictionary):
 		return _failure("Tool RPC router should serialize plain activity test payload.")
-	var plain_structured = plain_result.get("structuredContent", {})
-	if not (plain_structured is Dictionary):
-		return _failure("Tool RPC router should expose structuredContent for normalized non-protocol activity payloads.")
-	if JSON.stringify((plain_structured as Dictionary).get("data", {})) != JSON.stringify((plain_payload as Dictionary).get("data", {})):
-		return _failure("Tool RPC router structuredContent should preserve normalized non-protocol activity data.")
+	if plain_result.has("structuredContent"):
+		return _failure("Tool RPC router should omit structuredContent for normalized non-protocol activity payloads without outputSchema.")
 	if (plain_payload as Dictionary).has("activity"):
 		return _failure("Tool RPC router should reserve top-level activity only for protocol activity summaries.")
 	var plain_data = (plain_payload as Dictionary).get("data", {})
@@ -877,10 +891,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(blocked_editor_call.get("isError", false)):
 		return _failure("Tool RPC router should reject overlapping editor automation calls quickly.")
-	var blocked_structured = blocked_editor_call.get("structuredContent", {})
-	if not (blocked_structured is Dictionary):
-		return _failure("Tool RPC router overlapping editor automation error should expose structuredContent.")
-	var blocked_data = (blocked_structured as Dictionary).get("data", {})
+	var blocked_payload := _tool_result_payload(blocked_editor_call)
+	var blocked_data = blocked_payload.get("data", {})
 	if not (blocked_data is Dictionary) or str((blocked_data as Dictionary).get("error_type", "")) != "editor_automation_busy":
 		return _failure("Tool RPC router overlapping editor automation should use editor_automation_busy.")
 	blocking_router.call("_end_editor_automation_call", editor_guard)
@@ -936,9 +948,36 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool(failing_editor_released.get("isError", false)):
 		return _failure("Tool RPC router should preserve the failing editor tool error on repeat calls.")
-	var failing_editor_structured = failing_editor_released.get("structuredContent", {})
-	if not (failing_editor_structured is Dictionary) or str((failing_editor_structured as Dictionary).get("error", "")) != "editor automation contract failure":
+	var failing_editor_payload := _tool_result_payload(failing_editor_released)
+	if str(failing_editor_payload.get("error", "")) != "editor automation contract failure":
 		return _failure("Tool RPC router should release editor automation guard immediately after failing editor tool results.")
+
+	var slow_callbacks = FakeCallbacks.new()
+	slow_callbacks.loader = SlowToolLoader.new()
+	var slow_context = ToolRpcRouterContextScript.new()
+	slow_context.get_tool_loader = Callable(slow_callbacks, "get_tool_loader")
+	slow_context.is_tool_enabled = Callable(slow_callbacks, "is_tool_enabled")
+	slow_context.is_tool_exposed = Callable(slow_callbacks, "is_tool_exposed")
+	slow_context.log = Callable(slow_callbacks, "log")
+	slow_context.sanitize_for_json = Callable(slow_callbacks, "sanitize_for_json")
+	slow_context.tool_call_timeout_ms = 100
+	var slow_router = ToolRpcRouterScript.new()
+	slow_router.configure(slow_context)
+	var timed_out_call: Dictionary = await slow_router.build_tool_call_result_async({
+		"name": "system_project_state",
+		"arguments": {}
+	})
+	var timeout_payload := _tool_result_payload(timed_out_call)
+	var timeout_data = timeout_payload.get("data", {})
+	if not bool(timed_out_call.get("isError", false)) or not (timeout_data is Dictionary) or str((timeout_data as Dictionary).get("error_type", "")) != "tool_call_timeout":
+		return _failure("Tool RPC router should bound non-editor tool calls with a per-call timeout.")
+	for _index in range(40):
+		if slow_callbacks.loader.completed:
+			break
+		await _tree.process_frame
+	if not slow_callbacks.loader.completed:
+		return _failure("Tool RPC router timeout test fixture should settle after the timeout response.")
+	slow_router.dispose()
 
 	return {
 		"name": "tool_rpc_router_contracts",
@@ -985,6 +1024,22 @@ func _contains_tool_name_recursive(value, tool_name: String) -> bool:
 			if _contains_tool_name_recursive(nested, tool_name):
 				return true
 	return false
+
+
+func _tool_result_payload(result: Dictionary) -> Dictionary:
+	var structured = result.get("structuredContent", null)
+	if structured is Dictionary:
+		return structured as Dictionary
+	var content = result.get("content", [])
+	if not (content is Array) or (content as Array).is_empty():
+		return {}
+	var first = (content as Array)[0]
+	if not (first is Dictionary):
+		return {}
+	var parsed = JSON.parse_string(str((first as Dictionary).get("text", "")))
+	if parsed is Dictionary:
+		return parsed as Dictionary
+	return {}
 
 
 func _is_removed_scene_tool(structured, removed_tool: String, replacement_action: String) -> bool:

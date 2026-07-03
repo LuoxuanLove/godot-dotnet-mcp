@@ -246,7 +246,6 @@ The main UI-level controls that remain in the script are:
 | `ui/tools_tab.tscn` | Tools tab node tree and layout |
 | `ui/tools_tab.gd` | Main Tools tab controller, containing context menu, model, selection, search, and preview logic |
 | `tools/system/executor.gd` and `tools/system/impl_*.gd` | Current system high-level tool scheduling and implementation entry points |
-| `tools/tool_registry.gd` | Builtin executor registration source |
-| `tools/tool_manifest.gd` | Domain and category metadata access layer |
+| `tools/tool_catalog_manifest.gd` | Builtin executor registration, domain metadata, and public MCP catalog source |
 | `plugin/runtime/plugin_runtime_state.gd` | Current settings and custom-profile state |
 | `plugin/runtime/tool_profile_catalog.gd` | Builtin profile catalog |

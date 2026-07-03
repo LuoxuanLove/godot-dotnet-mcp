@@ -3,7 +3,7 @@ extends RefCounted
 class_name DockModelService
 
 const ToolProfileCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_profile_catalog.gd")
-const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const PluginInstanceFreshness = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_instance_freshness.gd")
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
@@ -486,7 +486,7 @@ func _get_domain_defs(catalog_snapshot: Dictionary) -> Array:
 		var defs = (manifest as Dictionary).get("domain_defs", [])
 		if defs is Array:
 			return defs
-	return MCPToolManifest.TOOL_DOMAIN_DEFS
+	return ToolCatalogManifest.TOOL_DOMAIN_DEFS
 
 
 func _build_tool_catalog_signature(loader, tools_by_category: Dictionary, settings: Dictionary) -> String:

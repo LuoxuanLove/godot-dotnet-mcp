@@ -4,6 +4,7 @@ class_name MCPToolRpcRouter
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 const MCPToolActivityRegistry = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
 const SERIAL_EDITOR_AUTOMATION_TOOLS := [
@@ -13,7 +14,55 @@ const SERIAL_EDITOR_AUTOMATION_TOOLS := [
 	"system_inspector",
 	"system_settings_dialog"
 ]
-const EDITOR_AUTOMATION_STALE_TIMEOUT_MS := 10000
+const DEFAULT_EDITOR_AUTOMATION_STALE_TIMEOUT_MS := 10000
+const DEFAULT_TOOL_CALL_TIMEOUT_MS := 60000
+const MIN_TOOL_CALL_TIMEOUT_MS := 100
+const ENV_TOOL_CALL_TIMEOUT_MS := "GODOT_DOTNET_MCP_TOOL_CALL_TIMEOUT_MS"
+const ENV_EDITOR_AUTOMATION_STALE_TIMEOUT_MS := "GODOT_DOTNET_MCP_EDITOR_AUTOMATION_STALE_TIMEOUT_MS"
+
+
+class ToolCallTask:
+	extends RefCounted
+
+	var _loader = null
+	var _category := ""
+	var _tool_name := ""
+	var _arguments: Dictionary = {}
+	var _owner_id := 0
+	var _task_id := 0
+	var completed := false
+	var result = null
+
+	func start(owner, task_id: int, loader, category: String, tool_name: String, arguments: Dictionary) -> void:
+		_owner_id = owner.get_instance_id() if owner != null and is_instance_valid(owner) else 0
+		_task_id = task_id
+		_loader = loader
+		_category = category
+		_tool_name = tool_name
+		_arguments = arguments.duplicate(true)
+		call_deferred("_run")
+
+	func _run() -> void:
+		if _loader == null:
+			result = {"success": false, "error": "Tool loader is unavailable"}
+			completed = true
+			_notify_owner()
+			return
+		result = await _loader.execute_tool_async(_category, _tool_name, _arguments)
+		completed = true
+		_notify_owner()
+
+	func _notify_owner() -> void:
+		var owner = instance_from_id(_owner_id) if _owner_id != 0 else null
+		_owner_id = 0
+		_loader = null
+		if owner != null and owner.has_method("_complete_tool_call_task"):
+			owner._complete_tool_call_task(_task_id)
+
+	func release_owner() -> void:
+		_owner_id = 0
+		_loader = null
+
 
 var _get_tool_loader := Callable()
 var _is_tool_enabled := Callable()
@@ -25,6 +74,10 @@ var _active_editor_automation_tool := ""
 var _active_editor_automation_started_msec := 0
 var _active_editor_automation_token := 0
 var _editor_automation_generation := 0
+var _tool_call_timeout_ms := DEFAULT_TOOL_CALL_TIMEOUT_MS
+var _editor_automation_stale_timeout_ms := DEFAULT_EDITOR_AUTOMATION_STALE_TIMEOUT_MS
+var _active_tool_call_tasks: Dictionary = {}
+var _tool_call_task_sequence := 0
 
 
 func configure(context = null) -> void:
@@ -37,6 +90,8 @@ func configure(context = null) -> void:
 	_log = context.log
 	_sanitize_for_json = context.sanitize_for_json
 	_ensure_initialized = context.ensure_initialized
+	_tool_call_timeout_ms = _resolve_timeout_ms(context.tool_call_timeout_ms, ENV_TOOL_CALL_TIMEOUT_MS, DEFAULT_TOOL_CALL_TIMEOUT_MS, MIN_TOOL_CALL_TIMEOUT_MS)
+	_editor_automation_stale_timeout_ms = _resolve_timeout_ms(-1, ENV_EDITOR_AUTOMATION_STALE_TIMEOUT_MS, DEFAULT_EDITOR_AUTOMATION_STALE_TIMEOUT_MS, MIN_TOOL_CALL_TIMEOUT_MS)
 
 
 func dispose() -> void:
@@ -50,6 +105,10 @@ func dispose() -> void:
 	_active_editor_automation_started_msec = 0
 	_active_editor_automation_token = 0
 	_editor_automation_generation = 0
+	_tool_call_timeout_ms = DEFAULT_TOOL_CALL_TIMEOUT_MS
+	_editor_automation_stale_timeout_ms = DEFAULT_EDITOR_AUTOMATION_STALE_TIMEOUT_MS
+	_release_tool_call_tasks()
+	_tool_call_task_sequence = 0
 
 
 func build_tools_list_result() -> Dictionary:
@@ -84,25 +143,35 @@ func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 
 	if tool_name.is_empty():
 		return _create_tool_result_payload({"success": false, "error": "Missing tool name"})
+	if not ToolCatalogManifest.is_valid_mcp_tool_name(tool_name):
+		return _create_tool_result_payload({
+			"success": false,
+			"error": "Invalid tool name format: %s" % tool_name,
+			"data": {
+				"error_type": "invalid_tool_name",
+				"tool_name": tool_name
+			}
+		})
 
 	_ensure_tool_runtime_initialized()
 	var loader = _get_loader()
 	if loader == null:
 		return _create_tool_result_payload({"success": false, "error": "Tool loader is unavailable"})
+	var include_structured_content := _tool_has_output_schema(loader, tool_name)
 	if loader.has_method("is_public_removed_tool") and bool(loader.is_public_removed_tool(tool_name)):
 		if loader.has_method("build_removed_public_tool_result"):
 			var removed_tool_result = loader.build_removed_public_tool_result(tool_name, arguments)
 			if removed_tool_result is Dictionary and not (removed_tool_result as Dictionary).is_empty():
-				return _create_tool_result_payload(removed_tool_result)
+				return _create_tool_result_payload(removed_tool_result, include_structured_content)
 
 	if not _call_bool(_is_tool_enabled, [tool_name], false):
-		return _create_tool_result_payload({"success": false, "error": "Tool '%s' is disabled" % tool_name})
+		return _create_tool_result_payload({"success": false, "error": "Tool '%s' is disabled" % tool_name}, include_structured_content)
 	if not _call_bool(_is_tool_exposed, [tool_name], false):
-		return _create_tool_result_payload({"success": false, "error": "Tool '%s' is not exposed" % tool_name})
+		return _create_tool_result_payload({"success": false, "error": "Tool '%s' is not exposed" % tool_name}, include_structured_content)
 
 	var resolved = _resolve_tool_call_name(tool_name)
 	if not bool(resolved.get("success", false)):
-		return _create_tool_result_payload({"success": false, "error": "Invalid tool name format: %s" % tool_name})
+		return _create_tool_result_payload({"success": false, "error": "Invalid tool name format: %s" % tool_name}, include_structured_content)
 
 	var category = str(resolved.get("category", ""))
 	var actual_tool_name = str(resolved.get("tool", ""))
@@ -110,9 +179,9 @@ func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 
 	var automation_guard := _begin_editor_automation_call(tool_name)
 	if not bool(automation_guard.get("success", false)):
-		return _create_tool_result_payload(automation_guard)
+		return _create_tool_result_payload(automation_guard, include_structured_content)
 
-	var raw_result = await loader.execute_tool_async(category, actual_tool_name, arguments)
+	var raw_result = await _execute_tool_with_timeout_async(loader, category, actual_tool_name, arguments, tool_name, automation_guard)
 	_end_editor_automation_call(automation_guard)
 	var result: Dictionary = _normalize_tool_result(raw_result)
 	if not result.get("success", false):
@@ -133,7 +202,35 @@ func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 			tool_name
 		)
 
-	return _create_tool_result_payload(result)
+	return _create_tool_result_payload(result, include_structured_content)
+
+
+func _execute_tool_with_timeout_async(loader, category: String, actual_tool_name: String, arguments: Dictionary, public_tool_name: String, automation_guard: Dictionary):
+	if _tool_call_timeout_ms <= 0 or _is_editor_automation_guard_acquired(automation_guard):
+		return await loader.execute_tool_async(category, actual_tool_name, arguments)
+	var tree = Engine.get_main_loop()
+	if not (tree is SceneTree):
+		return await loader.execute_tool_async(category, actual_tool_name, arguments)
+	var task := ToolCallTask.new()
+	_tool_call_task_sequence += 1
+	var task_id := _tool_call_task_sequence
+	_active_tool_call_tasks[task_id] = task
+	task.start(self, task_id, loader, category, actual_tool_name, arguments)
+	var started_msec := Time.get_ticks_msec()
+	while not task.completed:
+		if Time.get_ticks_msec() - started_msec >= _tool_call_timeout_ms:
+			return {
+				"success": false,
+				"error": "Tool '%s' timed out after %dms" % [public_tool_name, _tool_call_timeout_ms],
+				"data": {
+					"error_type": "tool_call_timeout",
+					"tool_name": public_tool_name,
+					"timeout_ms": _tool_call_timeout_ms
+				}
+			}
+		await (tree as SceneTree).process_frame
+	_active_tool_call_tasks.erase(task_id)
+	return task.result
 
 
 func _begin_editor_automation_call(tool_name: String) -> Dictionary:
@@ -152,7 +249,7 @@ func _begin_editor_automation_call(tool_name: String) -> Dictionary:
 				"requested_tool": tool_name,
 				"elapsed_ms": elapsed_ms,
 				"retry_after_ms": 250,
-				"stale_timeout_ms": EDITOR_AUTOMATION_STALE_TIMEOUT_MS
+				"stale_timeout_ms": _editor_automation_stale_timeout_ms
 			},
 			"hints": [
 				"Editor UI automation is serialized to keep the Godot editor responsive.",
@@ -186,7 +283,13 @@ func _watch_editor_automation_guard(token: int, tool_name: String) -> void:
 	var tree = Engine.get_main_loop()
 	if not (tree is SceneTree):
 		return
-	await (tree as SceneTree).create_timer(float(EDITOR_AUTOMATION_STALE_TIMEOUT_MS) / 1000.0).timeout
+	var started_msec := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - started_msec < _editor_automation_stale_timeout_ms:
+		if token != _active_editor_automation_token:
+			return
+		if _active_editor_automation_tool != tool_name:
+			return
+		await (tree as SceneTree).process_frame
 	if token != _active_editor_automation_token:
 		return
 	if _active_editor_automation_tool != tool_name:
@@ -194,7 +297,7 @@ func _watch_editor_automation_guard(token: int, tool_name: String) -> void:
 	MCPDebugBuffer.record(
 		"warning",
 		"server",
-		"Cleared stale editor automation guard for %s after watchdog timeout %dms" % [tool_name, EDITOR_AUTOMATION_STALE_TIMEOUT_MS],
+		"Cleared stale editor automation guard for %s after watchdog timeout %dms" % [tool_name, _editor_automation_stale_timeout_ms],
 		tool_name
 	)
 	_clear_editor_automation_guard()
@@ -204,7 +307,7 @@ func _clear_stale_editor_automation_if_needed() -> void:
 	if _active_editor_automation_tool.is_empty():
 		return
 	var elapsed_ms := Time.get_ticks_msec() - _active_editor_automation_started_msec
-	if elapsed_ms < EDITOR_AUTOMATION_STALE_TIMEOUT_MS:
+	if elapsed_ms < _editor_automation_stale_timeout_ms:
 		return
 	MCPDebugBuffer.record(
 		"warning",
@@ -219,6 +322,10 @@ func _clear_editor_automation_guard() -> void:
 	_active_editor_automation_tool = ""
 	_active_editor_automation_started_msec = 0
 	_active_editor_automation_token = 0
+
+
+func _is_editor_automation_guard_acquired(guard: Dictionary) -> bool:
+	return bool(guard.get("acquired", false))
 
 
 func _merge_agent_context(params: Dictionary, arguments: Dictionary) -> void:
@@ -274,7 +381,7 @@ func _resolve_tool_call_name(tool_name: String) -> Dictionary:
 	}
 
 
-func _create_tool_result_payload(result: Dictionary) -> Dictionary:
+func _create_tool_result_payload(result: Dictionary, include_structured_content: bool = false) -> Dictionary:
 	var normalized_result = _normalize_tool_result(result)
 	var sanitized_result = _sanitize(normalized_result)
 	var result_text = JSON.stringify(sanitized_result)
@@ -282,14 +389,16 @@ func _create_tool_result_payload(result: Dictionary) -> Dictionary:
 
 	_log_message("Tool response text length: %d, is_error=%s" % [result_text.length(), is_error], "debug")
 
-	return {
+	var payload := {
 		"content": [{
 			"type": "text",
 			"text": result_text
 		}],
-		"structuredContent": sanitized_result,
 		"isError": is_error
 	}
+	if include_structured_content:
+		payload["structuredContent"] = sanitized_result
+	return payload
 
 
 func _normalize_tool_result(result) -> Dictionary:
@@ -361,6 +470,50 @@ func _call_bool(callable_obj: Callable, args: Array, default_value: bool) -> boo
 	if callable_obj.is_valid():
 		return bool(callable_obj.callv(args))
 	return default_value
+
+
+func _tool_has_output_schema(loader, tool_name: String) -> bool:
+	if loader == null or not loader.has_method("get_tool_definitions"):
+		return false
+	for tool_def in loader.get_tool_definitions():
+		if not (tool_def is Dictionary):
+			continue
+		var def_dict := tool_def as Dictionary
+		var full_name := str(def_dict.get("full_name", def_dict.get("name", "")))
+		if full_name != tool_name:
+			continue
+		var output_schema = def_dict.get("outputSchema", null)
+		return output_schema is Dictionary and not (output_schema as Dictionary).is_empty()
+	return false
+
+
+func _resolve_timeout_ms(context_value, environment_name: String, default_value: int, minimum_value: int) -> int:
+	if context_value is int or context_value is float:
+		var numeric_value := int(context_value)
+		if numeric_value >= minimum_value:
+			return numeric_value
+	if OS.has_environment(environment_name):
+		var raw_value := OS.get_environment(environment_name).strip_edges()
+		if raw_value.is_valid_int():
+			var parsed_value := int(raw_value)
+			if parsed_value >= minimum_value:
+				return parsed_value
+	return default_value
+
+
+func _release_tool_call_tasks() -> void:
+	var task_ids: Array = []
+	for task_id in _active_tool_call_tasks:
+		var task = _active_tool_call_tasks[task_id]
+		if task is ToolCallTask:
+			task.release_owner()
+		task_ids.append(task_id)
+	for task_id in task_ids:
+		_active_tool_call_tasks.erase(task_id)
+
+
+func _complete_tool_call_task(task_id: int) -> void:
+	_active_tool_call_tasks.erase(task_id)
 
 
 func _log_message(message: String, level: String) -> void:

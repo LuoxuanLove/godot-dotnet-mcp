@@ -5,6 +5,8 @@ class_name MCPHttpRequestRouter
 const MCPProtocolFacts = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 const MCPHttpSseEventQueueScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_sse_event_queue.gd")
 const ENV_ALLOWED_CORS_ORIGINS := "GODOT_DOTNET_MCP_ALLOWED_CORS_ORIGINS"
+const ENV_ALLOWED_HOSTS := "GODOT_DOTNET_MCP_ALLOWED_HOSTS"
+const ENV_TRUST_PROXY_HEADERS := "GODOT_DOTNET_MCP_TRUST_PROXY_HEADERS"
 const STREAMABLE_HTTP_ALLOW_HEADERS := "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id, Last-Event-ID"
 const SESSION_ID_PREFIX := "godot-dotnet-mcp-http"
 
@@ -18,6 +20,7 @@ var _sse_event_queue = null
 var _owns_sse_event_queue := false
 var _allowed_cors_origins: Array[String] = []
 var _allowed_hosts: Array[String] = []
+var _trust_proxy_headers := false
 
 
 func configure(context = null) -> void:
@@ -36,6 +39,8 @@ func configure(context = null) -> void:
 		_sse_event_queue = MCPHttpSseEventQueueScript.new()
 		_owns_sse_event_queue = true
 	_allowed_cors_origins = _read_allowed_cors_origins()
+	_allowed_hosts = _read_allowed_hosts()
+	_trust_proxy_headers = _read_bool_environment(ENV_TRUST_PROXY_HEADERS, false)
 
 
 func dispose() -> void:
@@ -51,6 +56,7 @@ func dispose() -> void:
 	_owns_sse_event_queue = false
 	_allowed_cors_origins = []
 	_allowed_hosts = []
+	_trust_proxy_headers = false
 
 
 func set_allowed_cors_origins(value) -> void:
@@ -59,6 +65,10 @@ func set_allowed_cors_origins(value) -> void:
 
 func set_allowed_hosts(value) -> void:
 	_allowed_hosts = _normalize_allowed_hosts(value)
+
+
+func set_trust_proxy_headers(value: bool) -> void:
+	_trust_proxy_headers = value
 
 
 func route_request_async(method: String, path: String, request_body: String, headers: Dictionary = {}) -> Dictionary:
@@ -362,7 +372,7 @@ func _validate_mcp_existing_session(headers: Dictionary) -> Dictionary:
 func _build_mcp_sse_stream_response(headers: Dictionary) -> Dictionary:
 	var session_id := _resolve_mcp_session_id(headers)
 	var last_event_id := str(headers.get("last-event-id", "")).strip_edges()
-	var event := _append_sse_open_event(session_id, last_event_id)
+	var event := _build_sse_open_event(session_id, last_event_id)
 	var events := _sse_events_after_cursor(session_id, last_event_id)
 	if events.is_empty():
 		events = [event]
@@ -424,19 +434,24 @@ func _build_mcp_session_terminated_response(headers: Dictionary) -> Dictionary:
 	}
 
 
-func _append_sse_open_event(session_id: String, last_event_id: String) -> Dictionary:
+func _build_sse_open_event(session_id: String, last_event_id: String) -> Dictionary:
 	var resume_status := _sse_resume_status(session_id, last_event_id)
-	return _append_sse_event(session_id, {
-		"transport": "streamable_http",
-		"mode": "sse_stream",
-		"resume_from_event_id": last_event_id,
-		"resume_cursor_found": bool(resume_status.get("found", false)),
-		"resume_status": str(resume_status.get("status", "matched" if bool(resume_status.get("found", false)) else "unknown_session")),
-		"replay_event_count": int(resume_status.get("event_count_after_cursor", 0)),
-		"resume_start_index": int(resume_status.get("start_index", 0)),
-		"resume_base_index": int(resume_status.get("base_index", 0)),
-		"resume_next_index": int(resume_status.get("next_index", 0))
-	}, "streamable-http-get", "open")
+	return {
+		"id": "streamable-http-get-%s" % str(Time.get_ticks_usec()),
+		"event": "open",
+		"retry": MCPHttpSseEventQueueScript.SSE_RETRY_MS,
+		"data": {
+			"transport": "streamable_http",
+			"mode": "sse_stream",
+			"resume_from_event_id": last_event_id,
+			"resume_cursor_found": bool(resume_status.get("found", false)),
+			"resume_status": str(resume_status.get("status", "matched" if bool(resume_status.get("found", false)) else "unknown_session")),
+			"replay_event_count": int(resume_status.get("event_count_after_cursor", 0)),
+			"resume_start_index": int(resume_status.get("start_index", 0)),
+			"resume_base_index": int(resume_status.get("base_index", 0)),
+			"resume_next_index": int(resume_status.get("next_index", 0))
+		}
+	}
 
 
 func _append_sse_event(session_id: String, payload: Variant, id_prefix: String, event_name: String = "message") -> Dictionary:
@@ -460,7 +475,7 @@ func _build_mcp_absolute_url(headers: Dictionary) -> String:
 		host = "127.0.0.1:3000"
 	var scheme := "http"
 	var forwarded_proto := str(headers.get("x-forwarded-proto", "")).strip_edges().to_lower()
-	if forwarded_proto == "http" or forwarded_proto == "https":
+	if _trust_proxy_headers and (forwarded_proto == "http" or forwarded_proto == "https"):
 		scheme = forwarded_proto
 	return "%s://%s/mcp" % [scheme, host]
 
@@ -590,13 +605,22 @@ func _is_safe_http_header_value(value: String) -> bool:
 
 
 func _generate_mcp_session_id() -> String:
+	var entropy := _random_hex(12)
 	return "%s-%s-%s-%s-%s" % [
 		SESSION_ID_PREFIX,
 		MCPProtocolFacts.get_server_version().replace(".", "-"),
 		str(Time.get_ticks_usec()),
-		str(get_instance_id()),
-		str(randi())
+		str(OS.get_unique_id()).sha256_text().substr(0, 12),
+		entropy
 	]
+
+
+func _random_hex(byte_count: int) -> String:
+	var bytes := Crypto.new().generate_random_bytes(max(byte_count, 1))
+	var output := ""
+	for byte in bytes:
+		output += "%02x" % int(byte)
+	return output
 
 
 func _is_initialize_request_body(body: String) -> bool:
@@ -789,8 +813,30 @@ func _normalize_allowed_hosts(value) -> Array[String]:
 func _read_allowed_cors_origins() -> Array[String]:
 	if not OS.has_environment(ENV_ALLOWED_CORS_ORIGINS):
 		return []
-	var raw_origins := OS.get_environment(ENV_ALLOWED_CORS_ORIGINS).replace(";", ",").split(",", false)
+	var raw_origins: Array[String] = []
+	for raw_origin in OS.get_environment(ENV_ALLOWED_CORS_ORIGINS).replace(";", ",").split(",", false):
+		raw_origins.append(str(raw_origin))
 	return _normalize_allowed_origins(raw_origins)
+
+
+func _read_allowed_hosts() -> Array[String]:
+	if not OS.has_environment(ENV_ALLOWED_HOSTS):
+		return []
+	var raw_hosts: Array[String] = []
+	for raw_host in OS.get_environment(ENV_ALLOWED_HOSTS).replace(";", ",").split(",", false):
+		raw_hosts.append(str(raw_host))
+	return _normalize_allowed_hosts(raw_hosts)
+
+
+func _read_bool_environment(name: String, default_value: bool) -> bool:
+	if not OS.has_environment(name):
+		return default_value
+	var value := OS.get_environment(name).strip_edges().to_lower()
+	if ["1", "true", "yes", "on"].has(value):
+		return true
+	if ["0", "false", "no", "off"].has(value):
+		return false
+	return default_value
 
 
 func _forbidden(message: String) -> Dictionary:

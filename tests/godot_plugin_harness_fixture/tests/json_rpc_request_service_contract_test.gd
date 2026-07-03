@@ -10,8 +10,14 @@ class FakeCallbacks:
 
 	var received: Array[Dictionary] = []
 	var last_log: Dictionary = {}
+	var delayed_route_entered := false
+	var release_delayed_route := false
 
 	func route_json_rpc_async(method: String, params: Dictionary, id, has_id: bool) -> Dictionary:
+		if method == "contract/delayed":
+			delayed_route_entered = true
+			while not release_delayed_route:
+				await Engine.get_main_loop().process_frame
 		return {
 			"jsonrpc": "2.0",
 			"result": {
@@ -201,6 +207,38 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(first_received.get("method", "")) != "tools/list":
 		return _failure("JSON-RPC request service did not preserve the emitted method name.")
 
+	var delayed_state := {"done": false, "response": {}}
+	_run_delayed_request(service, delayed_state)
+	var wait_frames := 0
+	while not callbacks.delayed_route_entered and wait_frames < 30:
+		await _tree.process_frame
+		wait_frames += 1
+	if not callbacks.delayed_route_entered:
+		return _failure("JSON-RPC request service cancellation contract did not enter a pending request.")
+	var cancelled_response: Dictionary = await service.handle_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"method": "notifications/cancelled",
+		"params": {
+			"requestId": 77,
+			"reason": "contract"
+		}
+	}))
+	if int(cancelled_response.get("status", 0)) != 202 or not bool(cancelled_response.get("_no_body", false)):
+		return _failure("JSON-RPC request service should accept cancellation notifications with 202 and no body.")
+	callbacks.release_delayed_route = true
+	wait_frames = 0
+	while not bool(delayed_state.get("done", false)) and wait_frames < 30:
+		await _tree.process_frame
+		wait_frames += 1
+	var delayed_response = delayed_state.get("response", {})
+	if not (delayed_response is Dictionary):
+		return _failure("JSON-RPC request service cancellation contract did not complete the pending response.")
+	var delayed_error = (delayed_response as Dictionary).get("error", {})
+	if not (delayed_error is Dictionary) or int((delayed_error as Dictionary).get("code", 0)) != -32800:
+		return _failure("JSON-RPC request service should complete cancelled pending requests with JSON-RPC -32800.")
+	if int((delayed_response as Dictionary).get("id", 0)) != 77:
+		return _failure("JSON-RPC request service should preserve the original cancelled request id.")
+
 	return {
 		"name": "json_rpc_request_service_contracts",
 		"success": true,
@@ -211,6 +249,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"result_method": str((result as Dictionary).get("method", ""))
 		}
 	}
+
+
+func _run_delayed_request(service, state: Dictionary) -> void:
+	state["response"] = await service.handle_request_async(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 77,
+		"method": "contract/delayed",
+		"params": {}
+	}))
+	state["done"] = true
 
 
 func cleanup_case(_tree: SceneTree) -> void:

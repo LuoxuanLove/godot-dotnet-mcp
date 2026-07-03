@@ -239,6 +239,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var visual_state := _find_state(domain_states, "visual")
 	if visual_state.is_empty() or (visual_state.get("categories", []) as Array) != ["material"]:
 		return _failure("Snapshot should preserve non-core manifest domains as aggregate states.")
+	for empty_domain in ["gameplay", "interface", "plugin"]:
+		var empty_state := _find_state(domain_states, empty_domain)
+		if empty_state.is_empty():
+			return _failure("Snapshot should include manifest domain '%s' even when no category state is loaded." % empty_domain)
+		if int(empty_state.get("category_count", -1)) != 0 or int(empty_state.get("tool_count", -1)) != 0:
+			return _failure("Snapshot empty domain '%s' should report zero categories and tools." % empty_domain)
+		if bool(empty_state.get("loaded", true)):
+			return _failure("Snapshot empty domain '%s' should not report loaded=true." % empty_domain)
 
 	var presentation: Dictionary = snapshot.get("presentation", {})
 	var metadata_by_name: Dictionary = presentation.get("toolMetadataByName", {})

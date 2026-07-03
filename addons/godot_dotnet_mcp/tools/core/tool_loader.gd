@@ -465,15 +465,6 @@ func _build_executor_runtime_context(category: String, entry: Dictionary, reason
 	)
 
 
-func _reload_script_dependency_chain(_script_resource: Script, _visited: Dictionary) -> void:
-	pass
-
-	# Only reload this script if it has GDScript dependencies (parent class or Script
-	# constants) that were themselves reloaded and whose class IDs may have changed.
-	# Scripts with only built-in base classes and no Script constants are already fresh
-	# from CACHE_MODE_IGNORE and do not need reload() — calling it would corrupt them.
-
-
 func _extract_tool_definitions(category: String, executor) -> Array:
 	return _runtime_manager.extract_tool_definitions(executor)
 

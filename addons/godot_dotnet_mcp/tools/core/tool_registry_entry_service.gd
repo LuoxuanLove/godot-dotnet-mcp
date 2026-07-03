@@ -2,6 +2,8 @@
 extends RefCounted
 class_name ToolRegistryEntryService
 
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
+
 
 func build_index(collected: Dictionary) -> Dictionary:
 	var entries_by_category: Dictionary = {}
@@ -19,6 +21,14 @@ func build_index(collected: Dictionary) -> Dictionary:
 		var entry_dict := entry as Dictionary
 		var category := str(entry_dict.get("category", ""))
 		if category.is_empty():
+			continue
+		if not ToolCatalogManifest.is_valid_mcp_tool_name(category):
+			load_errors.append({
+				"category": category,
+				"path": str(entry_dict.get("path", "")),
+				"message": "Invalid MCP tool category registered",
+				"source": str(entry_dict.get("source", "builtin"))
+			})
 			continue
 		if entries_by_category.has(category):
 			load_errors.append({

@@ -90,6 +90,11 @@ Target version: 2.0.0.
 - Fixed Dock Tools tab refresh signatures so disabled-tool lists, collapsed nodes, and tool-load errors are compared with lightweight deterministic strings instead of JSON serialization during tab switches.
 - Fixed Dock status snapshots so lightweight views reuse cached lifecycle context and avoid calling heavy server diagnostics unless the active tab explicitly needs them.
 - Fixed MCP tool discovery recovery after update or hot reload so `tools/list` / `tools/call` lazily reinitialize empty registries, overlapping editor automation calls fail fast with `editor_automation_busy`, and idle GDScript LSP tick logs no longer make the editor or MCP clients appear stuck.
+- Fixed MCP tool-call result payloads so `structuredContent` is emitted only for tools that explicitly declare an output schema, while every result still includes text JSON content for clients that do not use structured output.
+- Fixed long-running MCP tool calls and editor automation watchdog cleanup so non-editor tools return deterministic `tool_call_timeout` errors and completed watchdogs or background tasks do not linger after calls are released.
+- Fixed debug `dotnet build` diagnostics so build servers are disabled during plugin-triggered builds, preventing headless validation or editor sessions from staying alive after the build result is returned.
+- Fixed Streamable HTTP replay and deployment hardening so GET SSE `open` metadata is observable but not stored in the resumable event log, proxy headers are trusted only when explicitly enabled, allowed hosts load from `GODOT_DOTNET_MCP_ALLOWED_HOSTS`, and generated session IDs include random entropy.
+- Fixed JSON-RPC cancellation notifications so in-flight request IDs can be marked cancelled and return the MCP cancellation error instead of reporting a stale completion.
 - Fixed idle runtime ticking so HTTP/stdio transports no longer drive loaded tool executors and GDScript LSP diagnostics every editor frame, while exposing lifecycle tick timing in performance diagnostics.
 - Fixed long-running stability gaps by refreshing User-tool definitions only after explicit invalidation, closing partial idle HTTP requests after the timeout window, and clearing stopped debugger sessions from the live bridge map immediately.
 - Fixed plugin disable lifecycle cleanup so runtime-owned services, watcher polling, client dialogs, debugger hooks, performance monitors, and static self-diagnostic state are released when the plugin is disabled without uninstalling the runtime bridge autoload.
@@ -118,6 +123,7 @@ Target version: 2.0.0.
 - Moved plugin client install detection state and executable picker dialog ownership into a dedicated client config state service while preserving Config tab action behavior.
 - Moved plugin runtime restart, soft reload, full reload, and Dock focus restore completion into a dedicated runtime reload completion service while keeping the existing deferred reload entrypoints intact.
 - Moved plugin update refs discovery parsing, pagination, commit aggregation, and release/tag snapshot construction into a dedicated refs discovery service while preserving existing Settings and MCP update behavior.
+- Removed the legacy `tool_manifest.gd` and `tool_registry.gd` shim scripts so catalog consumers use `ToolCatalogManifest` directly.
 - Moved plugin update compare target selection, target-version URL construction, plugin.cfg version parsing, current-commit resolution, and GitHub compare response parsing into a dedicated compare service while preserving existing Settings update status behavior.
 - Moved plugin update HTTP request startup, timeout/body/download configuration, and request-node cleanup into a dedicated request service while preserving Dock and MCP update workflow callbacks.
 - Moved MCPToolLoader service construction into a dedicated factory so the loader facade no longer owns the service preload/new chain while preserving existing runtime wiring.

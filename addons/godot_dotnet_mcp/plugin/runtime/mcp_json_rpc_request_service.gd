@@ -9,6 +9,8 @@ var _route_json_rpc_async := Callable()
 var _build_json_rpc_error := Callable()
 var _emit_request_received := Callable()
 var _log := Callable()
+var _cancelled_request_ids: Dictionary = {}
+var _pending_request_ids: Dictionary = {}
 
 
 func configure(context = null) -> void:
@@ -26,6 +28,8 @@ func dispose() -> void:
 	_build_json_rpc_error = Callable()
 	_emit_request_received = Callable()
 	_log = Callable()
+	_cancelled_request_ids.clear()
+	_pending_request_ids.clear()
 
 
 func handle_request_async(body: String) -> Dictionary:
@@ -62,11 +66,25 @@ func handle_request_async(body: String) -> Dictionary:
 			return {"status": 202, "_no_body": true}
 		return _build_error(-32602, "Invalid params: expected object", id)
 
+	if not has_id and method == "notifications/cancelled":
+		var notification_params := params as Dictionary
+		_mark_cancelled_request(notification_params)
+		return {"status": 202, "_no_body": true}
+
 	_log_message("Method: %s, ID: %s" % [method, id], "debug")
 	if _emit_request_received.is_valid():
 		_emit_request_received.call(method, params)
 
 	if _route_json_rpc_async.is_valid():
+		if has_id:
+			var id_key := _request_id_key(id)
+			_pending_request_ids[id_key] = true
+			var routed_response: Dictionary = await _route_json_rpc_async.call(method, params, id, has_id)
+			_pending_request_ids.erase(id_key)
+			if _cancelled_request_ids.has(id_key):
+				_cancelled_request_ids.erase(id_key)
+				return _build_error(-32800, "Request cancelled", id)
+			return routed_response
 		return await _route_json_rpc_async.call(method, params, id, has_id)
 	return _build_error(-32603, "JSON-RPC router is unavailable", id)
 
@@ -97,6 +115,31 @@ func _is_valid_json_rpc_id(id) -> bool:
 	if id is float:
 		return true
 	return false
+
+
+func _mark_cancelled_request(params: Dictionary) -> void:
+	if not params.has("requestId"):
+		_log_message("Cancellation notification missing requestId.", "debug")
+		return
+	var id = params.get("requestId")
+	if not _is_valid_json_rpc_id(id):
+		_log_message("Cancellation notification ignored invalid requestId.", "debug")
+		return
+	var id_key := _request_id_key(id)
+	var reason := str(params.get("reason", "")).strip_edges()
+	var status := "pending" if _pending_request_ids.has(id_key) else "not_pending"
+	if status == "pending":
+		_cancelled_request_ids[id_key] = true
+	if reason.is_empty():
+		_log_message("Request cancelled by client: %s (%s)" % [id_key, status], "debug")
+	else:
+		_log_message("Request cancelled by client: %s (%s): %s" % [id_key, status, reason], "debug")
+
+
+func _request_id_key(id) -> String:
+	if id == null:
+		return "null:"
+	return "%s:%s" % [type_string(typeof(id)), str(id)]
 
 
 func _build_error(code: int, message: String, id) -> Dictionary:

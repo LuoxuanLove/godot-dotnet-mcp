@@ -528,7 +528,7 @@ func _build_listen_failure_context(error_code: int, error_text_override: String 
 	var has_error_text_override := not error_text_override.is_empty()
 	var error_text := error_text_override if has_error_text_override else error_string(error_code)
 	var failure_reason := _classify_listen_failure(error_code, error_text)
-	if not has_error_text_override and failure_reason == "address_in_use" and _is_configured_port_in_windows_excluded_range():
+	if not has_error_text_override and failure_reason == "address_in_use" and _should_probe_windows_excluded_port_ranges() and _is_configured_port_in_windows_excluded_range():
 		failure_reason = "port_excluded_or_reserved"
 	var context := {
 		"host": _host,
@@ -609,6 +609,15 @@ func _is_configured_port_in_windows_excluded_range() -> bool:
 		if exit_code == 0 and _netsh_excluded_ranges_include_port(output, _port):
 			return true
 	return false
+
+
+func _should_probe_windows_excluded_port_ranges() -> bool:
+	if not _is_windows():
+		return false
+	if not OS.has_environment("GODOT_DOTNET_MCP_PROBE_WINDOWS_EXCLUDED_PORTS"):
+		return false
+	var value := OS.get_environment("GODOT_DOTNET_MCP_PROBE_WINDOWS_EXCLUDED_PORTS").strip_edges().to_lower()
+	return ["1", "true", "yes", "on"].has(value)
 
 
 func _netsh_excluded_ranges_include_port(output: Array, port: int) -> bool:

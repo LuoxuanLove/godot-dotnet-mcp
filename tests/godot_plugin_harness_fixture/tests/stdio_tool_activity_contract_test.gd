@@ -22,7 +22,8 @@ class FakeToolLoader:
 		}, {
 			"name": "system_project_lifecycle",
 			"category": "system",
-			"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["start", "stop"]}}}
+			"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["start", "stop"]}}},
+			"outputSchema": {"type": "object", "properties": {"success": {"type": "boolean"}, "data": {"type": "object"}}}
 		}]
 
 	func get_exposed_tool_definitions() -> Array:
@@ -33,7 +34,8 @@ class FakeToolLoader:
 		}, {
 			"name": "system_project_lifecycle",
 			"category": "system",
-			"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["start", "stop"]}}}
+			"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["start", "stop"]}}},
+			"outputSchema": {"type": "object", "properties": {"success": {"type": "boolean"}, "data": {"type": "object"}}}
 		}]
 
 	func get_domain_states() -> Array:
@@ -98,14 +100,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var parsed_dict: Dictionary = parsed
 	if not bool(parsed_dict.get("success", false)):
 		return _failure("Stdio tools/call should preserve successful tool results.")
-	var structured = (result as Dictionary).get("structuredContent", {})
-	if not (structured is Dictionary):
-		return _failure("Stdio tools/call should expose structuredContent for successful tool responses.")
-	var structured_dict: Dictionary = structured
-	if bool(structured_dict.get("success", false)) != bool(parsed_dict.get("success", false)):
-		return _failure("Stdio structuredContent should match the compatibility text JSON success flag.")
-	if JSON.stringify(structured_dict.get("data", {})) != JSON.stringify(parsed_dict.get("data", {})):
-		return _failure("Stdio structuredContent should match the compatibility text JSON data payload.")
+	if (result as Dictionary).has("structuredContent"):
+		return _failure("Stdio tools/call should omit structuredContent when the tool definition has no explicit outputSchema.")
 	if not (parsed_dict.get("activity", {}) is Dictionary) or str((parsed_dict.get("activity", {}) as Dictionary).get("call_id", "")).is_empty():
 		return _failure("Stdio tools/call should preserve loader activity summaries.")
 	if loader.executed_arguments.has("_mcp_context"):
@@ -133,7 +129,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Stdio lifecycle call should serialize a JSON object payload.")
 	var lifecycle_structured = (lifecycle_result as Dictionary).get("structuredContent", {})
 	if not (lifecycle_structured is Dictionary):
-		return _failure("Stdio lifecycle call should expose structuredContent.")
+		return _failure("Stdio lifecycle call should expose structuredContent when outputSchema is declared.")
 	var lifecycle_data = (lifecycle_payload as Dictionary).get("data", {})
 	if not (lifecycle_data is Dictionary) or str((lifecycle_data as Dictionary).get("tool", "")) != "project_lifecycle":
 		return _failure("Stdio lifecycle call should resolve system_project_lifecycle to project_lifecycle.")
@@ -149,9 +145,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		var removed_result = removed_response.get("result", {})
 		if not (removed_result is Dictionary) or not bool((removed_result as Dictionary).get("isError", false)):
 			return _failure("Stdio tools/call should reject removed project lifecycle entry '%s'." % removed_tool_name)
-		var removed_structured = (removed_result as Dictionary).get("structuredContent", {})
-		if not (removed_structured is Dictionary) or bool((removed_structured as Dictionary).get("success", true)):
-			return _failure("Stdio removed tool errors should expose failing structuredContent for '%s'." % removed_tool_name)
+		if (removed_result as Dictionary).has("structuredContent"):
+			return _failure("Stdio removed tool errors without outputSchema should not expose structuredContent for '%s'." % removed_tool_name)
+		var removed_payload := _tool_result_payload(removed_result as Dictionary)
+		if bool(removed_payload.get("success", true)):
+			return _failure("Stdio removed tool errors should expose a failing text JSON payload for '%s'." % removed_tool_name)
 
 	loader.disabled_tools["system_project_lifecycle"] = true
 	var disabled_lifecycle_response: Dictionary = await stdio_server.call("_handle_tools_call", {
@@ -315,6 +313,22 @@ func _verify_stdio_context_builder_guard(stdio_server) -> Dictionary:
 		if json_rpc_source.find(retained_helper) == -1:
 			return _failure("MCPStdioJsonRpcService should retain compatibility helper '%s' for focused stdio harness probes." % retained_helper)
 	return {"success": true, "error": ""}
+
+
+func _tool_result_payload(result: Dictionary) -> Dictionary:
+	var structured = result.get("structuredContent", null)
+	if structured is Dictionary:
+		return structured as Dictionary
+	var content = result.get("content", [])
+	if not (content is Array) or (content as Array).is_empty():
+		return {}
+	var first = (content as Array)[0]
+	if not (first is Dictionary):
+		return {}
+	var parsed = JSON.parse_string(str((first as Dictionary).get("text", "")))
+	if parsed is Dictionary:
+		return parsed as Dictionary
+	return {}
 
 
 func _failure(message: String) -> Dictionary:

@@ -156,6 +156,26 @@ static func _get_domain_states(loader) -> Array:
 static func _aggregate_domain_states(category_states: Array[Dictionary], domain_defs: Array) -> Array[Dictionary]:
 	var domain_order := _domain_order(domain_defs)
 	var by_domain := {}
+	for domain_def in domain_defs:
+		if not (domain_def is Dictionary):
+			continue
+		var domain_key := str((domain_def as Dictionary).get("key", ""))
+		if domain_key.is_empty():
+			domain_key = str((domain_def as Dictionary).get("domain_key", ""))
+		if domain_key.is_empty():
+			continue
+		by_domain[domain_key] = {
+			"domain": domain_key,
+			"domain_key": domain_key,
+			"categories": [],
+			"category_count": 0,
+			"loaded_category_count": 0,
+			"loaded": false,
+			"tool_count": 0,
+			"enabled_tool_count": 0,
+			"load_error_count": 0,
+			"last_errors": []
+		}
 	for state in category_states:
 		var category := str(state.get("category", state.get("domain", "")))
 		var domain_key := str(state.get("domain_key", ""))

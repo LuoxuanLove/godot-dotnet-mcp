@@ -284,10 +284,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var rpc_removed_help_result = rpc_removed_help.get("result", {})
 	if not (rpc_removed_help_result is Dictionary) or not bool((rpc_removed_help_result as Dictionary).get("isError", false)):
 		return _failure("JSON-RPC tools/call should return an error result for removed system_help legacy calls.")
-	var rpc_removed_help_structured = (rpc_removed_help_result as Dictionary).get("structuredContent", {})
-	if not (rpc_removed_help_structured is Dictionary) or str((rpc_removed_help_structured as Dictionary).get("error", "")).find("system_help") == -1:
+	var rpc_removed_help_payload := _tool_result_payload(rpc_removed_help_result as Dictionary)
+	if str(rpc_removed_help_payload.get("error", "")).find("system_help") == -1:
 		return _failure("JSON-RPC system_help removal response should include the removed tool name.")
-	var rpc_removed_help_data = (rpc_removed_help_structured as Dictionary).get("data", {})
+	var rpc_removed_help_data = rpc_removed_help_payload.get("data", {})
 	if not (rpc_removed_help_data is Dictionary) or not (((rpc_removed_help_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://guides/index")):
 		return _failure("JSON-RPC system_help removal response should include replacement guide resource URIs.")
 
@@ -318,12 +318,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var rpc_removed_resource_manage_result = rpc_removed_resource_manage.get("result", {})
 	if not (rpc_removed_resource_manage_result is Dictionary) or not bool((rpc_removed_resource_manage_result as Dictionary).get("isError", false)):
 		return _failure("JSON-RPC tools/call should reject removed resource_manage legacy calls.")
-	var rpc_removed_resource_manage_structured = (rpc_removed_resource_manage_result as Dictionary).get("structuredContent", {})
-	if not (rpc_removed_resource_manage_structured is Dictionary) or bool((rpc_removed_resource_manage_structured as Dictionary).get("success", true)):
-		return _failure("Removed resource_manage should return failing structuredContent.")
-	if str((rpc_removed_resource_manage_structured as Dictionary).get("error", "")).find("resource_manage") == -1:
+	var rpc_removed_resource_manage_payload := _tool_result_payload(rpc_removed_resource_manage_result as Dictionary)
+	if bool(rpc_removed_resource_manage_payload.get("success", true)):
+		return _failure("Removed resource_manage should return a failing text JSON payload.")
+	if str(rpc_removed_resource_manage_payload.get("error", "")).find("resource_manage") == -1:
 		return _failure("Removed resource_manage error should include the legacy tool name.")
-	if not _is_removed_resource_manage_tool(rpc_removed_resource_manage_structured, "resource_create"):
+	if not _is_removed_resource_manage_tool(rpc_removed_resource_manage_payload, "resource_create"):
 		return _failure("Removed resource_manage should expose removed_public_tool guidance and resource_create replacement.")
 	for resource_file_action in ["delete", "reload"]:
 		var rpc_removed_resource_file: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
@@ -338,10 +338,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		var rpc_removed_resource_file_result = rpc_removed_resource_file.get("result", {})
 		if not (rpc_removed_resource_file_result is Dictionary) or not bool((rpc_removed_resource_file_result as Dictionary).get("isError", false)):
 			return _failure("JSON-RPC tools/call should reject removed resource_manage %s legacy calls." % resource_file_action)
-		var rpc_removed_resource_file_structured = (rpc_removed_resource_file_result as Dictionary).get("structuredContent", {})
-		if not _is_removed_resource_manage_tool(rpc_removed_resource_file_structured, "resource_file_ops"):
+		var rpc_removed_resource_file_payload := _tool_result_payload(rpc_removed_resource_file_result as Dictionary)
+		if not _is_removed_resource_manage_tool(rpc_removed_resource_file_payload, "resource_file_ops"):
 			return _failure("Removed resource_manage %s should expose resource_file_ops replacement." % resource_file_action)
-		var rpc_removed_resource_file_arguments := _first_replacement_arguments(((rpc_removed_resource_file_structured as Dictionary).get("data", {}) if rpc_removed_resource_file_structured is Dictionary else {}))
+		var rpc_removed_resource_file_arguments := _first_replacement_arguments(rpc_removed_resource_file_payload.get("data", {}))
 		if str(rpc_removed_resource_file_arguments.get("action", "")) != resource_file_action:
 			return _failure("Removed resource_manage %s should preserve replacement action." % resource_file_action)
 		if str(rpc_removed_resource_file_arguments.get("source", "")) != "res://Tmp/removed_resource_manage.tres":
@@ -361,10 +361,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var rpc_removed_debug_log_result = rpc_removed_debug_log.get("result", {})
 	if not (rpc_removed_debug_log_result is Dictionary) or not bool((rpc_removed_debug_log_result as Dictionary).get("isError", false)):
 		return _failure("JSON-RPC tools/call should reject removed debug_log legacy calls.")
-	var rpc_removed_debug_log_structured = (rpc_removed_debug_log_result as Dictionary).get("structuredContent", {})
-	if not (rpc_removed_debug_log_structured is Dictionary) or bool((rpc_removed_debug_log_structured as Dictionary).get("success", true)):
-		return _failure("Removed debug_log should return failing structuredContent.")
-	if str((rpc_removed_debug_log_structured as Dictionary).get("error", "")).find("debug_log") == -1:
+	var rpc_removed_debug_log_payload := _tool_result_payload(rpc_removed_debug_log_result as Dictionary)
+	if bool(rpc_removed_debug_log_payload.get("success", true)):
+		return _failure("Removed debug_log should return a failing text JSON payload.")
+	if str(rpc_removed_debug_log_payload.get("error", "")).find("debug_log") == -1:
 		return _failure("Removed debug_log error should include the legacy tool name.")
 
 	var rpc_removed_catalog: Dictionary = await _server.handle_jsonrpc_request_async(JSON.stringify({
@@ -379,12 +379,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var rpc_removed_catalog_result = rpc_removed_catalog.get("result", {})
 	if not (rpc_removed_catalog_result is Dictionary) or not bool((rpc_removed_catalog_result as Dictionary).get("isError", false)):
 		return _failure("JSON-RPC tools/call should reject removed system_tool_catalog with isError=true.")
-	var rpc_removed_catalog_structured = (rpc_removed_catalog_result as Dictionary).get("structuredContent", {})
-	if not (rpc_removed_catalog_structured is Dictionary) or bool((rpc_removed_catalog_structured as Dictionary).get("success", true)):
-		return _failure("Removed system_tool_catalog should return failing structuredContent.")
-	var rpc_removed_catalog_data = (rpc_removed_catalog_structured as Dictionary).get("data", {})
+	var rpc_removed_catalog_payload := _tool_result_payload(rpc_removed_catalog_result as Dictionary)
+	if bool(rpc_removed_catalog_payload.get("success", true)):
+		return _failure("Removed system_tool_catalog should return a failing text JSON payload.")
+	var rpc_removed_catalog_data = rpc_removed_catalog_payload.get("data", {})
 	if not (rpc_removed_catalog_data is Dictionary) or str((rpc_removed_catalog_data as Dictionary).get("error_type", "")) != "removed_public_tool":
-		return _failure("Removed system_tool_catalog structuredContent should expose error_type=removed_public_tool.")
+		return _failure("Removed system_tool_catalog payload should expose error_type=removed_public_tool.")
 	if not (((rpc_removed_catalog_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://tools/catalog/visible")):
 		return _failure("Removed system_tool_catalog should point callers to catalog resources.")
 
@@ -400,10 +400,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var rpc_removed_activity_result = rpc_removed_activity.get("result", {})
 	if not (rpc_removed_activity_result is Dictionary) or not bool((rpc_removed_activity_result as Dictionary).get("isError", false)):
 		return _failure("JSON-RPC tools/call should return isError=true for removed system_tool_activity.")
-	var rpc_removed_activity_structured = (rpc_removed_activity_result as Dictionary).get("structuredContent", {})
-	if not (rpc_removed_activity_structured is Dictionary) or bool((rpc_removed_activity_structured as Dictionary).get("success", true)):
-		return _failure("JSON-RPC removed system_tool_activity should expose failing structuredContent.")
-	var rpc_removed_activity_data = (rpc_removed_activity_structured as Dictionary).get("data", {})
+	var rpc_removed_activity_payload := _tool_result_payload(rpc_removed_activity_result as Dictionary)
+	if bool(rpc_removed_activity_payload.get("success", true)):
+		return _failure("JSON-RPC removed system_tool_activity should expose a failing text JSON payload.")
+	var rpc_removed_activity_data = rpc_removed_activity_payload.get("data", {})
 	if not (rpc_removed_activity_data is Dictionary) or str((rpc_removed_activity_data as Dictionary).get("error_type", "")) != "removed_public_tool":
 		return _failure("JSON-RPC removed system_tool_activity should expose removed_public_tool guidance.")
 	if not (((rpc_removed_activity_data as Dictionary).get("replacement_resources", []) as Array).has("godot-dotnet-mcp://activity/status")):
@@ -426,11 +426,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		var rpc_removed_plugin_result = rpc_removed_plugin.get("result", {})
 		if not (rpc_removed_plugin_result is Dictionary) or not bool((rpc_removed_plugin_result as Dictionary).get("isError", false)):
 			return _failure("JSON-RPC tools/call should return isError=true for removed %s." % str(removed_plugin_case.get("tool", "")))
-		var rpc_removed_plugin_structured = (rpc_removed_plugin_result as Dictionary).get("structuredContent", {})
-		if not _is_removed_plugin_maintenance_tool(rpc_removed_plugin_structured, str(removed_plugin_case.get("tool", "")), str(removed_plugin_case.get("replacement_action", ""))):
+		var rpc_removed_plugin_payload := _tool_result_payload(rpc_removed_plugin_result as Dictionary)
+		if not _is_removed_plugin_maintenance_tool(rpc_removed_plugin_payload, str(removed_plugin_case.get("tool", "")), str(removed_plugin_case.get("replacement_action", ""))):
 			return _failure("JSON-RPC removed %s should point to system_plugin_maintenance." % str(removed_plugin_case.get("tool", "")))
 		if str(removed_plugin_case.get("replacement_action", "")) == "refresh_update_refs":
-			var rpc_removed_plugin_data = (rpc_removed_plugin_structured as Dictionary).get("data", {})
+			var rpc_removed_plugin_data = rpc_removed_plugin_payload.get("data", {})
 			var replacement_args := _first_replacement_arguments(rpc_removed_plugin_data)
 			if bool(replacement_args.get("force_refresh", true)):
 				return _failure("JSON-RPC removed system_plugin_update discover_refs should preserve force_refresh=false.")
@@ -450,8 +450,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		var rpc_removed_scene_result = rpc_removed_scene.get("result", {})
 		if not (rpc_removed_scene_result is Dictionary) or not bool((rpc_removed_scene_result as Dictionary).get("isError", false)):
 			return _failure("JSON-RPC tools/call should return isError=true for removed %s." % str(removed_scene_case.get("tool", "")))
-		var rpc_removed_scene_structured = (rpc_removed_scene_result as Dictionary).get("structuredContent", {})
-		if not _is_removed_scene_tool(rpc_removed_scene_structured, str(removed_scene_case.get("tool", "")), str(removed_scene_case.get("action", ""))):
+		var rpc_removed_scene_payload := _tool_result_payload(rpc_removed_scene_result as Dictionary)
+		if not _is_removed_scene_tool(rpc_removed_scene_payload, str(removed_scene_case.get("tool", "")), str(removed_scene_case.get("action", ""))):
 			return _failure("JSON-RPC removed %s should point to system_scene_inspect." % str(removed_scene_case.get("tool", "")))
 
 	return {
@@ -567,6 +567,22 @@ func _contains_tool_name_recursive(value, tool_name: String) -> bool:
 			if _contains_tool_name_recursive(nested, tool_name):
 				return true
 	return false
+
+
+func _tool_result_payload(result: Dictionary) -> Dictionary:
+	var structured = result.get("structuredContent", null)
+	if structured is Dictionary:
+		return structured as Dictionary
+	var content = result.get("content", [])
+	if not (content is Array) or (content as Array).is_empty():
+		return {}
+	var first = (content as Array)[0]
+	if not (first is Dictionary):
+		return {}
+	var parsed = JSON.parse_string(str((first as Dictionary).get("text", "")))
+	if parsed is Dictionary:
+		return parsed as Dictionary
+	return {}
 
 
 func _is_removed_scene_tool(structured, removed_tool: String, replacement_action: String) -> bool:

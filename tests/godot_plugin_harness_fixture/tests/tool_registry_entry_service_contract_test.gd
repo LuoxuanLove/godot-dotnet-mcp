@@ -22,6 +22,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"entries": [
 			first_system_entry,
 			{"category": "", "path": "res://blank.gd", "source": "builtin"},
+			{"category": "bad category", "path": "res://invalid.gd", "source": "builtin"},
 			{"category": "project", "path": "res://project.gd", "source": "builtin"},
 			{"category": "system", "path": "res://system_duplicate.gd", "source": "user"}
 		]
@@ -41,9 +42,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Entry service should preserve first-seen registry category order.")
 
 	var load_errors = index.get("load_errors", [])
-	if not (load_errors is Array) or (load_errors as Array).size() != 2:
-		return _failure("Entry service should preserve source errors and report duplicate categories.")
-	var duplicate_error = (load_errors as Array)[1]
+	if not (load_errors is Array) or (load_errors as Array).size() != 3:
+		return _failure("Entry service should preserve source errors and report duplicate plus invalid categories.")
+	var duplicate_error = _find_load_error(load_errors as Array, "Duplicate tool category registered", "system")
 	if not (duplicate_error is Dictionary):
 		return _failure("Entry service duplicate error should be a dictionary.")
 	var duplicate_dict := duplicate_error as Dictionary
@@ -51,6 +52,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Entry service should report duplicate category errors with the loader-compatible message.")
 	if str(duplicate_dict.get("category", "")) != "system" or str(duplicate_dict.get("path", "")) != "res://system_duplicate.gd" or str(duplicate_dict.get("source", "")) != "user":
 		return _failure("Entry service duplicate category errors should preserve category, path, and source.")
+	var invalid_error = _find_load_error(load_errors as Array, "Invalid MCP tool category registered", "bad category")
+	if not (invalid_error is Dictionary):
+		return _failure("Entry service invalid category error should be a dictionary.")
+	var invalid_dict := invalid_error as Dictionary
+	if str(invalid_dict.get("message", "")) != "Invalid MCP tool category registered":
+		return _failure("Entry service should report invalid MCP tool category errors with the loader-compatible message.")
+	if str(invalid_dict.get("category", "")) != "bad category" or str(invalid_dict.get("path", "")) != "res://invalid.gd":
+		return _failure("Entry service invalid category errors should preserve category and path.")
 
 	source_error["message"] = "mutated"
 	first_system_entry["nested"]["value"] = "mutated"
@@ -82,3 +91,13 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _find_load_error(load_errors: Array, message: String, category: String) -> Dictionary:
+	for load_error in load_errors:
+		if not (load_error is Dictionary):
+			continue
+		var load_error_dict := load_error as Dictionary
+		if str(load_error_dict.get("message", "")) == message and str(load_error_dict.get("category", "")) == category:
+			return load_error_dict
+	return {}

@@ -199,7 +199,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router should expose stable SSE resume window indexes for unknown cursors.")
 	var first_sse_event_id := _extract_first_sse_event_id(get_mcp_body)
 	if first_sse_event_id.is_empty():
-		return _failure("HTTP request router should expose an SSE event id that clients can resume from.")
+		return _failure("HTTP request router should expose an SSE open event id for current-stream observability.")
 	var legacy_sse_session_id := await _initialize_session(router, 900)
 	var initial_get_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": legacy_sse_session_id})
 	var initial_get_body := str(initial_get_response.get("_raw_body", ""))
@@ -209,33 +209,41 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router should serialize endpoint event URL data as plain SSE text, not a JSON string.")
 	if initial_get_body.find("event: open") == -1 or initial_get_body.find("event: message") != -1:
 		return _failure("HTTP request router should classify connection metadata as open events instead of JSON-RPC message events.")
+	var forwarded_untrusted_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": legacy_sse_session_id, "x-forwarded-proto": "https"})
+	var forwarded_untrusted_body := str(forwarded_untrusted_response.get("_raw_body", ""))
+	if forwarded_untrusted_body.find("data: http://localhost:3000/mcp") == -1:
+		return _failure("HTTP request router should ignore X-Forwarded-Proto unless proxy headers are explicitly trusted.")
+	router.set_trust_proxy_headers(true)
+	var forwarded_trusted_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": legacy_sse_session_id, "x-forwarded-proto": "https"})
+	var forwarded_trusted_body := str(forwarded_trusted_response.get("_raw_body", ""))
+	if forwarded_trusted_body.find("data: https://localhost:3000/mcp") == -1:
+		return _failure("HTTP request router should honor trusted X-Forwarded-Proto values when explicitly enabled.")
+	router.set_trust_proxy_headers(false)
 	var resumed_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": sse_session_id, "last-event-id": first_sse_event_id})
 	if int(resumed_mcp_response.get("status", 0)) != 200:
-		return _failure("HTTP request router should accept Last-Event-ID cursors for SSE replay probes.")
+		return _failure("HTTP request router should accept non-replayable GET open event ids as Last-Event-ID cursor hints.")
 	var resumed_body := str(resumed_mcp_response.get("_raw_body", ""))
 	if _count_sse_event_id(resumed_body, first_sse_event_id) != 0:
-		return _failure("HTTP request router should replay events after the Last-Event-ID cursor, not repeat the cursor event.")
+		return _failure("HTTP request router should not repeat non-replayable GET open events.")
 	if _count_sse_events(resumed_body) != 1:
-		return _failure("HTTP request router should return exactly the new event when resuming from the latest known cursor.")
-	if resumed_body.find("\"resume_cursor_found\":true") == -1:
-		return _failure("HTTP request router should report matched SSE resume cursors in event data.")
-	if resumed_body.find("\"resume_status\":\"matched\"") == -1:
-		return _failure("HTTP request router should report matched SSE resume status in event data.")
-	if resumed_body.find("\"replay_event_count\":0") == -1:
-		return _failure("HTTP request router should report zero stored events after a latest-cursor resume before adding the new probe event.")
-	if resumed_body.find("\"resume_start_index\":1") == -1 or resumed_body.find("\"resume_next_index\":1") == -1:
-		return _failure("HTTP request router should expose the absolute resume window after a matched cursor.")
+		return _failure("HTTP request router should return only the current open metadata event for non-replayable GET cursors.")
+	if resumed_body.find("\"resume_cursor_found\":false") == -1:
+		return _failure("HTTP request router should not report GET open cursors as matched replay cursors.")
+	if resumed_body.find("\"resume_status\":\"unknown_cursor\"") == -1:
+		return _failure("HTTP request router should report GET open cursors as unknown replay cursors.")
+	if resumed_body.find("\"resume_start_index\":0") == -1 or resumed_body.find("\"resume_next_index\":0") == -1:
+		return _failure("HTTP request router should keep the replay window unchanged for GET open cursors.")
 	var second_sse_event_id := _extract_first_sse_event_id(resumed_body)
 	if second_sse_event_id.is_empty() or second_sse_event_id == first_sse_event_id:
-		return _failure("HTTP request router should assign a new SSE event id for each resumable probe event.")
+		return _failure("HTTP request router should assign a new non-replayable SSE open event id for each GET probe.")
 	var replay_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": sse_session_id, "last-event-id": first_sse_event_id})
 	var replay_body := str(replay_mcp_response.get("_raw_body", ""))
-	if replay_body.find(second_sse_event_id) == -1:
-		return _failure("HTTP request router should replay stored events after a matched Last-Event-ID cursor.")
-	if _count_sse_events(replay_body) != 2:
-		return _failure("HTTP request router should include stored replay events plus the current probe event for matched older cursors.")
-	if replay_body.find("\"replay_event_count\":1") == -1:
-		return _failure("HTTP request router should report the number of stored replay events after a matched older cursor.")
+	if replay_body.find(second_sse_event_id) != -1:
+		return _failure("HTTP request router should not replay prior GET open metadata events.")
+	if _count_sse_events(replay_body) != 1:
+		return _failure("HTTP request router should not add GET open events to the resumable event log.")
+	if replay_body.find("\"replay_event_count\":0") == -1:
+		return _failure("HTTP request router should report zero replay events for GET open cursors.")
 	var unknown_active_cursor_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": sse_session_id, "last-event-id": "streamable-http-get-%s-999" % sse_session_id})
 	var unknown_active_cursor_body := str(unknown_active_cursor_response.get("_raw_body", ""))
 	if unknown_active_cursor_body.find("\"resume_status\":\"unknown_cursor\"") == -1:
@@ -251,14 +259,34 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router should reject GET /mcp for an unknown or evicted supplied session id.")
 
 	var bounded_router = HttpRequestRouterScript.new()
-	bounded_router.configure(context)
+	var bounded_service = ResponsePostService.new()
+	var bounded_context = HttpRequestRouterContextScript.new()
+	bounded_context.handle_mcp_request_async = Callable(bounded_service, "handle_mcp_request_async")
+	bounded_context.build_health_response = Callable(callbacks, "build_health_response")
+	bounded_context.build_tools_list_response = Callable(callbacks, "build_tools_list_response")
+	bounded_context.handle_editor_lifecycle_request = Callable(callbacks, "handle_editor_lifecycle_request")
+	bounded_context.handle_editor_lifecycle_post_request = Callable(callbacks, "handle_editor_lifecycle_post_request")
+	bounded_context.build_cors_response = Callable(callbacks, "build_cors_response")
+	bounded_router.configure(bounded_context)
 	var bounded_session_id := await _initialize_session(bounded_router, 500)
 	if bounded_session_id.is_empty():
 		return _failure("HTTP request router should issue a bounded-window session through initialize.")
-	var bounded_first_response: Dictionary = await bounded_router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": bounded_session_id})
-	var bounded_first_event_id := _extract_first_sse_event_id_with_prefix(str(bounded_first_response.get("_raw_body", "")), "streamable-http-get-")
+	var bounded_first_response: Dictionary = await bounded_router.route_request_async(
+		"POST",
+		"/mcp",
+		JSON.stringify({"jsonrpc": "2.0", "id": 501, "method": "tools/list"}),
+		{"host": "localhost:3000", "content-type": "application/json", "accept": "application/json;q=0.1, text/event-stream;q=1.0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": bounded_session_id}
+	)
+	var bounded_first_event_id := _extract_first_sse_event_id_with_prefix(str(bounded_first_response.get("_raw_body", "")), "streamable-http-post-")
+	if bounded_first_event_id.is_empty():
+		return _failure("HTTP request router should queue the first POST SSE event before stale-cursor eviction checks.")
 	for index in range(33):
-		await bounded_router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": bounded_session_id})
+		await bounded_router.route_request_async(
+			"POST",
+			"/mcp",
+			JSON.stringify({"jsonrpc": "2.0", "id": 502 + index, "method": "tools/list"}),
+			{"host": "localhost:3000", "content-type": "application/json", "accept": "application/json;q=0.1, text/event-stream;q=1.0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": bounded_session_id}
+		)
 	var stale_cursor_response: Dictionary = await bounded_router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": bounded_session_id, "last-event-id": bounded_first_event_id})
 	var stale_cursor_body := str(stale_cursor_response.get("_raw_body", ""))
 	if stale_cursor_body.find("\"resume_cursor_found\":false") == -1:
@@ -267,6 +295,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router should distinguish stale retained-window cursors from unknown sessions.")
 	if stale_cursor_body.find("\"resume_base_index\":2") == -1 or stale_cursor_body.find("\"resume_next_index\":34") == -1:
 		return _failure("HTTP request router should expose retained-window indexes for stale cursors.")
+	var previous_allowed_hosts := OS.get_environment("GODOT_DOTNET_MCP_ALLOWED_HOSTS") if OS.has_environment("GODOT_DOTNET_MCP_ALLOWED_HOSTS") else ""
+	var had_allowed_hosts := OS.has_environment("GODOT_DOTNET_MCP_ALLOWED_HOSTS")
+	OS.set_environment("GODOT_DOTNET_MCP_ALLOWED_HOSTS", "env.example.test, 127.0.0.1:3000")
+	var env_host_router = HttpRequestRouterScript.new()
+	env_host_router.configure(context)
+	var env_host_response: Dictionary = await env_host_router.route_request_async("GET", "/health", "", {"host": "env.example.test"})
+	if str(env_host_response.get("status", "")) != "ok":
+		return _failure("HTTP request router should allow Host values configured through GODOT_DOTNET_MCP_ALLOWED_HOSTS.")
+	env_host_router.dispose()
+	if had_allowed_hosts:
+		OS.set_environment("GODOT_DOTNET_MCP_ALLOWED_HOSTS", previous_allowed_hosts)
+	else:
+		OS.set_environment("GODOT_DOTNET_MCP_ALLOWED_HOSTS", "")
 	var get_protocol_denied_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": "1900-01-01"})
 	if int(get_protocol_denied_response.get("status", 0)) != 400:
 		return _failure("HTTP request router should reject unsupported MCP-Protocol-Version headers on GET /mcp.")
@@ -562,7 +603,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router should expose endpoint and open metadata on fresh GET SSE streams.")
 	var seed_get_event_id := _extract_first_sse_event_id_with_prefix(seed_get_body, "streamable-http-get-")
 	if seed_get_event_id.is_empty() or seed_get_event_id.find("streamable-http-get-") == -1:
-		return _failure("HTTP request router should expose a GET SSE cursor before replaying queued POST events.")
+		return _failure("HTTP request router should expose a non-replayable GET SSE open event id before replaying queued POST events.")
 	var queued_post_sse: Dictionary = await response_post_router.route_request_async(
 		"POST",
 		"/mcp",
@@ -575,7 +616,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"GET",
 		"/mcp",
 		"",
-		{"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": initialized_post_sse_session_id, "last-event-id": seed_get_event_id}
+		{"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": initialized_post_sse_session_id, "last-event-id": initialized_post_sse_event_id}
 	)
 	var get_after_post_sse_body := str(get_after_post_sse_response.get("_raw_body", ""))
 	if get_after_post_sse_body.find("\"id\":48") == -1:
