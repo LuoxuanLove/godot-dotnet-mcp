@@ -1,0 +1,23 @@
+scripts/test_dotnet_bridge_safe_writes.ps1
+  s_23543e5ed94f7d::t_022ee0ac8bbf13 89,115
+tests/godot_plugin_harness_fixture/tests/plugin_roslyn_service_exported_runtime_contract_test.gd
+  s_23543e5ed94f7d::t_3a39ba0bb8ec86 44-45,49-51
+addons/godot_dotnet_mcp/plugin/runtime/plugin_roslyn_service.gd
+  s_23543e5ed94f7d::t_544649e59efce5 94-97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9f7e0e16059db62a1e13c76ffac82cce34f662d7",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
