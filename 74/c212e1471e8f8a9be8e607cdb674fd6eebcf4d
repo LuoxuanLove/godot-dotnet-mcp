@@ -1,0 +1,22 @@
+addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_router.gd
+  s_23543e5ed94f7d::t_b6a42fe3f03db8 243-246
+  s_23543e5ed94f7d::t_e62c1496aaf78a 393,549,564,566
+tests/godot_plugin_harness_fixture/tests/http_request_router_contract_test.gd
+  s_23543e5ed94f7d::t_e8d616be423dae 360-364
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "74c212e1471e8f8a9be8e607cdb674fd6eebcf4d",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
