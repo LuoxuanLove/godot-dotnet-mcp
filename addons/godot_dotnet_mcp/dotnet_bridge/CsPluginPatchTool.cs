@@ -8,6 +8,7 @@ namespace GodotDotnetMcp.DotnetBridge;
 internal sealed record PluginPatchResult(
     string Path,
     string SourceHash,
+    bool DryRun,
     bool Written,
     string Action,
     string TypeName,
@@ -33,6 +34,7 @@ internal static class CsPluginPatchTool
                 throw new BridgeToolException("cs_plugin_patch requires a .cs path.");
             }
 
+            var dryRun = !GetOptionalBool(arguments, "dryRun", out var dryRunValue) || dryRunValue;
             var sourceText = File.ReadAllText(path);
             var readModel = PluginRoslynSyntaxCore.Read(path, sourceText);
             var action = GetRequiredString(arguments, "action");
@@ -58,12 +60,16 @@ internal static class CsPluginPatchTool
                 _ => throw new BridgeToolException($"Unsupported Roslyn patch action: {action}"),
             };
 
-            WriteToolHelpers.WriteUtf8NoBom(path, updatedText);
+            if (!dryRun)
+            {
+                WriteToolHelpers.WriteUtf8NoBom(path, updatedText);
+            }
             var updatedReadModel = CSharpFileReader.ReadSource(path, updatedText);
             var result = new PluginPatchResult(
                 Path: Path.GetFullPath(path),
                 SourceHash: WriteToolHelpers.ComputeSha256(updatedText),
-                Written: true,
+                DryRun: dryRun,
+                Written: !dryRun,
                 Action: action,
                 TypeName: typeName,
                 MemberName: RequireMemberName(memberName, action),
@@ -312,18 +318,29 @@ internal static class CsPluginPatchTool
 
     private static bool GetOptionalBool(JsonElement arguments, string name)
     {
+        return GetOptionalBool(arguments, name, out var value) && value;
+    }
+
+    private static bool GetOptionalBool(JsonElement arguments, string name, out bool value)
+    {
+        value = false;
         if (arguments.ValueKind != JsonValueKind.Object || !arguments.TryGetProperty(name, out var property))
         {
             return false;
         }
 
-        return property.ValueKind switch
+        if (property.ValueKind == JsonValueKind.String)
         {
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.String => bool.TryParse(property.GetString(), out var value) && value,
-            _ => false,
-        };
+            return bool.TryParse(property.GetString(), out value);
+        }
+
+        if (property.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
+            value = property.GetBoolean();
+            return true;
+        }
+
+        return false;
     }
 
     private static IReadOnlyList<string> GetStringArray(JsonElement arguments, params string[] names)

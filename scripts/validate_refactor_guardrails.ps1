@@ -285,7 +285,7 @@ if (-not (Test-Path -LiteralPath $roslynRuntimeBundleScript)) {
 }
 else {
     $roslynRuntimeBundleScriptText = Get-Content -LiteralPath $roslynRuntimeBundleScript -Raw -Encoding UTF8
-    foreach ($requiredText in @("dotnet publish", "roslyn-runtime-manifest.json", "Get-FileHash", "isolated-runtime-bundle")) {
+    foreach ($requiredText in @("dotnet publish", "roslyn-runtime-manifest.json", "Get-FileHash", "framework-dependent")) {
         if (-not $roslynRuntimeBundleScriptText.Contains($requiredText)) {
             $errors.Add("Roslyn runtime release guard script must contain '$requiredText'.")
         }

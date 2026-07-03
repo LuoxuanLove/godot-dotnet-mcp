@@ -227,6 +227,8 @@ func _assert_isolated_runtime_process_has_timeout_guards() -> Dictionary:
 		"--timeout-ms",
 		"--response-json-file",
 		"roslyn_runtime_timeout",
+		"framework-dependent",
+		".NET 8 runtime",
 		"_parse_runtime_process_response",
 		"_execute_runtime_process_async",
 		"_write_runtime_request_file",
@@ -262,6 +264,9 @@ func _assert_production_runtime_does_not_load_in_process_facade() -> Dictionary:
 			return _failure("PluginRoslynService production path must not auto-load in-process Roslyn facade via '%s'." % blocked_text)
 	if service_source.find("RUNTIME_BRIDGE_DLL_PATH") == -1:
 		return _failure("PluginRoslynService should keep the isolated runtime bridge as the production entrypoint.")
+	var manifest_source := _read_text("res://addons/godot_dotnet_mcp/plugin/runtime/roslyn_runtime/roslyn-runtime-manifest.json")
+	if manifest_source.find("\"distribution\": \"framework-dependent\"") == -1 or manifest_source.find("\"framework\": \"Microsoft.NETCore.App\"") == -1 or manifest_source.find("\"version\": \"8.0.0\"") == -1:
+		return _failure("PluginRoslynService runtime manifest should truthfully declare the framework-dependent .NET 8 runtime requirement.")
 	if service_source.find("PluginRoslynRuntimeFacade in-process runtime is disabled for production installs") == -1:
 		return _failure("PluginRoslynService should document why production uses the isolated runtime process.")
 	return {"success": true}

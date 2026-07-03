@@ -40,14 +40,17 @@ try {
     if ($manifest.schema -ne 1) {
         throw "Roslyn runtime manifest schema must be 1."
     }
-    if ([string]$manifest.distribution -ne "isolated-runtime-bundle") {
-        throw "Roslyn runtime manifest distribution must be isolated-runtime-bundle."
+    if ([string]$manifest.distribution -ne "framework-dependent") {
+        throw "Roslyn runtime manifest distribution must be framework-dependent."
     }
     if ([string]$manifest.source_surface -ne "excluded") {
         throw "Roslyn runtime manifest source_surface must be excluded."
     }
     if ([string]$manifest.semantic_runtime -ne "Roslyn") {
         throw "Roslyn runtime manifest semantic_runtime must be Roslyn."
+    }
+    if ([string]$manifest.runtime_requirements.host -ne "dotnet" -or [string]$manifest.runtime_requirements.framework -ne "Microsoft.NETCore.App" -or [string]$manifest.runtime_requirements.version -ne "8.0.0") {
+        throw "Roslyn runtime manifest must declare the .NET 8 framework-dependent runtime requirement."
     }
 
     $files = @($manifest.files | ForEach-Object { [string]$_ })
@@ -114,7 +117,7 @@ try {
         throw ($errors -join [Environment]::NewLine)
     }
 
-    Write-Host "Roslyn runtime bundle manifest validated for $($files.Count) files; DLL payload hashes match dotnet publish output."
+    Write-Host "Roslyn runtime manifest validated for $($files.Count) framework-dependent files; DLL payload hashes match dotnet publish output."
 }
 finally {
     if (Test-Path -LiteralPath $publishDirectory) {

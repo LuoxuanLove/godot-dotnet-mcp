@@ -56,6 +56,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var metadata_data: Dictionary = metadata.get("data", {})
 	if str(metadata_data.get("transport", "")) != "process_json":
 		return _failure("Exported PluginRoslynService should report process_json transport.")
+	if str(metadata_data.get("distribution", "")) != "framework-dependent":
+		return _failure("Exported PluginRoslynService should report framework-dependent Roslyn runtime distribution.")
+	if str(metadata_data.get("runtime_requirement", "")).find(".NET 8") == -1:
+		return _failure("Exported PluginRoslynService should report the .NET 8 runtime requirement.")
 
 	return {
 		"name": CASE_NAME,

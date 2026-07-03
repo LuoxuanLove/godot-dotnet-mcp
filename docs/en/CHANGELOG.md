@@ -10,7 +10,8 @@ Target version: 2.0.0.
 
 ### Added
 
-- Added an isolated Roslyn runtime bundle so Asset Library and prepared addon installs keep C# semantic read/patch workflows without compiling plugin Roslyn or bridge source files inside the host project.
+- Added framework-dependent Roslyn runtime files so Asset Library and prepared addon installs keep C# semantic read/patch workflows without compiling plugin Roslyn or bridge source files inside the host project; these workflows require a local .NET 8 runtime.
+- Added `cs_plugin_patch` to the .NET bridge capability catalog, made plugin patch writes dry-run by default, and hardened `dotnet_build` cancellation so timed-out child processes are terminated.
 - Added MCP 2025-11-25 Resources, Resource Templates, Prompts, and Tools metadata, including titles, icons, annotations, input schemas, output schemas, and JSON Schema 2020-12 declarations.
 - Added Dock Resources and Prompts tabs with protocol catalog counts, ID copy actions, resource previews, prompt argument inputs, generated prompt previews, and bounded icon rendering.
 - Added read-only editor log resources at `godot-dotnet-mcp://logs/editor/output` and `godot-dotnet-mcp://logs/editor/errors`.
