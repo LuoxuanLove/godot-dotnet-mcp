@@ -1,0 +1,21 @@
+addons/godot_dotnet_mcp/plugin/runtime/plugin_update_sync_mirror_service.gd
+  s_23543e5ed94f7d::t_9bce59e97c2f32 110,113,119,123,129,134,287-295,315,320,324-326,328-339
+tests/godot_plugin_harness_fixture/tests/plugin_update_sync_mirror_service_contract_test.gd
+  s_23543e5ed94f7d::t_a36a7de629e3ce 47-48,53-71,75-100,102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d3e714f59c665f893ba7967baca856433316e712",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
