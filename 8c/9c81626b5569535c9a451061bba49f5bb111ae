@@ -1,0 +1,23 @@
+tests/godot_plugin_harness_fixture/tests/plugin_update_sync_mirror_service_contract_test.gd
+  s_23543e5ed94f7d::t_71916056ca1037 49
+  s_23543e5ed94f7d::t_a36a7de629e3ce 47-48,54-72,76-101,103
+addons/godot_dotnet_mcp/plugin/runtime/plugin_update_sync_mirror_service.gd
+  s_23543e5ed94f7d::t_9bce59e97c2f32 110,113,119,123,135,288-296,316,321,325-327,329-340
+  s_23543e5ed94f7d::t_88e2a0df2bf093 127-128,130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8c9c81626b5569535c9a451061bba49f5bb111ae",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": null
+    }
+  }
+}
