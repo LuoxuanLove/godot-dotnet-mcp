@@ -9,6 +9,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var source_guard := _verify_plugin_entrypoint_delegates_profile_config()
 	if not source_guard.is_empty():
 		return _failure(source_guard)
+	var settings_store_guard := _verify_settings_store_atomic_writes()
+	if not settings_store_guard.is_empty():
+		return _failure(settings_store_guard)
 
 	var service = PluginProfileConfigServiceScript.new()
 	var state = FakeState.new()
@@ -117,6 +120,44 @@ func _verify_plugin_entrypoint_delegates_profile_config() -> String:
 	]:
 		if service_source.find(required_service) == -1:
 			return "PluginProfileConfigService should own profile/config method: %s" % required_service
+	return ""
+
+
+func _verify_settings_store_atomic_writes() -> String:
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/config/settings_store.gd")
+	if source.is_empty():
+		return "SettingsStore source should be readable."
+	for required in [
+		"func _write_json_file_atomically(",
+		"FileWriteTransaction.write_text_atomically(",
+		"Failed to persist plugin settings"
+	]:
+		if source.find(required) == -1:
+			return "SettingsStore should persist settings/profile/export JSON with verified atomic writes: %s" % required
+	var transaction_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/config/file_write_transaction.gd")
+	if transaction_source.is_empty():
+		return "FileWriteTransaction source should be readable."
+	for required_transaction in [
+		"static func write_text_atomically(",
+		"static func build_sidecar_path(",
+		"DirAccess.rename_absolute",
+		"write_verify_failed",
+		"backup_failed",
+		"replace_failed",
+		"return sidecar_name"
+	]:
+		if transaction_source.find(required_transaction) == -1:
+			return "FileWriteTransaction should centralize settings/fallback atomic write behavior: %s" % required_transaction
+	for forbidden in [
+		"func save_plugin_settings(settings_path: String, settings: Dictionary) -> void:\n\tvar settings_dir := settings_path.get_base_dir()\n\tDirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(settings_dir))\n\tvar file = FileAccess.open(settings_path, FileAccess.WRITE)",
+		"func _ensure_parent_dir(",
+		"make_dir_recursive",
+		"func export_tool_config(file_path: String, profile_id: String, disabled_tools: Array) -> Dictionary:"
+	]:
+		if forbidden.begins_with("func export_tool_config"):
+			continue
+		if source.find(forbidden) != -1:
+			return "SettingsStore should not use direct FileAccess.WRITE for plugin settings."
 	return ""
 
 

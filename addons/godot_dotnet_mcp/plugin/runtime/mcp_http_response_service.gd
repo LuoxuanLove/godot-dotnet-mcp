@@ -331,7 +331,7 @@ func _status_text_for(status_code: int) -> String:
 		415: "Unsupported Media Type",
 		500: "Internal Server Error"
 	}
-	return str(status_texts.get(status_code, "OK"))
+	return str(status_texts.get(status_code, "Unknown"))
 
 
 func _normalize_json_rpc_id(id):

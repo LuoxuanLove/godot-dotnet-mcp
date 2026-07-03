@@ -3,6 +3,7 @@ extends RefCounted
 class_name MCPRuntimeFallbackStore
 
 const MCPUserDataPaths = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_user_data_paths.gd")
+const FileWriteTransaction = preload("res://addons/godot_dotnet_mcp/plugin/config/file_write_transaction.gd")
 
 var _fallback_file_path := MCPUserDataPaths.RUNTIME_EVENTS_PATH
 var _max_stored_events := 300
@@ -41,11 +42,16 @@ func flush() -> void:
 	if _pending_events.is_empty():
 		return
 	_ensure_fallback_cache_loaded()
-	_fallback_cache.append_array(_pending_events)
-	if _fallback_cache.size() > _max_stored_events:
-		_fallback_cache = _fallback_cache.slice(_fallback_cache.size() - _max_stored_events)
-	_write_fallback_events(_fallback_cache)
-	_pending_events.clear()
+	var next_cache: Array[Dictionary] = _fallback_cache.duplicate(true)
+	next_cache.append_array(_pending_events)
+	if next_cache.size() > _max_stored_events:
+		next_cache = next_cache.slice(next_cache.size() - _max_stored_events)
+	if _write_fallback_events(next_cache):
+		_fallback_cache = next_cache
+		_fallback_cache_loaded = true
+		_pending_events.clear()
+	else:
+		push_warning("[MCP] Failed to persist fallback runtime events; pending events remain in memory.")
 
 
 func read_events() -> Array[Dictionary]:
@@ -114,12 +120,9 @@ func _read_fallback_events() -> Array[Dictionary]:
 	return []
 
 
-func _write_fallback_events(events: Array[Dictionary]) -> void:
-	var file := FileAccess.open(_fallback_file_path, FileAccess.WRITE)
-	if file == null:
-		return
-	file.store_string(JSON.stringify(events))
-	file.close()
+func _write_fallback_events(events: Array[Dictionary]) -> bool:
+	var result: Dictionary = FileWriteTransaction.write_text_atomically(_fallback_file_path, JSON.stringify(events))
+	return bool(result.get("success", false))
 
 
 func _trim_cached_events() -> void:

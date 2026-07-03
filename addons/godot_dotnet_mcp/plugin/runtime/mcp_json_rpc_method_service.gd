@@ -33,9 +33,11 @@ func dispose() -> void:
 func handle_initialize(_params: Dictionary, id) -> Dictionary:
 	var result = {
 		"protocolVersion": MCPProtocolFacts.get_protocol_version(),
-		"toolSchemaVersion": MCPProtocolFacts.get_tool_schema_version(),
 		"capabilities": _build_capabilities(),
-		"serverInfo": MCPProtocolFacts.build_server_info()
+		"serverInfo": MCPProtocolFacts.build_server_info(),
+		"_meta": {
+			"toolSchemaVersion": MCPProtocolFacts.get_tool_schema_version()
+		}
 	}
 	return _build_response(result, id)
 

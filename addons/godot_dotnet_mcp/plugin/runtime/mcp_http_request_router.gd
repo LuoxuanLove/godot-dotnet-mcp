@@ -204,9 +204,6 @@ func _validate_mcp_transport_headers(headers: Dictionary) -> Dictionary:
 	var session_guard := _validate_mcp_session_id_header(headers)
 	if not session_guard.is_empty():
 		return session_guard
-	var active_session_guard := _validate_mcp_existing_session(headers)
-	if not active_session_guard.is_empty():
-		return active_session_guard
 
 	var accept_header := str(headers.get("accept", "")).strip_edges()
 	if not _accepts_mcp_response(accept_header):
@@ -218,7 +215,8 @@ func _validate_mcp_transport_headers(headers: Dictionary) -> Dictionary:
 
 	var requested_version := str(headers.get("mcp-protocol-version", "")).strip_edges()
 	var supported_version := MCPProtocolFacts.get_protocol_version()
-	if requested_version.is_empty() and _is_initialize_request_body(str(headers.get("_request_body", ""))):
+	var is_initialize_request := _is_initialize_request_body(str(headers.get("_request_body", "")))
+	if requested_version.is_empty() and is_initialize_request:
 		return {}
 	if requested_version.is_empty():
 		return {
@@ -234,6 +232,18 @@ func _validate_mcp_transport_headers(headers: Dictionary) -> Dictionary:
 			"supported_protocol_version": supported_version,
 			"requested_protocol_version": requested_version
 		}
+
+	var requested_session := str(headers.get("mcp-session-id", "")).strip_edges()
+	if requested_session.is_empty() and not is_initialize_request:
+		return {
+			"error": "Missing MCP session id",
+			"status": 400,
+			"details": "POST /mcp requires an initialized Mcp-Session-Id after initialize."
+		}
+	if not is_initialize_request:
+		var active_session_guard := _validate_mcp_existing_session(headers)
+		if not active_session_guard.is_empty():
+			return active_session_guard
 
 	return {}
 
@@ -380,7 +390,7 @@ func _build_mcp_post_sse_response(headers: Dictionary, json_rpc_response: Dictio
 	var requested_session := str(headers.get("mcp-session-id", "")).strip_edges()
 	var has_existing_session := not requested_session.is_empty() and _has_mcp_session(requested_session) and not _is_mcp_session_terminated(requested_session)
 	var should_queue_event := establish_session or has_existing_session
-	var session_id := _resolve_mcp_session_id(headers) if should_queue_event else ""
+	var session_id := _resolve_mcp_session_id(headers, not establish_session) if should_queue_event else ""
 	var event := _append_sse_event(session_id, json_rpc_response.duplicate(true), "streamable-http-post") if should_queue_event else _build_one_shot_sse_event(json_rpc_response)
 	var response := {
 		"status": 200,
@@ -402,7 +412,7 @@ func _build_mcp_session_terminated_response(headers: Dictionary) -> Dictionary:
 	var session_id := _resolve_mcp_session_id(headers)
 	var termination := _terminate_mcp_session(session_id)
 	return {
-		"status": 204,
+		"status": 200,
 		"_no_body": true,
 		"_mcp_session_id": session_id,
 		"_terminate_mcp_session_id": session_id,
@@ -536,7 +546,7 @@ func _attach_mcp_transport_headers(response: Dictionary, request_headers: Dictio
 	if establish_session:
 		enriched["_establish_mcp_session"] = true
 	if _should_remember_mcp_session(enriched):
-		var resolved_session_id := response_session_id if not response_session_id.is_empty() else _resolve_mcp_session_id(request_headers)
+		var resolved_session_id := response_session_id if not response_session_id.is_empty() else _resolve_mcp_session_id(request_headers, false)
 		response_headers["Mcp-Session-Id"] = resolved_session_id
 		_remember_mcp_session(resolved_session_id)
 	elif not response_session_id.is_empty() and _has_mcp_session(response_session_id) and not _is_mcp_session_terminated(response_session_id):
@@ -551,9 +561,9 @@ func _attach_mcp_transport_headers(response: Dictionary, request_headers: Dictio
 	return enriched
 
 
-func _resolve_mcp_session_id(headers: Dictionary) -> String:
+func _resolve_mcp_session_id(headers: Dictionary, allow_requested_session: bool = true) -> String:
 	var requested_session := str(headers.get("mcp-session-id", "")).strip_edges()
-	if not requested_session.is_empty() and _is_safe_http_header_value(requested_session):
+	if allow_requested_session and not requested_session.is_empty() and _is_safe_http_header_value(requested_session):
 		return requested_session
 	return _generate_mcp_session_id()
 
@@ -626,35 +636,43 @@ func _is_json_content_type(content_type: String) -> bool:
 
 
 func _accepts_mcp_response(accept_header: String) -> bool:
+	var weights := _mcp_accept_response_weights(accept_header)
+	if weights.is_empty():
+		return false
+	return float(weights.get("json_q", -1.0)) > 0.0 and float(weights.get("sse_q", -1.0)) > 0.0
+
+
+func _mcp_accept_response_weights(accept_header: String) -> Dictionary:
 	var normalized := accept_header.strip_edges().to_lower()
 	if normalized.is_empty():
-		return false
-	var accepts_json := false
-	var accepts_sse := false
+		return {}
+	var wildcard_q := -1.0
+	var json_q := -1.0
+	var sse_q := -1.0
 	for raw_part in normalized.split(",", false):
 		var parsed := _parse_accept_part(str(raw_part))
 		var media_range := str(parsed.get("media_range", ""))
 		var quality := float(parsed.get("q", 1.0))
-		if quality <= 0.0:
-			continue
-		if media_range == "application/json":
-			accepts_json = true
+		if media_range == "*/*":
+			wildcard_q = max(wildcard_q, quality)
+		elif media_range == "application/json":
+			json_q = max(json_q, quality)
 		elif media_range == "text/event-stream":
-			accepts_sse = true
-	return accepts_json and accepts_sse
+			sse_q = max(sse_q, quality)
+	if json_q < 0.0:
+		json_q = wildcard_q
+	if sse_q < 0.0:
+		sse_q = wildcard_q
+	return {
+		"json_q": json_q,
+		"sse_q": sse_q
+	}
 
 
 func _prefers_sse_response(accept_header: String) -> bool:
-	var json_q := -1.0
-	var sse_q := -1.0
-	for raw_part in accept_header.split(",", false):
-		var parsed := _parse_accept_part(str(raw_part))
-		var media_range := str(parsed.get("media_range", ""))
-		var quality := float(parsed.get("q", 1.0))
-		if media_range == "text/event-stream":
-			sse_q = max(sse_q, quality)
-		elif media_range == "application/json":
-			json_q = max(json_q, quality)
+	var weights := _mcp_accept_response_weights(accept_header)
+	var json_q := float(weights.get("json_q", -1.0))
+	var sse_q := float(weights.get("sse_q", -1.0))
 	return sse_q > json_q and sse_q > 0.0
 
 
