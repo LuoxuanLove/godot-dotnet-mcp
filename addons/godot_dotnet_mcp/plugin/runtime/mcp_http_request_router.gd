@@ -240,9 +240,10 @@ func _validate_mcp_transport_headers(headers: Dictionary) -> Dictionary:
 			"status": 400,
 			"details": "POST /mcp requires an initialized Mcp-Session-Id after initialize."
 		}
-	var active_session_guard := _validate_mcp_existing_session(headers)
-	if not active_session_guard.is_empty():
-		return active_session_guard
+	if not is_initialize_request:
+		var active_session_guard := _validate_mcp_existing_session(headers)
+		if not active_session_guard.is_empty():
+			return active_session_guard
 
 	return {}
 
@@ -389,7 +390,7 @@ func _build_mcp_post_sse_response(headers: Dictionary, json_rpc_response: Dictio
 	var requested_session := str(headers.get("mcp-session-id", "")).strip_edges()
 	var has_existing_session := not requested_session.is_empty() and _has_mcp_session(requested_session) and not _is_mcp_session_terminated(requested_session)
 	var should_queue_event := establish_session or has_existing_session
-	var session_id := _resolve_mcp_session_id(headers) if should_queue_event else ""
+	var session_id := _resolve_mcp_session_id(headers, not establish_session) if should_queue_event else ""
 	var event := _append_sse_event(session_id, json_rpc_response.duplicate(true), "streamable-http-post") if should_queue_event else _build_one_shot_sse_event(json_rpc_response)
 	var response := {
 		"status": 200,
@@ -545,7 +546,7 @@ func _attach_mcp_transport_headers(response: Dictionary, request_headers: Dictio
 	if establish_session:
 		enriched["_establish_mcp_session"] = true
 	if _should_remember_mcp_session(enriched):
-		var resolved_session_id := response_session_id if not response_session_id.is_empty() else _resolve_mcp_session_id(request_headers)
+		var resolved_session_id := response_session_id if not response_session_id.is_empty() else _resolve_mcp_session_id(request_headers, false)
 		response_headers["Mcp-Session-Id"] = resolved_session_id
 		_remember_mcp_session(resolved_session_id)
 	elif not response_session_id.is_empty() and _has_mcp_session(response_session_id) and not _is_mcp_session_terminated(response_session_id):
@@ -560,9 +561,9 @@ func _attach_mcp_transport_headers(response: Dictionary, request_headers: Dictio
 	return enriched
 
 
-func _resolve_mcp_session_id(headers: Dictionary) -> String:
+func _resolve_mcp_session_id(headers: Dictionary, allow_requested_session: bool = true) -> String:
 	var requested_session := str(headers.get("mcp-session-id", "")).strip_edges()
-	if not requested_session.is_empty() and _is_safe_http_header_value(requested_session):
+	if allow_requested_session and not requested_session.is_empty() and _is_safe_http_header_value(requested_session):
 		return requested_session
 	return _generate_mcp_session_id()
 

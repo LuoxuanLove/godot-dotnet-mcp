@@ -357,6 +357,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var initialize_without_protocol_result = initialize_without_protocol_response.get("result", {})
 	if not (initialize_without_protocol_result is Dictionary) or str((initialize_without_protocol_result as Dictionary).get("protocolVersion", "")) != ProtocolFactsScript.get_protocol_version():
 		return _failure("HTTP request router should allow initialize POST /mcp to reach JSON-RPC negotiation before MCP-Protocol-Version is established.")
+	var initialize_with_client_session_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"%s\"}}" % ProtocolFactsScript.get_protocol_version(), {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream", "mcp-session-id": "client-fixed-session"})
+	var initialize_with_client_session_headers: Dictionary = initialize_with_client_session_response.get("_headers", {})
+	var initialize_with_client_session_id := str(initialize_with_client_session_headers.get("Mcp-Session-Id", ""))
+	if initialize_with_client_session_id.is_empty() or initialize_with_client_session_id == "client-fixed-session":
+		return _failure("HTTP request router should ignore client-supplied session ids on initialize and issue a server-generated session.")
 
 	var generated_session_id := await _initialize_session(router, 4)
 	if generated_session_id.is_empty():
