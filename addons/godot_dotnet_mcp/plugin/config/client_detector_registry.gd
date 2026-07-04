@@ -124,7 +124,7 @@ func _resolve_config_path(client_id: String) -> String:
 		"claude_desktop":
 			return _path_from_app_data("Claude/claude_desktop_config.json", ConfigPathsScript.get_claude_config_path())
 		"trae":
-			return _path_from_app_data("Trae/User/mcp.json", ConfigPathsScript.get_trae_config_path())
+			return _path_from_app_data_candidates(["Trae CN/User/mcp.json", "Trae/User/mcp.json"], ConfigPathsScript.get_trae_config_path())
 		"antigravity":
 			return _path_from_home(".gemini/config/mcp_config.json", ConfigPathsScript.get_antigravity_mcp_config_path())
 		"codex_desktop":
@@ -155,6 +155,24 @@ func _path_from_home(relative_path: String, fallback_path: String) -> String:
 
 func _path_from_app_data(relative_path: String, fallback_path: String) -> String:
 	return _path_from_resolver_root("get_app_data_root", relative_path, fallback_path)
+
+
+func _path_from_app_data_candidates(relative_paths: Array[String], fallback_path: String) -> String:
+	if _path_resolver != null and _path_resolver.has_method("get_app_data_root"):
+		var root := _normalize_path(str(_path_resolver.call("get_app_data_root")))
+		if not root.is_empty():
+			var resolved_candidates: Array[String] = []
+			for relative_path in relative_paths:
+				var candidate := _normalize_path("%s/%s" % [root, relative_path])
+				resolved_candidates.append(candidate)
+				if FileAccess.file_exists(candidate):
+					return candidate
+			var normalized_fallback := _normalize_path(fallback_path)
+			if not normalized_fallback.is_empty() and resolved_candidates.has(normalized_fallback):
+				return normalized_fallback
+			if not resolved_candidates.is_empty():
+				return resolved_candidates[0]
+	return fallback_path
 
 
 func _path_from_resolver_root(method_name: String, relative_path: String, fallback_path: String) -> String:

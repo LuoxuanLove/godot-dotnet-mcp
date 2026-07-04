@@ -1,6 +1,7 @@
 extends RefCounted
 
 const ClientDetectorRegistry = preload("res://addons/godot_dotnet_mcp/plugin/config/client_detector_registry.gd")
+const TRAE_CN_FIXTURE := "user://client_detector_registry_appdata/Trae CN/User/mcp.json"
 
 
 class FakePathResolver extends RefCounted:
@@ -38,6 +39,16 @@ class FakePathResolver extends RefCounted:
 			"manual_path_invalid": false,
 			"manual_path": ""
 		}
+
+
+class PathResolverWithAppData extends FakePathResolver:
+	var _app_data_root := ""
+
+	func _init(app_data_root: String) -> void:
+		_app_data_root = app_data_root.replace("\\", "/").strip_edges().trim_suffix("/")
+
+	func get_app_data_root() -> String:
+		return _app_data_root
 
 
 class FakeRuntimeInspector extends RefCounted:
@@ -87,6 +98,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Client detector registry should resolve Cursor config paths through the configured path resolver.")
 	if str(results.get("cline", {}).get("config_path", "")) != "C:/Users/Test/AppData/Roaming/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json":
 		return _failure("Client detector registry should resolve VS Code extension config paths through APPDATA.")
+	var trae_cn_absolute := ProjectSettings.globalize_path(TRAE_CN_FIXTURE).replace("\\", "/")
+	_ensure_file(TRAE_CN_FIXTURE, "{}")
+	var trae_registry = ClientDetectorRegistry.new()
+	trae_registry.configure(PathResolverWithAppData.new(trae_cn_absolute.get_slice("/Trae CN/User/", 0)), FakeRuntimeInspector.new(), FakeConfigEntryInspector.new())
+	var trae_results = trae_registry.detect_all(PackedStringArray())
+	if str(trae_results.get("trae", {}).get("config_path", "")) != trae_cn_absolute:
+		return _failure("Trae registry detection should preserve the existing Trae CN config path when resolver-based candidates are available.")
 	if not str(results.get("codex_desktop", {}).get("config_path", "")).is_empty():
 		return _failure("Client detector registry should not invent a Codex Desktop config path when no production config file is known.")
 	if not str(results.get("opencode_desktop", {}).get("config_path", "")).is_empty():
@@ -161,3 +179,13 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message,
 	}
+
+
+func _ensure_file(path: String, text: String) -> void:
+	var absolute_path := ProjectSettings.globalize_path(path)
+	DirAccess.make_dir_recursive_absolute(absolute_path.get_base_dir())
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return
+	file.store_string(text)
+	file.close()
