@@ -1,0 +1,46 @@
+docs/ja/変更履歴.md
+  s_66d6019d75d323::t_9a08660218f6db 64
+docs/ko/변경-로그.md
+  s_66d6019d75d323::t_26928a64eba526 64
+tests/godot_plugin_harness_fixture/tests/plugin_update_tool_facade_service_contract_test.gd
+  s_66d6019d75d323::t_2d50b9512bf336 26-30,60-61
+docs/zh-CN/变更日志.md
+  s_66d6019d75d323::t_b3807602c4b112 67
+tests/godot_plugin_harness_fixture/tests/plugin_update_refs_discovery_service_contract_test.gd
+  s_66d6019d75d323::t_5a7e0fe83a33c7 70-110,142-143
+addons/godot_dotnet_mcp/plugin/runtime/plugin_update_refs_discovery_service.gd
+  s_66d6019d75d323::t_d71160a3df816d 121-163,165-227
+  s_66d6019d75d323::t_0b739da527f5e7 164
+addons/godot_dotnet_mcp/plugin/runtime/plugin_update_tool_facade_service.gd
+  s_66d6019d75d323::t_3a5346a4043a3c 139
+docs/en/CHANGELOG.md
+  s_66d6019d75d323::t_84be48d6557cfc 66
+addons/godot_dotnet_mcp/plugin.gd
+  s_66d6019d75d323::t_357e5c98863b86 52,1004
+  s_66d6019d75d323::t_2e9dd9a5f2f95a 845-855,857-868
+  s_66d6019d75d323::t_a0f5b0d072f700 2356,2402-2405
+  s_66d6019d75d323::t_a4c88cd652cbbb 856
+  s_66d6019d75d323::t_e49b266008d1dd 720,801
+  s_66d6019d75d323::t_00521e4a06a85c 975,1073
+  s_66d6019d75d323::t_33bc34cce8b30c 1600,1681,1694-1711
+  s_66d6019d75d323::t_ea5665b4d49a90 1311-1312,1396-1409,1412,1419
+  s_66d6019d75d323::t_8f4814eaa885eb 1598-1599,1679-1680
+  s_66d6019d75d323::t_91ae9f2e75cfe8 1712-1713
+  s_66d6019d75d323::t_802c4644ab8843 2406-2407
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "774e062cad32d8283de0df121b862157f1ef0a6c",
+  "prompts": {},
+  "sessions": {
+    "s_66d6019d75d323": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2c37-c0dd-7fd1-91a0-bba363bbbc8d",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
