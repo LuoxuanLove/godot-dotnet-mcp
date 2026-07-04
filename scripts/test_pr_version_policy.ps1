@@ -6,8 +6,10 @@ $metadataFiles = @(
     "addons/godot_dotnet_mcp/plugin.cfg",
     "addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.json",
     "addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd",
-    "addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+    "addons/godot_dotnet_mcp/.dotnet_bridge/DotnetBridge.csproj"
 )
+
+$legacyBridgeMetadataPath = "addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
 
 function Convert-ToAssemblyVersion {
     param([string]$Version)
@@ -18,13 +20,17 @@ function Write-MetadataFixture {
     param(
         [string]$RepositoryRoot,
         [string]$Version,
-        [string]$PluginDescription = "Policy fixture"
+        [string]$PluginDescription = "Policy fixture",
+        [switch]$UseLegacyBridgePath
     )
 
     $pluginDir = Join-Path $RepositoryRoot "addons\godot_dotnet_mcp"
     $factsDir = Join-Path $pluginDir "plugin\runtime"
-    $bridgeDir = Join-Path $pluginDir "dotnet_bridge"
+    $bridgeMetadataPath = if ($UseLegacyBridgePath) { $legacyBridgeMetadataPath } else { $metadataFiles[3] }
+    $alternateBridgeMetadataPath = if ($UseLegacyBridgePath) { $metadataFiles[3] } else { $legacyBridgeMetadataPath }
+    $bridgeDir = Split-Path -Parent (Join-Path $RepositoryRoot $bridgeMetadataPath)
     New-Item -ItemType Directory -Path $pluginDir, $factsDir, $bridgeDir -Force | Out-Null
+    Remove-Item -LiteralPath (Join-Path $RepositoryRoot $alternateBridgeMetadataPath) -Force -ErrorAction SilentlyContinue
 
     @"
 [plugin]
@@ -74,7 +80,7 @@ static func _default_facts() -> Dictionary:
     <InformationalVersion>$Version</InformationalVersion>
   </PropertyGroup>
 </Project>
-"@ | Set-Content -LiteralPath (Join-Path $RepositoryRoot $metadataFiles[3]) -Encoding UTF8
+"@ | Set-Content -LiteralPath (Join-Path $RepositoryRoot $bridgeMetadataPath) -Encoding UTF8
 }
 
 function New-PolicyFixture {
@@ -83,12 +89,15 @@ function New-PolicyFixture {
         [string]$ComparisonBaseVersion = "",
         [string]$HeadVersion = "1.0.0",
         [string]$HeadBranch = "feature/tooling",
+        [switch]$BaseUsesLegacyBridgePath,
+        [switch]$ComparisonBaseUsesLegacyBridgePath,
+        [switch]$HeadUsesLegacyBridgePath,
         [scriptblock]$MutateHead = $null
     )
 
     $repo = Join-Path ([System.IO.Path]::GetTempPath()) ("godot-dotnet-mcp-version-policy-" + [System.Guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $repo | Out-Null
-    Write-MetadataFixture -RepositoryRoot $repo -Version $BaseVersion -PluginDescription "Base fixture"
+    Write-MetadataFixture -RepositoryRoot $repo -Version $BaseVersion -PluginDescription "Base fixture" -UseLegacyBridgePath:$BaseUsesLegacyBridgePath
 
     git -C $repo init -q
     git -C $repo config user.email "ci@example.invalid"
@@ -99,13 +108,13 @@ function New-PolicyFixture {
 
     if (-not [string]::IsNullOrWhiteSpace($ComparisonBaseVersion)) {
         git -C $repo switch -c refactor/v2.0.0 -q
-        Write-MetadataFixture -RepositoryRoot $repo -Version $ComparisonBaseVersion -PluginDescription "Comparison base fixture"
+        Write-MetadataFixture -RepositoryRoot $repo -Version $ComparisonBaseVersion -PluginDescription "Comparison base fixture" -UseLegacyBridgePath:$ComparisonBaseUsesLegacyBridgePath
         git -C $repo add addons
         git -C $repo commit -m "comparison base" -q
     }
 
     git -C $repo switch -c $HeadBranch -q
-    Write-MetadataFixture -RepositoryRoot $repo -Version $HeadVersion
+    Write-MetadataFixture -RepositoryRoot $repo -Version $HeadVersion -UseLegacyBridgePath:$HeadUsesLegacyBridgePath
     if ($null -ne $MutateHead) {
         & $MutateHead $repo
     }
@@ -124,6 +133,9 @@ function Invoke-PolicyScenario {
         [string]$ComparisonBaseVersion = "",
         [string]$HeadVersion = "1.0.0",
         [scriptblock]$MutateHead = $null,
+        [switch]$BaseUsesLegacyBridgePath,
+        [switch]$ComparisonBaseUsesLegacyBridgePath,
+        [switch]$HeadUsesLegacyBridgePath,
         [bool]$ShouldPass,
         [string]$RepositoryOwner = "LuoxuanLove",
         [string]$HeadRepositoryOwner = "LuoxuanLove",
@@ -131,7 +143,7 @@ function Invoke-PolicyScenario {
         [switch]$RequireTrustedReleaseBranch
     )
 
-    $repo = New-PolicyFixture -BaseVersion $BaseVersion -ComparisonBaseVersion $ComparisonBaseVersion -HeadVersion $HeadVersion -HeadBranch $HeadBranch -MutateHead $MutateHead
+    $repo = New-PolicyFixture -BaseVersion $BaseVersion -ComparisonBaseVersion $ComparisonBaseVersion -HeadVersion $HeadVersion -HeadBranch $HeadBranch -BaseUsesLegacyBridgePath:$BaseUsesLegacyBridgePath -ComparisonBaseUsesLegacyBridgePath:$ComparisonBaseUsesLegacyBridgePath -HeadUsesLegacyBridgePath:$HeadUsesLegacyBridgePath -MutateHead $MutateHead
     try {
         $headCommit = (git -C $repo rev-parse HEAD).Trim()
         $baseRef = if ([string]::IsNullOrWhiteSpace($ComparisonBaseVersion)) { "dev" } else { $BaseBranch }
@@ -168,6 +180,7 @@ function Invoke-PolicyScenario {
 Invoke-PolicyScenario -Name "non-release unchanged metadata" -HeadBranch "feature/tooling" -HeadVersion "1.0.0" -ShouldPass $true
 Invoke-PolicyScenario -Name "refactor base unchanged metadata" -BaseBranch "refactor/v2.0.0" -HeadBranch "feature/v2.0-tooling" -HeadVersion "1.0.0" -ShouldPass $true
 Invoke-PolicyScenario -Name "refactor base compares against refactor ref, not default branch checkout" -BaseBranch "refactor/v2.0.0" -BaseVersion "1.3.0" -ComparisonBaseVersion "2.0.0" -HeadBranch "feature/v2.0-policy" -HeadVersion "2.0.0" -ShouldPass $true
+Invoke-PolicyScenario -Name "refactor base bridge metadata can move from legacy to hidden path" -BaseBranch "refactor/v2.0.0" -BaseVersion "1.3.0" -ComparisonBaseVersion "2.0.0" -ComparisonBaseUsesLegacyBridgePath -HeadBranch "feature/v2.0-bridge-path" -HeadVersion "2.0.0" -ShouldPass $true
 Invoke-PolicyScenario -Name "v2 base unchanged metadata" -BaseBranch "v2.0" -HeadBranch "feature/v2-tooling" -HeadVersion "1.0.0" -ShouldPass $true
 Invoke-PolicyScenario -Name "v2 release baseline stacked base unchanged metadata" -BaseBranch "release/v2.0.0-baseline" -HeadBranch "feature/v2-session-contracts" -HeadVersion "1.0.0" -ShouldPass $true
 Invoke-PolicyScenario -Name "v2 feature stacked base unchanged metadata" -BaseBranch "feature/v2-resource-reference-graph" -HeadBranch "feature/v2-session-lifecycle-contract" -HeadVersion "1.0.0" -ShouldPass $true

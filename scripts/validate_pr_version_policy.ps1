@@ -13,6 +13,11 @@
 
 $ErrorActionPreference = "Stop"
 
+$bridgeMetadataPaths = @(
+    "addons/godot_dotnet_mcp/.dotnet_bridge/DotnetBridge.csproj",
+    "addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+)
+
 $versionFields = @(
     @{
         Path = "addons/godot_dotnet_mcp/plugin.cfg"
@@ -30,27 +35,27 @@ $versionFields = @(
         Pattern = '"server_version"\s*:\s*"([^"]+)"'
     },
     @{
-        Path = "addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+        Paths = $bridgeMetadataPaths
         Name = "bridge Version"
         Pattern = '<Version>([^<]+)</Version>'
     },
     @{
-        Path = "addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+        Paths = $bridgeMetadataPaths
         Name = "bridge VersionPrefix"
         Pattern = '<VersionPrefix>([^<]+)</VersionPrefix>'
     },
     @{
-        Path = "addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+        Paths = $bridgeMetadataPaths
         Name = "bridge AssemblyVersion"
         Pattern = '<AssemblyVersion>([^<]+)</AssemblyVersion>'
     },
     @{
-        Path = "addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+        Paths = $bridgeMetadataPaths
         Name = "bridge FileVersion"
         Pattern = '<FileVersion>([^<]+)</FileVersion>'
     },
     @{
-        Path = "addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+        Paths = $bridgeMetadataPaths
         Name = "bridge InformationalVersion"
         Pattern = '<InformationalVersion>([^<]+)</InformationalVersion>'
     }
@@ -214,6 +219,49 @@ function Read-VersionContent {
     return Invoke-Git -Arguments @("show", "${Ref}:$Path")
 }
 
+function Test-VersionMetadataPathExists {
+    param(
+        [string]$Ref,
+        [string]$Path
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Ref)) {
+        return Test-Path -LiteralPath (Join-Path $RepositoryRoot $Path)
+    }
+
+    $output = Invoke-Git -Arguments @("ls-tree", "--name-only", $Ref, "--", $Path)
+    $entries = @($output -split "\r?\n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    return $entries -contains $Path
+}
+
+function Read-VersionFieldContent {
+    param(
+        [hashtable]$Field,
+        [string]$Ref,
+        [string]$Label
+    )
+
+    $paths = @()
+    if ($Field.ContainsKey("Paths")) {
+        $paths = @($Field.Paths)
+    } else {
+        $paths = @($Field.Path)
+    }
+
+    foreach ($path in $paths) {
+        if (Test-VersionMetadataPathExists -Ref $Ref -Path $path) {
+            $source = if ([string]::IsNullOrWhiteSpace($Ref)) { $path } else { "${Ref}:$path" }
+            return [pscustomobject]@{
+                Content = Read-VersionContent -Ref $Ref -Path $path -Label $Label
+                Path = $path
+                Source = $source
+            }
+        }
+    }
+
+    throw "Cannot find $Label metadata file for $($Field.Name): $($paths -join ', ')"
+}
+
 function Test-IsV2StackBaseBranch {
     param([string]$Branch)
 
@@ -291,12 +339,10 @@ Assert-ProtocolFactsParity -Ref $HeadRef -Label "head"
 
 $changes = New-Object System.Collections.Generic.List[string]
 foreach ($field in $versionFields) {
-    $baseSource = "${BaseRef}:$($field.Path)"
-    $headSource = if ([string]::IsNullOrWhiteSpace($HeadRef)) { $field.Path } else { "${HeadRef}:$($field.Path)" }
-    $baseContent = Read-VersionContent -Ref $BaseRef -Path $field.Path -Label "base"
-    $headContent = Read-VersionContent -Ref $HeadRef -Path $field.Path -Label "head"
-    $baseValue = Get-VersionValue -Content $baseContent -Pattern $field.Pattern -Source $baseSource -Name $field.Name
-    $headValue = Get-VersionValue -Content $headContent -Pattern $field.Pattern -Source $headSource -Name $field.Name
+    $baseMetadata = Read-VersionFieldContent -Field $field -Ref $BaseRef -Label "base"
+    $headMetadata = Read-VersionFieldContent -Field $field -Ref $HeadRef -Label "head"
+    $baseValue = Get-VersionValue -Content $baseMetadata.Content -Pattern $field.Pattern -Source $baseMetadata.Source -Name $field.Name
+    $headValue = Get-VersionValue -Content $headMetadata.Content -Pattern $field.Pattern -Source $headMetadata.Source -Name $field.Name
 
     if ($baseValue -ne $headValue) {
         $changes.Add("$($field.Name): $baseValue -> $headValue")
