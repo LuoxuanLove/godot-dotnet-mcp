@@ -471,6 +471,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_compare_difference": "por delante %d / por detrás %d",
 	"settings_update_compare_loading": "comparando...",
 	"settings_update_refs_error": "No se pudieron descubrir las referencias de actualización.",
+	"settings_update_refs_request_timeout": "La solicitud %s agotó el tiempo tras %.1f s sin completarse (página %s).",
 	"settings_update_selected_target": "Objetivo seleccionado:",
 	"settings_update_check": "Descubrir",
 	"settings_update_prepare": "Preparar",

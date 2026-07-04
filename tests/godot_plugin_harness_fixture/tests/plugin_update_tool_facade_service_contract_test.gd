@@ -23,6 +23,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"refs_state": "idle",
 		"refs_status": "Ready",
 		"refs_error": "",
+		"refs_pending": {
+			"serial": 9,
+			"waiting_kinds": ["branches"],
+			"active_requests": [{"kind": "branches", "elapsed_msec": 12000}]
+		},
 		"branches": ["dev", "refactor/v2.0.0"],
 		"releases": ["v2.0.0"],
 		"latest_stable_release": "v2.0.0",
@@ -52,6 +57,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("PluginUpdateToolFacadeService should resolve idle update state as ready.", {"status": status.get("status", "")})
 	if str((status.get("refs", {}) as Dictionary).get("latest_stable_release", "")) != "v2.0.0":
 		return _failure("PluginUpdateToolFacadeService should preserve ref discovery metadata.")
+	if int(((status.get("refs", {}) as Dictionary).get("pending", {}) as Dictionary).get("serial", 0)) != 9:
+		return _failure("PluginUpdateToolFacadeService should expose pending ref discovery diagnostics.")
 	if int((status.get("compare", {}) as Dictionary).get("ahead_by", -1)) != 5:
 		return _failure("PluginUpdateToolFacadeService should preserve compare metadata.")
 	context["target"]["ref"] = "mutated-ref"

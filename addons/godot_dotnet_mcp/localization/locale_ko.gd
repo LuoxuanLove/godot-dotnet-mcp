@@ -638,6 +638,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_compare_difference": "앞섬 %d / 뒤처짐 %d",
 	"settings_update_compare_loading": "확인 중...",
 	"settings_update_refs_error": "업데이트 참조 검색에 실패했습니다.",
+	"settings_update_refs_request_timeout": "%s 요청이 %.1f초 안에 완료되지 않아 시간 초과되었습니다(페이지 %s).",
 	"settings_update_selected_target": "선택한 대상:",
 	"settings_update_check": "검색",
 	"settings_update_prepare": "준비",

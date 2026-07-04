@@ -472,6 +472,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_compare_difference": "ahead %d / behind %d",
 	"settings_update_compare_loading": "checking...",
 	"settings_update_refs_error": "更新参照の検出に失敗しました。",
+	"settings_update_refs_request_timeout": "%s リクエストは %.1f 秒以内に完了せずタイムアウトしました（%s ページ目）。",
 	"settings_update_selected_target": "選択中の対象:",
 	"settings_update_check": "検出",
 	"settings_update_prepare": "準備",
