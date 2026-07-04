@@ -415,7 +415,6 @@ internal static class DotnetCliRunner
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            KillProcessTree(process);
             throw;
         }
         finally

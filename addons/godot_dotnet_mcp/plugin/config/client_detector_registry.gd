@@ -5,6 +5,7 @@ class_name ClientDetectorRegistry
 const ClientConfigFileDetectorScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_config_file_detector.gd")
 const ClientExecutableDetectorScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_executable_detector.gd")
 const ClientCapabilityMatrixScript = preload("res://addons/godot_dotnet_mcp/plugin/config/client_capability_matrix.gd")
+const ConfigPathsScript = preload("res://addons/godot_dotnet_mcp/plugin/config/config_paths.gd")
 
 var _path_resolver: Variant = null
 var _runtime_inspector: Variant = null
@@ -119,30 +120,68 @@ func _detect_executable_client(client_id: String, running_processes: PackedStrin
 func _resolve_config_path(client_id: String) -> String:
 	match client_id:
 		"cursor":
-			return "C:/Users/Test/.cursor/mcp.json"
+			return _path_from_home(".cursor/mcp.json", ConfigPathsScript.get_cursor_config_path())
 		"claude_desktop":
-			return "C:/Users/Test/Claude/claude_desktop.json"
+			return _path_from_app_data("Claude/claude_desktop_config.json", ConfigPathsScript.get_claude_config_path())
 		"trae":
-			return "C:/Users/Test/Trae/config.json"
+			return _path_from_app_data_candidates(["Trae CN/User/mcp.json", "Trae/User/mcp.json"], ConfigPathsScript.get_trae_config_path())
 		"antigravity":
-			return "C:/Users/Test/.gemini/config/mcp_config.json"
+			return _path_from_home(".gemini/config/mcp_config.json", ConfigPathsScript.get_antigravity_mcp_config_path())
 		"codex_desktop":
-			return "C:/Users/Test/Codex/config.json"
+			return ""
 		"gemini":
-			return "C:/Users/Test/.gemini/settings.json"
+			return _path_from_home(".gemini/settings.json", ConfigPathsScript.get_gemini_config_path())
 		"opencode_desktop":
-			return "C:/Users/Test/.opencode/config.json"
+			return ""
 		"opencode":
-			return "C:/Users/Test/.config/opencode/opencode.json"
+			return _path_from_home(".config/opencode/opencode.json", ConfigPathsScript.get_opencode_config_path())
 		"windsurf":
-			return "C:/Users/Test/.codeium/windsurf/mcp_config.json"
+			return _path_from_home(".codeium/windsurf/mcp_config.json", ConfigPathsScript.get_windsurf_config_path())
 		"cline":
-			return "C:/Users/Test/AppData/Roaming/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
+			return _path_from_app_data("Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json", ConfigPathsScript.get_cline_config_path())
 		"roo_code":
-			return "C:/Users/Test/AppData/Roaming/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json"
+			return _path_from_app_data("Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json", ConfigPathsScript.get_roo_config_path())
 		"qwen":
-			return "C:/Users/Test/.qwen/settings.json"
+			return _path_from_home(".qwen/settings.json", ConfigPathsScript.get_qwen_config_path())
 		"cherry_studio":
-			return "C:/Users/Test/AppData/Roaming/CherryStudio"
+			return _path_from_app_data("CherryStudio", ConfigPathsScript.get_cherry_studio_config_hint_path())
 		_:
 			return ""
+
+
+func _path_from_home(relative_path: String, fallback_path: String) -> String:
+	return _path_from_resolver_root("get_home_root", relative_path, fallback_path)
+
+
+func _path_from_app_data(relative_path: String, fallback_path: String) -> String:
+	return _path_from_resolver_root("get_app_data_root", relative_path, fallback_path)
+
+
+func _path_from_app_data_candidates(relative_paths: Array[String], fallback_path: String) -> String:
+	if _path_resolver != null and _path_resolver.has_method("get_app_data_root"):
+		var root := _normalize_path(str(_path_resolver.call("get_app_data_root")))
+		if not root.is_empty():
+			var resolved_candidates: Array[String] = []
+			for relative_path in relative_paths:
+				var candidate := _normalize_path("%s/%s" % [root, relative_path])
+				resolved_candidates.append(candidate)
+				if FileAccess.file_exists(candidate):
+					return candidate
+			var normalized_fallback := _normalize_path(fallback_path)
+			if not normalized_fallback.is_empty() and resolved_candidates.has(normalized_fallback):
+				return normalized_fallback
+			if not resolved_candidates.is_empty():
+				return resolved_candidates[0]
+	return fallback_path
+
+
+func _path_from_resolver_root(method_name: String, relative_path: String, fallback_path: String) -> String:
+	if _path_resolver != null and _path_resolver.has_method(method_name):
+		var root := _normalize_path(str(_path_resolver.call(method_name)))
+		if not root.is_empty():
+			return _normalize_path("%s/%s" % [root, relative_path])
+	return fallback_path
+
+
+func _normalize_path(path: String) -> String:
+	return path.replace("\\", "/").strip_edges().trim_suffix("/")
