@@ -607,6 +607,8 @@ func _run_dotnet_command(action: String, project_path: String, timeout_sec: int)
 	var args: Array[String] = [action, global_project_path, "--nologo", "-v:q"]
 	if action == "build":
 		args.append("--no-restore")
+	if action == "build" or action == "restore":
+		args.append("--disable-build-servers")
 
 	var command_result = _execute_process_with_pipe("dotnet", args, timeout_sec)
 	if not bool(command_result.get("success", false)):

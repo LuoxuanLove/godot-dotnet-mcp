@@ -192,6 +192,12 @@ func clear() -> void:
 	}
 
 
+func dispose() -> void:
+	clear()
+	if _singleton == self:
+		_singleton = null
+
+
 func _start_next_job() -> void:
 	if _pending_script_path.is_empty():
 		return

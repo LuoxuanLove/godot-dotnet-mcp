@@ -111,7 +111,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var stdio_local_disabled_check := _assert_stable_stdio_tool_error(
 		stdio_local_disabled_response.get("result", {}),
 		"disabled",
-		"stdio-local disabled"
+		"stdio-local disabled",
+		true
 	)
 	if not bool(stdio_local_disabled_check.get("success", false)):
 		return stdio_local_disabled_check
@@ -153,36 +154,65 @@ func _assert_matching_tool_error(router_result: Dictionary, stdio_result, expect
 		return _failure("Shared router should mark %s case as an error." % expected_text)
 	if not bool(stdio_result_dict.get("isError", false)):
 		return _failure("Stdio should mark %s case as an error." % expected_text)
-	var router_structured = router_result.get("structuredContent", {})
-	var stdio_structured = stdio_result_dict.get("structuredContent", {})
-	if not (router_structured is Dictionary) or not (stdio_structured is Dictionary):
-		return _failure("Both router and stdio should expose structuredContent for %s errors." % expected_text)
-	var router_error := str((router_structured as Dictionary).get("error", ""))
-	var stdio_error := str((stdio_structured as Dictionary).get("error", ""))
+	if router_result.has("structuredContent") or stdio_result_dict.has("structuredContent"):
+		return _failure("Router and stdio should omit structuredContent for %s errors when outputSchema is not declared." % expected_text)
+	var router_payload := _tool_result_payload(router_result)
+	var stdio_payload := _tool_result_payload(stdio_result_dict)
+	var router_error := str(router_payload.get("error", ""))
+	var stdio_error := str(stdio_payload.get("error", ""))
 	if router_error != stdio_error:
 		return _failure("Stdio %s error should match shared router error. router=%s stdio=%s" % [expected_text, router_error, stdio_error])
 	if stdio_error.find(expected_text) == -1:
 		return _failure("Stdio %s error should preserve the expected text." % expected_text)
-	if bool((stdio_structured as Dictionary).get("success", true)):
-		return _failure("Stdio %s structuredContent should report success=false." % expected_text)
+	if bool(stdio_payload.get("success", true)):
+		return _failure("Stdio %s text JSON payload should report success=false." % expected_text)
 	return {"success": true, "error": ""}
 
 
-func _assert_stable_stdio_tool_error(stdio_result, expected_text: String, label: String) -> Dictionary:
+func _assert_stable_stdio_tool_error(stdio_result, expected_text: String, label: String, expect_structured_content: bool = false) -> Dictionary:
 	if not (stdio_result is Dictionary):
 		return _failure("Stdio tools/call should return a tool result for %s errors." % label)
 	var stdio_result_dict: Dictionary = stdio_result
 	if not bool(stdio_result_dict.get("isError", false)):
 		return _failure("Stdio should mark %s as an error." % label)
-	var stdio_structured = stdio_result_dict.get("structuredContent", {})
-	if not (stdio_structured is Dictionary):
-		return _failure("Stdio should expose structuredContent for %s errors." % label)
-	var stdio_error := str((stdio_structured as Dictionary).get("error", ""))
+	if expect_structured_content:
+		if not (stdio_result_dict.get("structuredContent", null) is Dictionary):
+			return _failure("Stdio should expose structuredContent for %s errors when tools/list advertises an outputSchema." % label)
+	else:
+		if stdio_result_dict.has("structuredContent"):
+			return _failure("Stdio should omit structuredContent for %s errors when outputSchema is not advertised." % label)
+	var stdio_text_payload := _tool_result_text_payload(stdio_result_dict)
+	var stdio_payload := stdio_text_payload
+	if expect_structured_content:
+		stdio_payload = stdio_result_dict.get("structuredContent", {}) as Dictionary
+	var stdio_error := str(stdio_payload.get("error", ""))
 	if stdio_error.find(expected_text) == -1:
 		return _failure("Stdio %s error should preserve '%s'. actual=%s" % [label, expected_text, stdio_error])
-	if bool((stdio_structured as Dictionary).get("success", true)):
-		return _failure("Stdio %s structuredContent should report success=false." % label)
+	if bool(stdio_payload.get("success", true)):
+		return _failure("Stdio %s text JSON payload should report success=false." % label)
+	if expect_structured_content and JSON.stringify(stdio_text_payload) != JSON.stringify(stdio_result_dict.get("structuredContent", {})):
+		return _failure("Stdio %s structuredContent should match the text JSON payload." % label)
 	return {"success": true, "error": ""}
+
+
+func _tool_result_payload(result: Dictionary) -> Dictionary:
+	var structured = result.get("structuredContent", null)
+	if structured is Dictionary:
+		return structured as Dictionary
+	return _tool_result_text_payload(result)
+
+
+func _tool_result_text_payload(result: Dictionary) -> Dictionary:
+	var content = result.get("content", [])
+	if not (content is Array) or (content as Array).is_empty():
+		return {}
+	var first = (content as Array)[0]
+	if not (first is Dictionary):
+		return {}
+	var parsed = JSON.parse_string(str((first as Dictionary).get("text", "")))
+	if parsed is Dictionary:
+		return parsed as Dictionary
+	return {}
 
 
 func _assert_stdio_framing_guards(stdio_server) -> Dictionary:

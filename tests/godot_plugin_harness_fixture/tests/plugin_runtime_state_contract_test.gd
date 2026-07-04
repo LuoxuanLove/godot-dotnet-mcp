@@ -1,7 +1,7 @@
 extends RefCounted
 
 const PluginRuntimeStateScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
-const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 
 
 class FakeLocalization extends RefCounted:
@@ -34,8 +34,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("PluginRuntimeState should expose the full tool profile.")
 	var default_enabled_categories: Array = default_profile.get("enabled_categories", [])
 	for visual_category in ["material", "shader", "lighting", "particle", "tilemap", "geometry"]:
-		if not MCPToolManifest.ALL_TOOL_CATEGORIES.has(visual_category):
-			return _failure("MCPToolManifest should keep the split visual category registered: %s" % visual_category)
+		if not ToolCatalogManifest.get_all_tool_categories().has(visual_category):
+			return _failure("ToolCatalogManifest should keep the split visual category registered: %s" % visual_category)
 		if not default_enabled_categories.has(visual_category):
 			return _failure("Default tool profile should keep split visual authoring category enabled: %s" % visual_category)
 	var full_excluded_categories: Array = full_profile.get("excluded_categories", [])

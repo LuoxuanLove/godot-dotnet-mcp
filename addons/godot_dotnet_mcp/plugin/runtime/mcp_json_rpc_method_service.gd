@@ -9,6 +9,10 @@ var _resources_service = null
 var _prompts_service = null
 var _response_service = null
 var _log := Callable()
+var _last_initialize_params: Dictionary = {}
+var _last_client_info: Dictionary = {}
+var _last_client_capabilities: Dictionary = {}
+var _last_client_meta: Dictionary = {}
 
 
 func configure(context = null) -> void:
@@ -28,13 +32,19 @@ func dispose() -> void:
 	_prompts_service = null
 	_response_service = null
 	_log = Callable()
+	_last_initialize_params.clear()
+	_last_client_info.clear()
+	_last_client_capabilities.clear()
+	_last_client_meta.clear()
 
 
-func handle_initialize(_params: Dictionary, id) -> Dictionary:
+func handle_initialize(params: Dictionary, id) -> Dictionary:
+	_record_initialize_params(params)
 	var result = {
 		"protocolVersion": MCPProtocolFacts.get_protocol_version(),
 		"capabilities": _build_capabilities(),
 		"serverInfo": MCPProtocolFacts.build_server_info(),
+		"instructions": "Use resources/list and resources/read for catalog, guide, state, and diagnostic context before calling exposed tools.",
 		"_meta": {
 			"toolSchemaVersion": MCPProtocolFacts.get_tool_schema_version()
 		}
@@ -112,6 +122,36 @@ func _validate_tools_call_params(params: Dictionary) -> String:
 	if params.has("arguments") and not (params.get("arguments") is Dictionary):
 		return "Invalid params: tools/call arguments must be an object"
 	return ""
+
+
+func get_last_initialize_params() -> Dictionary:
+	return _last_initialize_params.duplicate(true)
+
+
+func get_last_client_info() -> Dictionary:
+	return _last_client_info.duplicate(true)
+
+
+func get_last_client_capabilities() -> Dictionary:
+	return _last_client_capabilities.duplicate(true)
+
+
+func get_last_client_meta() -> Dictionary:
+	return _last_client_meta.duplicate(true)
+
+
+func _record_initialize_params(params: Dictionary) -> void:
+	_last_initialize_params = params.duplicate(true)
+	_last_client_info = _duplicate_dictionary_or_empty(params.get("clientInfo", {}))
+	_last_client_capabilities = _duplicate_dictionary_or_empty(params.get("capabilities", {}))
+	_last_client_meta = _duplicate_dictionary_or_empty(params.get("_meta", {}))
+
+
+func _duplicate_dictionary_or_empty(value) -> Dictionary:
+	if value is Dictionary:
+		return (value as Dictionary).duplicate(true)
+	return {}
+
 
 func handle_notification(method: String, _params: Dictionary) -> void:
 	match method:

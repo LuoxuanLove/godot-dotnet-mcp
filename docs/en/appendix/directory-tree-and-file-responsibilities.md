@@ -156,8 +156,7 @@ The docs are part of the project and must stay in sync with the code.
 
 | Path | Purpose |
 |---|---|
-| `tool_registry.gd` | Builtin executor registration source, defining category, domain key, script path, and hot-reload metadata |
-| `tool_manifest.gd` | Tool catalog access layer. It keeps `MCPToolManifest` as the stable entry point and provides domain and category metadata |
+| `tool_catalog_manifest.gd` | Builtin executor registration and catalog metadata source, defining categories, domain keys, script paths, hot-reload metadata, and public MCP tool domains |
 | `base_tools.gd` | Shared base helpers |
 | `mcp_debug_buffer.gd` | Log buffer |
 | `mcp_file_utils.gd` / `mcp_json_utils.gd` / `mcp_node_utils.gd` / `mcp_type_utils.gd` | General helpers |
@@ -173,10 +172,11 @@ The docs are part of the project and must stay in sync with the code.
 
 ### Category Executor Directories
 
-There are currently **26** executor category directories on disk. The builtin registration chain is centralized in `tools/tool_registry.gd`.
+There are currently **28** executor category directories on disk. The builtin registration chain is centralized in `tools/tool_catalog_manifest.gd`.
 
 - `animation/`
 - `audio/`
+- `dap/`
 - `debug/`
 - `editor/`
 - `filesystem/`
@@ -194,6 +194,7 @@ There are currently **26** executor category directories on disk. The builtin re
 - `plugin_runtime/`
 - `project/`
 - `resource/`
+- `runtime/`
 - `scene/`
 - `script/`
 - `shader/`
@@ -202,7 +203,7 @@ There are currently **26** executor category directories on disk. The builtin re
 - `ui/`
 - `user/`
 
-Each tool-domain directory normally has an `executor.gd`, and the formal builtin loading chain follows the categories registered in `tools/tool_registry.gd`.
+Each tool-domain directory normally has an `executor.gd`, and the formal builtin loading chain follows the categories registered in `tools/tool_catalog_manifest.gd`.
 
 ### `tools/system/`
 

@@ -26,7 +26,9 @@ Stdio now defaults to newline-delimited JSON-RPC for current MCP clients. Legacy
 
 Transport validation is stricter as well. HTTP and stdio now share deterministic JSON-RPC envelope behavior for malformed requests, response envelopes, disabled tools, duplicate or conflicting HTTP body headers, and session validation.
 
-Long-running editor sessions also get tighter cleanup: idle partial HTTP requests close after the timeout window, User-tool definition refreshes run only after explicit invalidation, and stopped debugger sessions are removed from the live bridge map immediately.
+Streamable HTTP replay is also more deliberate: GET SSE `open` metadata remains visible for current streams without entering the resumable event log, proxy headers are trusted only when explicitly enabled, and generated session IDs include additional random entropy.
+
+Long-running editor sessions also get tighter cleanup: idle partial HTTP requests close after the timeout window, User-tool definition refreshes run only after explicit invalidation, debug `dotnet build` diagnostics disable build servers, and stopped debugger sessions are removed from the live bridge map immediately.
 
 ### 🧭 Resource and Prompt UI
 
@@ -50,11 +52,15 @@ Clean install validation now checks both sides of that contract: exported addon 
 
 Catalog snapshots, catalog resources, `/api/tools`, Dock model metadata, Tools tab previews, search, and schema-copy paths use `ToolCatalogManifest` and `ToolCatalogSnapshotService` as the shared catalog fact path. This reduces drift between client discovery, HTTP diagnostics, and editor UI previews.
 
+Tool-call results now reserve `structuredContent` for tools whose `tools/list` entries advertise output schemas, while keeping text JSON content available for all clients. This keeps discovery metadata and call results aligned for strict MCP clients.
+
 The v2.0 line also splits many large root domain implementations into focused executors while keeping public facades where compatibility requires them. Audio, animation, signal, TileMap, UI, filesystem, node, project, resource, scene, group, geometry, material, lighting, navigation, particle, physics, shader, debug, and editor domains all move toward smaller implementation units.
 
 ### ✅ Compatibility and Validation
 
 This draft includes guardrails for the refactor rather than only feature text. Validation now covers public tool removals, root monolith closure, catalog facts, optional capability advertisement, changelog structure, release-note draft wording, Roslyn runtime bundle shape, clean Asset Library installs, safe bridge writes, and MCP 2025-11-25 conformance contracts.
+
+Runtime contracts now cover JSON-RPC cancellation notifications, bounded non-editor tool-call timeouts, editor automation watchdog release, and the direct `ToolCatalogManifest` catalog path.
 
 Compatibility is deliberately explicit: older discovery calls and legacy transports are documented as compatibility paths, while the default client guidance points to Resources, Prompts, canonical Tools, Streamable HTTP, and newline stdio.
 

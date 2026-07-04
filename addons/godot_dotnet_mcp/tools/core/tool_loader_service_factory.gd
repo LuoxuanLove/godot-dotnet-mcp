@@ -1,7 +1,7 @@
 @tool
 extends RefCounted
 
-const MCPToolRegistry = preload("res://addons/godot_dotnet_mcp/tools/tool_registry.gd")
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 const ToolPublicSurfacePolicyScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_public_surface_policy.gd")
 const ToolExecutionObserverScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_execution_observer.gd")
 const ToolRuntimeManagerScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_runtime_manager.gd")
@@ -28,7 +28,7 @@ const ToolLoaderLifecycleTickBudgetServiceScript = preload("res://addons/godot_d
 
 func ensure_services(current: Dictionary) -> Dictionary:
 	return {
-		"registry": _ensure(current, "registry", MCPToolRegistry),
+		"registry": _ensure(current, "registry", ToolCatalogManifest),
 		"state_store": _ensure(current, "state_store", ToolLoaderStateStoreScript),
 		"public_surface_policy": _ensure(current, "public_surface_policy", ToolPublicSurfacePolicyScript),
 		"execution_observer": _ensure(current, "execution_observer", ToolExecutionObserverScript),

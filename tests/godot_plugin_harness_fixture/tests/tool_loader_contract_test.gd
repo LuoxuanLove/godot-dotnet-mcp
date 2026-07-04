@@ -2,7 +2,6 @@ extends RefCounted
 
 const ToolLoaderScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader.gd")
 const ToolLoaderTickServiceScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_loader_tick_service.gd")
-const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
 const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 const ToolActivityRegistryScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
@@ -160,7 +159,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		var exposed_name := str(tool_def.get("name", ""))
 		var exposed_category := str(tool_def.get("category", ""))
 		exposed_names.append(exposed_name)
-		if not MCPToolManifest.PUBLIC_MCP_TOOL_CATEGORIES.has(exposed_category):
+		if not ToolCatalogManifest.PUBLIC_MCP_TOOL_CATEGORIES.has(exposed_category):
 			return _failure("Public MCP exposure should follow the manifest categories, not expose: %s" % exposed_category)
 		if not exposed_name.begins_with("%s_" % exposed_category):
 			return _failure("Public MCP exposure should prefix public tools with their manifest category: %s" % exposed_name)
@@ -603,6 +602,8 @@ func _assert_loader_recovers_services_after_hot_reload() -> Dictionary:
 	_loader._runtime_state_service = null
 	_loader._lifecycle_service = null
 	_loader._access_service = null
+	if _loader._lsp_diagnostics_service != null and _loader._lsp_diagnostics_service.has_method("dispose"):
+		_loader._lsp_diagnostics_service.dispose()
 	_loader._lsp_diagnostics_service = null
 	_loader._execution_context_service = null
 	_loader._context_service = null

@@ -14,19 +14,28 @@ var _write_sse_events := Callable()
 var _get_sse_events_since_index := Callable()
 var _tick_loader := Callable()
 var _max_pending_request_bytes := DEFAULT_MAX_PENDING_REQUEST_BYTES
+var _sse_heartbeat_interval_seconds := DEFAULT_SSE_HEARTBEAT_INTERVAL_SECONDS
+var _http_idle_connection_timeout_seconds := DEFAULT_HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS
+var _last_sse_inbound_log_at_unix := 0
 
 const MAX_REQUESTS_PER_DRAIN := 16
 const MAX_ACCEPTS_PER_FRAME := 8
 const MAX_REQUEST_HEADER_BYTES := 64 * 1024
 const DEFAULT_MAX_PENDING_REQUEST_BYTES := (1024 * 1024) + MAX_REQUEST_HEADER_BYTES
-const SSE_HEARTBEAT_INTERVAL_SECONDS := 15
-const HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS := 30
+const DEFAULT_SSE_HEARTBEAT_INTERVAL_SECONDS := 15
+const DEFAULT_HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS := 30
+const ENV_SSE_HEARTBEAT_INTERVAL_SECONDS := "GODOT_DOTNET_MCP_SSE_HEARTBEAT_INTERVAL_SECONDS"
+const ENV_HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS := "GODOT_DOTNET_MCP_HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS"
+const SSE_INBOUND_LOG_THROTTLE_SECONDS := 5
 
 
 func configure(connection_state, request_decoder, context = null) -> void:
 	_connection_state = connection_state
 	_request_decoder = request_decoder
 	_max_pending_request_bytes = DEFAULT_MAX_PENDING_REQUEST_BYTES
+	_sse_heartbeat_interval_seconds = _read_positive_int_environment(ENV_SSE_HEARTBEAT_INTERVAL_SECONDS, DEFAULT_SSE_HEARTBEAT_INTERVAL_SECONDS)
+	_http_idle_connection_timeout_seconds = _read_positive_int_environment(ENV_HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS, DEFAULT_HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS)
+	_last_sse_inbound_log_at_unix = 0
 	if context == null:
 		_reset_callbacks()
 		return
@@ -114,7 +123,7 @@ func _process_client(client: StreamPeerTCP) -> bool:
 				return true
 			_log("Received %d bytes, total pending: %d bytes" % [available, pending_byte_size], "debug")
 		if not received_bytes_this_frame and _should_disconnect_idle_http_client(client):
-			_log("Closing idle HTTP client after %d seconds without activity" % HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS, "debug")
+			_log("Closing idle HTTP client after %d seconds without activity" % _http_idle_connection_timeout_seconds, "debug")
 			client.disconnect_from_host()
 			return true
 		if not _connection_state.is_pending_empty(client):
@@ -138,7 +147,7 @@ func _should_disconnect_idle_http_client(client: StreamPeerTCP) -> bool:
 	if last_seen_at_unix <= 0:
 		return false
 	var now := int(Time.get_unix_time_from_system())
-	return now - last_seen_at_unix >= HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS
+	return now - last_seen_at_unix >= _http_idle_connection_timeout_seconds
 
 
 func _try_handle_pending_framing_error(client: StreamPeerTCP, pending_data: PackedByteArray) -> bool:
@@ -282,7 +291,9 @@ func _open_sse_stream(client: StreamPeerTCP, response: Dictionary) -> bool:
 
 func _process_sse_streaming_client(client: StreamPeerTCP) -> bool:
 	if client.get_available_bytes() > 0:
-		client.get_data(client.get_available_bytes())
+		var byte_count := client.get_available_bytes()
+		client.get_data(byte_count)
+		_log_sse_inbound_bytes(byte_count)
 	if _drain_sse_events(client):
 		return true
 	if not _write_sse_heartbeat.is_valid():
@@ -291,7 +302,7 @@ func _process_sse_streaming_client(client: StreamPeerTCP) -> bool:
 	if _connection_state != null and _connection_state.has_method("get_sse_last_heartbeat_at_unix"):
 		last_heartbeat = int(_connection_state.get_sse_last_heartbeat_at_unix(client))
 	var now := int(Time.get_unix_time_from_system())
-	if last_heartbeat > 0 and now - last_heartbeat < SSE_HEARTBEAT_INTERVAL_SECONDS:
+	if last_heartbeat > 0 and now - last_heartbeat < _sse_heartbeat_interval_seconds:
 		return false
 	var heartbeat_ok := bool(_write_sse_heartbeat.call(client))
 	if not heartbeat_ok:
@@ -301,6 +312,14 @@ func _process_sse_streaming_client(client: StreamPeerTCP) -> bool:
 	if _connection_state != null and _connection_state.has_method("mark_sse_heartbeat"):
 		_connection_state.mark_sse_heartbeat(client)
 	return false
+
+
+func _log_sse_inbound_bytes(byte_count: int) -> void:
+	var now := int(Time.get_unix_time_from_system())
+	if _last_sse_inbound_log_at_unix > 0 and now - _last_sse_inbound_log_at_unix < SSE_INBOUND_LOG_THROTTLE_SECONDS:
+		return
+	_last_sse_inbound_log_at_unix = now
+	_log("Discarded %d inbound byte(s) from a server-to-client SSE stream." % byte_count, "debug")
 
 
 func _disconnect_mcp_sse_session(request_client: StreamPeerTCP, session_id: String) -> void:
@@ -388,6 +407,16 @@ func _log_pending_request_wait(decoded_request: Dictionary, pending_byte_size: i
 func _log(message: String, level: String = "debug") -> void:
 	if _log_callback.is_valid():
 		_log_callback.call(message, level)
+
+
+func _read_positive_int_environment(name: String, default_value: int) -> int:
+	if not OS.has_environment(name):
+		return default_value
+	var value := OS.get_environment(name).strip_edges()
+	if not value.is_valid_int():
+		return default_value
+	var parsed := int(value)
+	return parsed if parsed > 0 else default_value
 
 
 func _reset_callbacks() -> void:

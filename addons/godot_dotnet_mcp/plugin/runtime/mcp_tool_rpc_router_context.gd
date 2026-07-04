@@ -9,6 +9,7 @@ var log := Callable()
 var sanitize_for_json := Callable()
 var ensure_initialized := Callable()
 var tool_activity_registry = null
+var tool_call_timeout_ms := -1
 
 
 func dispose() -> void:
@@ -19,3 +20,4 @@ func dispose() -> void:
 	sanitize_for_json = Callable()
 	ensure_initialized = Callable()
 	tool_activity_registry = null
+	tool_call_timeout_ms = -1

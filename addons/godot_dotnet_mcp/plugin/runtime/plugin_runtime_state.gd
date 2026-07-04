@@ -3,7 +3,7 @@ extends RefCounted
 class_name PluginRuntimeState
 
 const ToolProfileCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_profile_catalog.gd")
-const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 
 const SETTINGS_PATH := "user://godot_dotnet_mcp/settings.json"
 const TOOL_PROFILE_DIR := ToolProfileCatalog.PROFILE_STORAGE_DIR
@@ -26,11 +26,11 @@ const DEFAULT_SETTINGS: Dictionary = {
 	"update_release_tag": ""
 }
 
-static var ALL_TOOL_CATEGORIES: Array[String] = MCPToolManifest.get_all_tool_categories()
+static var ALL_TOOL_CATEGORIES: Array[String] = ToolCatalogManifest.get_all_tool_categories()
 const DEFAULT_COLLAPSED_DOMAINS: Array[String] = []
 
 const BUILTIN_TOOL_PROFILES: Array[Dictionary] = ToolProfileCatalog.BUILTIN_TOOL_PROFILES
-const TOOL_DOMAIN_DEFS: Array[Dictionary] = MCPToolManifest.TOOL_DOMAIN_DEFS
+const TOOL_DOMAIN_DEFS: Array[Dictionary] = ToolCatalogManifest.TOOL_DOMAIN_DEFS
 const DEFAULT_COLLAPSED_SYSTEM_TOOLS: Array[String] = [
 	"system_bindings_audit",
 	"system_editor_evidence",

@@ -55,14 +55,19 @@ func reset() -> void:
 
 
 func release() -> void:
-	if _service != null and is_instance_valid(_service) and _service.has_method("clear"):
-		_service.clear()
+	if _service != null and is_instance_valid(_service):
+		if _service.has_method("dispose"):
+			_service.dispose()
+		elif _service.has_method("clear"):
+			_service.clear()
 	_service = null
 	if _runtime_bridge != null:
 		if _runtime_bridge.has_method("set_gdscript_lsp_diagnostics_service"):
 			_runtime_bridge.set_gdscript_lsp_diagnostics_service(null)
 		if _runtime_bridge.has_method("set_tool_loader"):
 			_runtime_bridge.set_tool_loader(null)
+	_runtime_bridge = null
+	_tool_loader = null
 
 
 func get_debug_snapshot(tool_loader_status: Dictionary = {}) -> Dictionary:

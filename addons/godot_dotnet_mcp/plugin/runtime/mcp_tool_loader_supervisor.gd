@@ -75,6 +75,8 @@ func get_disabled_tools() -> Array:
 
 
 func is_tool_enabled(tool_name: String) -> bool:
+	if not _is_tool_known(tool_name):
+		return false
 	return not _disabled_tools.has(tool_name)
 
 
@@ -84,6 +86,10 @@ func is_tool_exposed(tool_name: String) -> bool:
 	if not _tool_loader.has_method("is_tool_exposed"):
 		return false
 	return bool(_tool_loader.is_tool_exposed(tool_name))
+
+
+func is_tool_known(tool_name: String) -> bool:
+	return _is_tool_known(tool_name)
 
 
 func get_tool_loader() -> MCPToolLoader:
@@ -160,6 +166,20 @@ func _rebuild_tool_loader(reason: String, force_reload_scripts: bool) -> Diction
 	var tool_count = int(summary.get("tool_count", 0))
 	_log_message("Tool loader summary after %s: %d tools / %d categories" % [reason, tool_count, category_count], "debug")
 	return summary
+
+
+func _is_tool_known(tool_name: String) -> bool:
+	var normalized := tool_name.strip_edges()
+	if normalized.is_empty() or _tool_loader == null or not _tool_loader.has_method("get_tool_definitions"):
+		return false
+	for tool_def in _tool_loader.get_tool_definitions():
+		if not (tool_def is Dictionary):
+			continue
+		var def_dict := tool_def as Dictionary
+		var full_name := str(def_dict.get("full_name", def_dict.get("name", "")))
+		if full_name == normalized:
+			return true
+	return false
 
 
 func _replace_tool_loader() -> void:

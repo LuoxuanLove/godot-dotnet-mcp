@@ -124,6 +124,13 @@ static func get_builtin_entries() -> Array[Dictionary]:
 	return BUILTIN_ENTRIES.duplicate(true)
 
 
+func collect_entries() -> Dictionary:
+	return {
+		"entries": get_builtin_entries(),
+		"errors": []
+	}
+
+
 static func get_builtin_categories() -> Array[String]:
 	var categories: Array[String] = []
 	for entry in BUILTIN_ENTRIES:

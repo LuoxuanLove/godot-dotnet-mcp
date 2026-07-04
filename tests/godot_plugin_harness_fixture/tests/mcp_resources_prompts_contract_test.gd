@@ -102,6 +102,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("initialize serverInfo should include the protocol facts server name.")
 	if str((server_info as Dictionary).get("description", "")) != ProtocolFactsScript.get_server_description():
 		return _failure("initialize serverInfo should include the protocol facts server description.")
+	if str((initialize_result as Dictionary).get("instructions", "")).is_empty():
+		return _failure("initialize should expose server instructions for MCP 2025-11-25 clients.")
 	if (initialize_result as Dictionary).has("toolSchemaVersion"):
 		return _failure("initialize should not expose non-standard toolSchemaVersion at the top level.")
 	var initialize_meta = (initialize_result as Dictionary).get("_meta", {})
@@ -112,7 +114,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not capability_failure.is_empty():
 		return _failure(capability_failure)
 	var fallback_method_service = JsonRpcMethodServiceScript.new()
-	var fallback_initialize := fallback_method_service.handle_initialize({}, 99)
+	var fallback_initialize := fallback_method_service.handle_initialize({
+		"clientInfo": {"name": "contract-client", "version": "1.2.3"},
+		"capabilities": {"sampling": {}},
+		"_meta": {"profile": "contract"}
+	}, 99)
 	var fallback_result = fallback_initialize.get("result", {})
 	if not (fallback_result is Dictionary):
 		return _failure("fallback initialize should return a result object.")
@@ -121,6 +127,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var fallback_meta = (fallback_result as Dictionary).get("_meta", {})
 	if not (fallback_meta is Dictionary) or str((fallback_meta as Dictionary).get("toolSchemaVersion", "")) != ProtocolFactsScript.get_tool_schema_version():
 		return _failure("fallback initialize should expose the internal tool schema version through _meta.")
+	if str((fallback_result as Dictionary).get("instructions", "")).is_empty():
+		return _failure("fallback initialize should expose server instructions.")
+	var client_info := fallback_method_service.get_last_client_info()
+	if str(client_info.get("name", "")) != "contract-client" or str(client_info.get("version", "")) != "1.2.3":
+		return _failure("initialize should retain clientInfo for later capability gating.")
+	var client_capabilities := fallback_method_service.get_last_client_capabilities()
+	if not (client_capabilities.get("sampling", null) is Dictionary):
+		return _failure("initialize should retain client capabilities for later capability gating.")
+	var client_meta := fallback_method_service.get_last_client_meta()
+	if str(client_meta.get("profile", "")) != "contract":
+		return _failure("initialize should retain client _meta for later capability gating.")
 	capability_failure = _validate_initialize_capabilities((fallback_result as Dictionary).get("capabilities", {}), "fallback initialize")
 	if not capability_failure.is_empty():
 		return _failure(capability_failure)
