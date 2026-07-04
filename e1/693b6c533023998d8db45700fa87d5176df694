@@ -1,0 +1,43 @@
+docs/zh-CN/附录/目录树与文件职责.md
+  s_23543e5ed94f7d::t_3d1fe3b4a16e5f 180,198
+addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_request_service.gd
+  s_23543e5ed94f7d::t_39538830b6af61 8-9,131,141-145
+  s_23543e5ed94f7d::t_1860b42c255e42 146-147
+addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_router.gd
+  s_23543e5ed94f7d::t_dd1f46e12c96be 608,613-614
+docs/en/appendix/directory-tree-and-file-responsibilities.md
+  s_23543e5ed94f7d::t_3d1fe3b4a16e5f 179,197
+tests/godot_plugin_harness_fixture/tests/http_request_router_contract_test.gd
+  s_23543e5ed94f7d::t_c485e596f7da49 171-174,180-181
+  s_23543e5ed94f7d::t_0c5f300f221b34 175-179,182
+addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_snapshot_service.gd
+  s_23543e5ed94f7d::t_c22f6866314937 173
+docs/ja/付録/ディレクトリツリーとファイル責務.md
+  s_23543e5ed94f7d::t_3d1fe3b4a16e5f 179,197
+docs/ko/부록/디렉터리-트리와-파일-책임.md
+  s_23543e5ed94f7d::t_3d1fe3b4a16e5f 179,197
+addons/godot_dotnet_mcp/tools/debug/executor.gd
+  s_23543e5ed94f7d::t_cf691df70d7830 610
+tests/godot_plugin_harness_fixture/tests/debug_tool_executor_contract_test.gd
+  s_23543e5ed94f7d::t_9913140c0efe6c 135-136
+tests/godot_plugin_harness_fixture/tests/tool_catalog_snapshot_service_contract_test.gd
+  s_23543e5ed94f7d::t_9913140c0efe6c 248-249
+tests/godot_plugin_harness_fixture/tests/json_rpc_request_service_contract_test.gd
+  s_23543e5ed94f7d::t_0c5f300f221b34 223,228-232
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e1693b6c533023998d8db45700fa87d5176df694",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
