@@ -605,13 +605,13 @@ func _is_safe_http_header_value(value: String) -> bool:
 
 
 func _generate_mcp_session_id() -> String:
-	var entropy := _random_hex(12)
+	var entropy := _random_hex(24)
 	return "%s-%s-%s-%s-%s" % [
 		SESSION_ID_PREFIX,
 		MCPProtocolFacts.get_server_version().replace(".", "-"),
 		str(Time.get_ticks_usec()),
-		str(OS.get_unique_id()).sha256_text().substr(0, 12),
-		entropy
+		entropy.substr(0, 12),
+		entropy.substr(12)
 	]
 
 

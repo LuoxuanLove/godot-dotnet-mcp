@@ -132,8 +132,8 @@ func _prepare_temp_root() -> void:
 
 func _assert_dotnet_build_disables_build_servers() -> String:
 	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/tools/debug/executor.gd")
-	if source.find('args.append("--disable-build-servers")') == -1:
-		return "Debug dotnet build should disable build servers so headless harness and editor sessions can exit cleanly."
+	if source.find('if action == "build" or action == "restore":') == -1 or source.find('args.append("--disable-build-servers")') == -1:
+		return "Debug dotnet build and restore should disable build servers so headless harness and editor sessions can exit cleanly."
 	return ""
 
 

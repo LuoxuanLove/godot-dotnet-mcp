@@ -168,6 +168,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var sse_session_id := await _initialize_session(router)
 	if sse_session_id.is_empty():
 		return _failure("HTTP request router should issue a session id for successful initialize before GET /mcp SSE.")
+	var first_session_parts := sse_session_id.split("-")
+	if first_session_parts.size() < 6:
+		return _failure("HTTP request router should issue session ids with a prefix, semver fields, timestamp, and random entropy fields.")
+	var first_session_entropy := str(first_session_parts[first_session_parts.size() - 2])
+	if first_session_entropy.length() != 12:
+		return _failure("HTTP request router session ids should use random entropy instead of a machine fingerprint field.")
+	var second_session_id := await _initialize_session(router, 901)
+	if second_session_id.is_empty() or second_session_id == sse_session_id:
+		return _failure("HTTP request router should issue unique random session ids for separate initialize requests.")
+	var second_session_parts := second_session_id.split("-")
+	if str(second_session_parts[second_session_parts.size() - 2]) == first_session_entropy:
+		return _failure("HTTP request router session entropy should be unlinkable across initialize requests.")
 	var get_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": sse_session_id, "last-event-id": "cursor-7"})
 	if int(get_mcp_response.get("status", 0)) != 200:
 		return _failure("HTTP request router should allow GET /mcp as a Streamable HTTP SSE probe for initialized sessions.")

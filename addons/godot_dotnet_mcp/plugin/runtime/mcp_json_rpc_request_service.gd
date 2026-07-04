@@ -5,6 +5,8 @@ class_name MCPJsonRpcRequestService
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const MCPJsonRpcEnvelopeValidator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_envelope_validator.gd")
 
+const MAX_CANCELLATION_REASON_LOG_CHARS := 120
+
 var _route_json_rpc_async := Callable()
 var _build_json_rpc_error := Callable()
 var _emit_request_received := Callable()
@@ -126,7 +128,7 @@ func _mark_cancelled_request(params: Dictionary) -> void:
 		_log_message("Cancellation notification ignored invalid requestId.", "debug")
 		return
 	var id_key := _request_id_key(id)
-	var reason := str(params.get("reason", "")).strip_edges()
+	var reason := _sanitize_cancellation_reason(params.get("reason", ""))
 	var status := "pending" if _pending_request_ids.has(id_key) else "not_pending"
 	if status == "pending":
 		_cancelled_request_ids[id_key] = true
@@ -134,6 +136,13 @@ func _mark_cancelled_request(params: Dictionary) -> void:
 		_log_message("Request cancelled by client: %s (%s)" % [id_key, status], "debug")
 	else:
 		_log_message("Request cancelled by client: %s (%s): %s" % [id_key, status, reason], "debug")
+
+
+func _sanitize_cancellation_reason(value) -> String:
+	var reason := str(value).strip_edges().replace("\r", " ").replace("\n", " ")
+	if reason.length() <= MAX_CANCELLATION_REASON_LOG_CHARS:
+		return reason
+	return "%s..." % reason.substr(0, MAX_CANCELLATION_REASON_LOG_CHARS)
 
 
 func _request_id_key(id) -> String:

@@ -170,7 +170,7 @@ static func _aggregate_domain_states(category_states: Array[Dictionary], domain_
 			"categories": [],
 			"category_count": 0,
 			"loaded_category_count": 0,
-			"loaded": false,
+			"loaded": true,
 			"tool_count": 0,
 			"enabled_tool_count": 0,
 			"load_error_count": 0,

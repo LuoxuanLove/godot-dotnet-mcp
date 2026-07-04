@@ -245,8 +245,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			return _failure("Snapshot should include manifest domain '%s' even when no category state is loaded." % empty_domain)
 		if int(empty_state.get("category_count", -1)) != 0 or int(empty_state.get("tool_count", -1)) != 0:
 			return _failure("Snapshot empty domain '%s' should report zero categories and tools." % empty_domain)
-		if bool(empty_state.get("loaded", true)):
-			return _failure("Snapshot empty domain '%s' should not report loaded=true." % empty_domain)
+		if not bool(empty_state.get("loaded", false)):
+			return _failure("Snapshot empty domain '%s' should retain optimistic loaded=true when no category failed." % empty_domain)
 
 	var presentation: Dictionary = snapshot.get("presentation", {})
 	var metadata_by_name: Dictionary = presentation.get("toolMetadataByName", {})

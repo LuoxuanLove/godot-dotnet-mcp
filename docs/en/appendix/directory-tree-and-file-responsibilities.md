@@ -176,6 +176,7 @@ There are currently **28** executor category directories on disk. The builtin re
 
 - `animation/`
 - `audio/`
+- `dap/`
 - `debug/`
 - `editor/`
 - `filesystem/`
@@ -193,6 +194,7 @@ There are currently **28** executor category directories on disk. The builtin re
 - `plugin_runtime/`
 - `project/`
 - `resource/`
+- `runtime/`
 - `scene/`
 - `script/`
 - `shader/`

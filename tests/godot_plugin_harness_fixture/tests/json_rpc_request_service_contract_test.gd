@@ -220,11 +220,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"method": "notifications/cancelled",
 		"params": {
 			"requestId": 77,
-			"reason": "contract"
+			"reason": "contract\n%s" % "S".repeat(200)
 		}
 	}))
 	if int(cancelled_response.get("status", 0)) != 202 or not bool(cancelled_response.get("_no_body", false)):
 		return _failure("JSON-RPC request service should accept cancellation notifications with 202 and no body.")
+	var cancellation_log := str(callbacks.last_log.get("message", ""))
+	if cancellation_log.find("\n") != -1 or cancellation_log.find("\r") != -1:
+		return _failure("JSON-RPC request service should strip newlines from cancellation reason logs.")
+	if cancellation_log.length() > 220 or cancellation_log.find("S".repeat(160)) != -1:
+		return _failure("JSON-RPC request service should truncate client-supplied cancellation reasons before logging.")
 	callbacks.release_delayed_route = true
 	wait_frames = 0
 	while not bool(delayed_state.get("done", false)) and wait_frames < 30:
