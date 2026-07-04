@@ -1,0 +1,43 @@
+tests/godot_plugin_harness_fixture/tests/mcp_tool_loader_supervisor_contract_test.gd
+  s_9214b0fc2ec5df::t_f9d200411df964 82-83
+  s_9214b0fc2ec5df::t_bc0f058be47d7c 29-31,33-35,72-81
+  s_9214b0fc2ec5df::t_736b339246cb8c 32,36-37
+  s_9214b0fc2ec5df::t_22d47e2a3b9583 84
+docs/ja/変更履歴.md
+  s_9214b0fc2ec5df::t_d22e11aa8879c7 66-68
+  s_9214b0fc2ec5df::t_a9e23372bfee34 65
+addons/godot_dotnet_mcp/plugin/config/client_detector_registry.gd
+  s_9214b0fc2ec5df::t_6c0b2b9cde5a9f 8,131,135
+  s_9214b0fc2ec5df::t_8d08d76bfaee1b 123,125,127,129,133,137,139,141,143,145,147,150-169
+docs/ko/변경-로그.md
+  s_9214b0fc2ec5df::t_d22e11aa8879c7 66-68
+  s_9214b0fc2ec5df::t_a9e23372bfee34 65
+docs/en/CHANGELOG.md
+  s_9214b0fc2ec5df::t_a9e23372bfee34 67
+  s_9214b0fc2ec5df::t_d22e11aa8879c7 68-70
+tests/godot_plugin_harness_fixture/tests/client_detector_registry_contract_test.gd
+  s_9214b0fc2ec5df::t_736b339246cb8c 86-96
+addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_loader_supervisor.gd
+  s_9214b0fc2ec5df::t_6c0b2b9cde5a9f 70
+addons/godot_dotnet_mcp/plugin.gd
+  s_9214b0fc2ec5df::t_6c0b2b9cde5a9f 336,391
+docs/zh-CN/变更日志.md
+  s_9214b0fc2ec5df::t_d22e11aa8879c7 69-71
+  s_9214b0fc2ec5df::t_a9e23372bfee34 68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8cb543448a644acdea36aeef77888c19fa242082",
+  "prompts": {},
+  "sessions": {
+    "s_9214b0fc2ec5df": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2c90-ab55-79a0-b70b-51d684f83e96",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
