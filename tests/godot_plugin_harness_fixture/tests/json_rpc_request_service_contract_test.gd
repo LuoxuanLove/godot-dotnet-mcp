@@ -207,8 +207,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(first_received.get("method", "")) != "tools/list":
 		return _failure("JSON-RPC request service did not preserve the emitted method name.")
 
+	var delayed_request_id := "contract\nrequest%s" % "I".repeat(200)
 	var delayed_state := {"done": false, "response": {}}
-	_run_delayed_request(service, delayed_state)
+	_run_delayed_request(service, delayed_state, delayed_request_id)
 	var wait_frames := 0
 	while not callbacks.delayed_route_entered and wait_frames < 30:
 		await _tree.process_frame
@@ -219,17 +220,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"jsonrpc": "2.0",
 		"method": "notifications/cancelled",
 		"params": {
-			"requestId": 77,
-			"reason": "contract\n%s" % "S".repeat(200)
+			"requestId": delayed_request_id,
+			"reason": "contract\nreason%s" % "S".repeat(200)
 		}
 	}))
 	if int(cancelled_response.get("status", 0)) != 202 or not bool(cancelled_response.get("_no_body", false)):
 		return _failure("JSON-RPC request service should accept cancellation notifications with 202 and no body.")
 	var cancellation_log := str(callbacks.last_log.get("message", ""))
+	if not cancellation_log.begins_with("Request cancelled by client: ") or cancellation_log.find("(pending)") == -1:
+		return _failure("JSON-RPC request service should log sanitized cancellation context.")
+	if cancellation_log.find("String:contract request") == -1 or cancellation_log.find("contract reason%s" % "S".repeat(20)) == -1:
+		return _failure("JSON-RPC request service should include sanitized cancellation id and reason context.")
 	if cancellation_log.find("\n") != -1 or cancellation_log.find("\r") != -1:
-		return _failure("JSON-RPC request service should strip newlines from cancellation reason logs.")
-	if cancellation_log.length() > 220 or cancellation_log.find("S".repeat(160)) != -1:
-		return _failure("JSON-RPC request service should truncate client-supplied cancellation reasons before logging.")
+		return _failure("JSON-RPC request service should strip newlines from cancellation logs.")
+	if cancellation_log.length() > 320 or cancellation_log.find("S".repeat(160)) != -1 or cancellation_log.find("I".repeat(160)) != -1:
+		return _failure("JSON-RPC request service should truncate client-supplied cancellation fields before logging.")
 	callbacks.release_delayed_route = true
 	wait_frames = 0
 	while not bool(delayed_state.get("done", false)) and wait_frames < 30:
@@ -241,7 +246,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var delayed_error = (delayed_response as Dictionary).get("error", {})
 	if not (delayed_error is Dictionary) or int((delayed_error as Dictionary).get("code", 0)) != -32800:
 		return _failure("JSON-RPC request service should complete cancelled pending requests with JSON-RPC -32800.")
-	if int((delayed_response as Dictionary).get("id", 0)) != 77:
+	if str((delayed_response as Dictionary).get("id", "")) != delayed_request_id:
 		return _failure("JSON-RPC request service should preserve the original cancelled request id.")
 
 	return {
@@ -256,10 +261,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	}
 
 
-func _run_delayed_request(service, state: Dictionary) -> void:
+func _run_delayed_request(service, state: Dictionary, request_id) -> void:
 	state["response"] = await service.handle_request_async(JSON.stringify({
 		"jsonrpc": "2.0",
-		"id": 77,
+		"id": request_id,
 		"method": "contract/delayed",
 		"params": {}
 	}))

@@ -5,7 +5,7 @@ class_name MCPJsonRpcRequestService
 const PluginSelfDiagnosticStore = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_self_diagnostic_store.gd")
 const MCPJsonRpcEnvelopeValidator = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_envelope_validator.gd")
 
-const MAX_CANCELLATION_REASON_LOG_CHARS := 120
+const MAX_CLIENT_LOG_FIELD_CHARS := 120
 
 var _route_json_rpc_async := Callable()
 var _build_json_rpc_error := Callable()
@@ -73,7 +73,13 @@ func handle_request_async(body: String) -> Dictionary:
 		_mark_cancelled_request(notification_params)
 		return {"status": 202, "_no_body": true}
 
-	_log_message("Method: %s, ID: %s" % [method, id], "debug")
+	_log_message(
+		"Method: %s, ID: %s" % [
+			_sanitize_client_log_field(method),
+			_sanitize_client_log_field(id)
+		],
+		"debug"
+	)
 	if _emit_request_received.is_valid():
 		_emit_request_received.call(method, params)
 
@@ -128,21 +134,22 @@ func _mark_cancelled_request(params: Dictionary) -> void:
 		_log_message("Cancellation notification ignored invalid requestId.", "debug")
 		return
 	var id_key := _request_id_key(id)
-	var reason := _sanitize_cancellation_reason(params.get("reason", ""))
+	var id_log_key := _sanitize_client_log_field(id_key)
+	var reason := _sanitize_client_log_field(params.get("reason", ""))
 	var status := "pending" if _pending_request_ids.has(id_key) else "not_pending"
 	if status == "pending":
 		_cancelled_request_ids[id_key] = true
 	if reason.is_empty():
-		_log_message("Request cancelled by client: %s (%s)" % [id_key, status], "debug")
+		_log_message("Request cancelled by client: %s (%s)" % [id_log_key, status], "debug")
 	else:
-		_log_message("Request cancelled by client: %s (%s): %s" % [id_key, status, reason], "debug")
+		_log_message("Request cancelled by client: %s (%s): %s" % [id_log_key, status, reason], "debug")
 
 
-func _sanitize_cancellation_reason(value) -> String:
-	var reason := str(value).strip_edges().replace("\r", " ").replace("\n", " ")
-	if reason.length() <= MAX_CANCELLATION_REASON_LOG_CHARS:
-		return reason
-	return "%s..." % reason.substr(0, MAX_CANCELLATION_REASON_LOG_CHARS)
+func _sanitize_client_log_field(value) -> String:
+	var text := str(value).strip_edges().replace("\r", " ").replace("\n", " ")
+	if text.length() <= MAX_CLIENT_LOG_FIELD_CHARS:
+		return text
+	return "%s..." % text.substr(0, MAX_CLIENT_LOG_FIELD_CHARS)
 
 
 func _request_id_key(id) -> String:
