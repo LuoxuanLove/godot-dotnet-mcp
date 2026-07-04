@@ -333,6 +333,7 @@ func _attach_server_controller() -> void:
 		_action_router,
 		Callable(self, "_create_server_controller")
 	)
+	_invalidate_plugin_lifecycle_context()
 
 
 func _connect_server_controller_signals() -> void:
@@ -387,6 +388,7 @@ func _recreate_server_controller() -> void:
 		Callable(self, "_create_server_controller")
 	)
 	_configure_user_tool_watch_service()
+	_invalidate_plugin_lifecycle_context()
 
 
 func _load_state() -> void:

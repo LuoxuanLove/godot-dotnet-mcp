@@ -83,6 +83,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Antigravity registry detection should expose its Gemini-backed MCP config file path.")
 	if str(results.get("antigravity", {}).get("config_entry_status", {}).get("status", "")) != "missing_file":
 		return _failure("Antigravity registry detection should inspect its config entry through the shared config-file path.")
+	if str(results.get("cursor", {}).get("config_path", "")) != "C:/Users/Test/.cursor/mcp.json":
+		return _failure("Client detector registry should resolve Cursor config paths through the configured path resolver.")
+	if str(results.get("cline", {}).get("config_path", "")) != "C:/Users/Test/AppData/Roaming/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json":
+		return _failure("Client detector registry should resolve VS Code extension config paths through APPDATA.")
+	if not str(results.get("codex_desktop", {}).get("config_path", "")).is_empty():
+		return _failure("Client detector registry should not invent a Codex Desktop config path when no production config file is known.")
+	if not str(results.get("opencode_desktop", {}).get("config_path", "")).is_empty():
+		return _failure("Client detector registry should not invent an OpenCode Desktop config path when no production config file is known.")
+	var source = FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/config/client_detector_registry.gd")
+	if source.find("C:/Users/Test") != -1:
+		return _failure("Client detector registry production source should not contain hard-coded test user paths.")
 	var expected_support_levels := {
 		"claude_desktop": "full_write",
 		"claude_code": "auto_add",

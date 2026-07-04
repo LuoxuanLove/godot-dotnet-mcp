@@ -64,10 +64,10 @@ func set_disabled_tools(disabled: Array) -> void:
 	_disabled_tools.clear()
 	for name in normalized:
 		_disabled_tools[name] = true
-	_disabled_tools_signature = next_signature
 	if _tool_loader != null:
 		_tool_loader.set_disabled_tools(normalized)
 		refresh_status_from_loader()
+	_disabled_tools_signature = next_signature
 
 
 func get_disabled_tools() -> Array:
