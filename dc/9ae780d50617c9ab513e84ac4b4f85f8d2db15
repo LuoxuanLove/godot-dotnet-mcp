@@ -1,0 +1,47 @@
+docs/ja/プロセス/リリースノート/リリースノート-v2.0.0.md
+  s_23543e5ed94f7d::t_89bc9fac4f43ae 55
+addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router.gd
+  s_23543e5ed94f7d::t_9f857290921009 68-70,171,233,488,491-500,530-532,534
+  s_23543e5ed94f7d::t_15d2a21c979b6e 489-490,501-502
+  s_23543e5ed94f7d::t_9789d05346a61d 46-50,55
+  s_23543e5ed94f7d::t_3a504871daa73f 62,66,71,74,90,245,533,535-537,539-542,545-546,551
+  s_23543e5ed94f7d::t_ac9b6f8f2d4a24 67
+tests/godot_plugin_harness_fixture/tests/stdio_tool_error_parity_contract_test.gd
+  s_23543e5ed94f7d::t_39ddbf1b24e1e4 114-115,172,178-183,190-191
+docs/ja/変更履歴.md
+  s_23543e5ed94f7d::t_89bc9fac4f43ae 90
+tests/godot_plugin_harness_fixture/tests/tool_rpc_router_contract_test.gd
+  s_23543e5ed94f7d::t_5a8651a37a8381 988-989
+  s_23543e5ed94f7d::t_9164b4fc338a21 990-991
+  s_23543e5ed94f7d::t_7549e8ec68f5d9 633-637,666,668,871-873,879-880,980-981
+docs/ko/변경-로그.md
+  s_23543e5ed94f7d::t_89bc9fac4f43ae 90
+docs/zh-CN/变更日志.md
+  s_23543e5ed94f7d::t_89bc9fac4f43ae 94
+docs/en/process/release-notes/release-notes-v2.0.0.md
+  s_23543e5ed94f7d::t_89bc9fac4f43ae 55
+docs/en/CHANGELOG.md
+  s_23543e5ed94f7d::t_89bc9fac4f43ae 93
+docs/zh-CN/流程/发布说明/发布说明-v2.0.0.md
+  s_23543e5ed94f7d::t_89bc9fac4f43ae 55
+docs/ko/프로세스/릴리스-노트/릴리스-노트-v2.0.0.md
+  s_23543e5ed94f7d::t_89bc9fac4f43ae 55
+tests/godot_plugin_harness_fixture/tests/stdio_tool_activity_contract_test.gd
+  s_23543e5ed94f7d::t_ef9c1c4bd2cff3 103-107,135
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "dc9ae780d50617c9ab513e84ac4b4f85f8d2db15",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
