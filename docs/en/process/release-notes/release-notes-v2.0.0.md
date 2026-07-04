@@ -1,6 +1,6 @@
-## 🧩 Godot .NET MCP v2.0.0: Protocol Refactor Draft
+## 🧩 Godot .NET MCP v2.0.0: Protocol-First Editor Bridge
 
-This is the draft release note source for the unreleased v2.0.0 protocol refactor line. It summarizes the user-visible changes currently staged under `Unreleased` in the changelog; it is not a release announcement until the version is formally published.
+Godot .NET MCP `v2.0.0` is a protocol-first refactor release for editor-native MCP workflows. It reorganizes context, prompts, tools, transports, and C# semantic support around the MCP 2025-11-25 model while keeping installation centered on the plugin itself.
 
 <p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v2.0.0/docs/en/process/release-notes/release-notes-v2.0.0.md">English</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v2.0.0/docs/zh-CN/流程/发布说明/发布说明-v2.0.0.md">简体中文</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v2.0.0/docs/ja/プロセス/リリースノート/リリースノート-v2.0.0.md">日本語</a> | <a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/refactor/v2.0.0/docs/ko/프로세스/릴리스-노트/릴리스-노트-v2.0.0.md">한국어</a></p>
 
@@ -58,7 +58,7 @@ The v2.0 line also splits many large root domain implementations into focused ex
 
 ### ✅ Compatibility and Validation
 
-This draft includes guardrails for the refactor rather than only feature text. Validation now covers public tool removals, root monolith closure, catalog facts, optional capability advertisement, changelog structure, release-note draft wording, Roslyn runtime bundle shape, clean Asset Library installs, safe bridge writes, and MCP 2025-11-25 conformance contracts.
+This release includes guardrails for the refactor rather than only feature text. Validation now covers public tool removals, root monolith closure, catalog facts, optional capability advertisement, changelog structure, release-note wording, Roslyn runtime bundle shape, clean Asset Library installs, safe bridge writes, and MCP 2025-11-25 conformance contracts.
 
 Runtime contracts now cover JSON-RPC cancellation notifications, bounded non-editor tool-call timeouts, editor automation watchdog release, and the direct `ToolCatalogManifest` catalog path.
 
