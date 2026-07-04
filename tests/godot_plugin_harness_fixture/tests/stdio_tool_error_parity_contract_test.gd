@@ -111,7 +111,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var stdio_local_disabled_check := _assert_stable_stdio_tool_error(
 		stdio_local_disabled_response.get("result", {}),
 		"disabled",
-		"stdio-local disabled"
+		"stdio-local disabled",
+		true
 	)
 	if not bool(stdio_local_disabled_check.get("success", false)):
 		return stdio_local_disabled_check
@@ -168,20 +169,26 @@ func _assert_matching_tool_error(router_result: Dictionary, stdio_result, expect
 	return {"success": true, "error": ""}
 
 
-func _assert_stable_stdio_tool_error(stdio_result, expected_text: String, label: String) -> Dictionary:
+func _assert_stable_stdio_tool_error(stdio_result, expected_text: String, label: String, expect_structured_content: bool = false) -> Dictionary:
 	if not (stdio_result is Dictionary):
 		return _failure("Stdio tools/call should return a tool result for %s errors." % label)
 	var stdio_result_dict: Dictionary = stdio_result
 	if not bool(stdio_result_dict.get("isError", false)):
 		return _failure("Stdio should mark %s as an error." % label)
-	if stdio_result_dict.has("structuredContent"):
-		return _failure("Stdio should omit structuredContent for %s errors when outputSchema is not declared." % label)
+	if expect_structured_content:
+		if not (stdio_result_dict.get("structuredContent", null) is Dictionary):
+			return _failure("Stdio should expose structuredContent for %s errors when tools/list advertises an outputSchema." % label)
+	else:
+		if stdio_result_dict.has("structuredContent"):
+			return _failure("Stdio should omit structuredContent for %s errors when outputSchema is not advertised." % label)
 	var stdio_payload := _tool_result_payload(stdio_result_dict)
 	var stdio_error := str(stdio_payload.get("error", ""))
 	if stdio_error.find(expected_text) == -1:
 		return _failure("Stdio %s error should preserve '%s'. actual=%s" % [label, expected_text, stdio_error])
 	if bool(stdio_payload.get("success", true)):
 		return _failure("Stdio %s text JSON payload should report success=false." % label)
+	if expect_structured_content and JSON.stringify(stdio_payload) != JSON.stringify(stdio_result_dict.get("structuredContent", {})):
+		return _failure("Stdio %s structuredContent should match the text JSON payload." % label)
 	return {"success": true, "error": ""}
 
 

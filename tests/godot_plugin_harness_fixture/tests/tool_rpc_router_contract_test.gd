@@ -627,11 +627,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var parsed_dict: Dictionary = parsed
 	if not bool(parsed_dict.get("success", false)):
 		return _failure("Tool RPC router did not preserve the success flag in the serialized payload.")
-	if success_result.has("structuredContent"):
-		return _failure("Tool RPC router should omit structuredContent when the original tool definition has no explicit outputSchema.")
 	var parsed_data = parsed_dict.get("data", {})
 	if not (parsed_data is Dictionary) or str((parsed_data as Dictionary).get("tool", "")) != "project_state":
 		return _failure("Tool RPC router did not preserve the resolved tool name in the serialized payload.")
+	var success_structured = success_result.get("structuredContent", {})
+	if not (success_structured is Dictionary):
+		return _failure("Tool RPC router should expose structuredContent when tools/list advertises an outputSchema.")
+	if JSON.stringify((success_structured as Dictionary).get("data", {})) != JSON.stringify(parsed_data):
+		return _failure("Tool RPC router structuredContent should mirror text JSON for advertised output schemas.")
 	var executed_arguments = (parsed_data as Dictionary).get("arguments", {})
 	if not (executed_arguments is Dictionary) or (executed_arguments as Dictionary).has("_mcp_context"):
 		return _failure("Tool RPC router should strip _mcp_context before executing the concrete tool.")
@@ -660,9 +663,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Tool RPC router should resolve system_project_lifecycle to the project_lifecycle implementation.")
 	var lifecycle_structured = lifecycle_result.get("structuredContent", {})
 	if not (lifecycle_structured is Dictionary):
-		return _failure("Tool RPC router should expose structuredContent when the original tool definition declares outputSchema.")
+		return _failure("Tool RPC router should expose structuredContent when tools/list advertises an outputSchema.")
 	if JSON.stringify((lifecycle_structured as Dictionary).get("data", {})) != JSON.stringify(lifecycle_data):
-		return _failure("Tool RPC router structuredContent should mirror text JSON when outputSchema is declared.")
+		return _failure("Tool RPC router structuredContent should mirror text JSON for advertised output schemas.")
 
 	for removed_tool_name in ["system_project_run", "system_project_stop"]:
 		var removed_result: Dictionary = await router.build_tool_call_result_async({
@@ -865,13 +868,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var plain_payload = JSON.parse_string(str(((plain_result.get("content", []) as Array)[0] as Dictionary).get("text", "")))
 	if not (plain_payload is Dictionary):
 		return _failure("Tool RPC router should serialize plain activity test payload.")
-	if plain_result.has("structuredContent"):
-		return _failure("Tool RPC router should omit structuredContent for normalized non-protocol activity payloads without outputSchema.")
+	var plain_structured = plain_result.get("structuredContent", {})
+	if not (plain_structured is Dictionary):
+		return _failure("Tool RPC router should expose structuredContent for normalized payloads when tools/list advertises an outputSchema.")
 	if (plain_payload as Dictionary).has("activity"):
 		return _failure("Tool RPC router should reserve top-level activity only for protocol activity summaries.")
 	var plain_data = (plain_payload as Dictionary).get("data", {})
 	if not (plain_data is Dictionary) or not (((plain_data as Dictionary).get("activity", {}) as Dictionary).get("user_supplied", false)):
 		return _failure("Tool RPC router should move non-protocol tool activity fields into data.")
+	if JSON.stringify((plain_structured as Dictionary).get("data", {})) != JSON.stringify(plain_data):
+		return _failure("Tool RPC router structuredContent should mirror normalized non-protocol activity data.")
 
 	var blocking_callbacks = FakeCallbacks.new()
 	var blocking_context = ToolRpcRouterContextScript.new()
@@ -971,12 +977,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var timeout_data = timeout_payload.get("data", {})
 	if not bool(timed_out_call.get("isError", false)) or not (timeout_data is Dictionary) or str((timeout_data as Dictionary).get("error_type", "")) != "tool_call_timeout":
 		return _failure("Tool RPC router should bound non-editor tool calls with a per-call timeout.")
+	if not (slow_router.get("_active_tool_call_tasks") as Dictionary).is_empty():
+		return _failure("Tool RPC router should release timed-out background task references immediately.")
 	for _index in range(40):
 		if slow_callbacks.loader.completed:
 			break
 		await _tree.process_frame
 	if not slow_callbacks.loader.completed:
 		return _failure("Tool RPC router timeout test fixture should settle after the timeout response.")
+	for _index in range(4):
+		await _tree.process_frame
+	if not (slow_router.get("_retired_tool_call_tasks") as Dictionary).is_empty():
+		return _failure("Tool RPC router should clear retired timeout tasks after their coroutine settles.")
 	slow_router.dispose()
 
 	return {

@@ -100,8 +100,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var parsed_dict: Dictionary = parsed
 	if not bool(parsed_dict.get("success", false)):
 		return _failure("Stdio tools/call should preserve successful tool results.")
-	if (result as Dictionary).has("structuredContent"):
-		return _failure("Stdio tools/call should omit structuredContent when the tool definition has no explicit outputSchema.")
+	var structured = (result as Dictionary).get("structuredContent", {})
+	if not (structured is Dictionary):
+		return _failure("Stdio tools/call should expose structuredContent when tools/list advertises an outputSchema.")
+	if JSON.stringify((structured as Dictionary).get("data", {})) != JSON.stringify(parsed_dict.get("data", {})):
+		return _failure("Stdio tools/call structuredContent should mirror the text JSON data for advertised output schemas.")
 	if not (parsed_dict.get("activity", {}) is Dictionary) or str((parsed_dict.get("activity", {}) as Dictionary).get("call_id", "")).is_empty():
 		return _failure("Stdio tools/call should preserve loader activity summaries.")
 	if loader.executed_arguments.has("_mcp_context"):
@@ -129,7 +132,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Stdio lifecycle call should serialize a JSON object payload.")
 	var lifecycle_structured = (lifecycle_result as Dictionary).get("structuredContent", {})
 	if not (lifecycle_structured is Dictionary):
-		return _failure("Stdio lifecycle call should expose structuredContent when outputSchema is declared.")
+		return _failure("Stdio lifecycle call should expose structuredContent when tools/list advertises an outputSchema.")
 	var lifecycle_data = (lifecycle_payload as Dictionary).get("data", {})
 	if not (lifecycle_data is Dictionary) or str((lifecycle_data as Dictionary).get("tool", "")) != "project_lifecycle":
 		return _failure("Stdio lifecycle call should resolve system_project_lifecycle to project_lifecycle.")

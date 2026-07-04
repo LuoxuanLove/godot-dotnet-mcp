@@ -43,25 +43,35 @@ class ToolCallTask:
 		call_deferred("_run")
 
 	func _run() -> void:
-		if _loader == null:
+		var loader = _loader
+		var category := _category
+		var tool_name := _tool_name
+		var arguments := _arguments.duplicate(true)
+		if loader == null:
 			result = {"success": false, "error": "Tool loader is unavailable"}
 			completed = true
 			_notify_owner()
 			return
-		result = await _loader.execute_tool_async(_category, _tool_name, _arguments)
+		result = await loader.execute_tool_async(category, tool_name, arguments)
 		completed = true
 		_notify_owner()
 
 	func _notify_owner() -> void:
 		var owner = instance_from_id(_owner_id) if _owner_id != 0 else null
 		_owner_id = 0
-		_loader = null
+		release_payload()
 		if owner != null and owner.has_method("_complete_tool_call_task"):
 			owner._complete_tool_call_task(_task_id)
 
+	func release_payload() -> void:
+		_loader = null
+		_category = ""
+		_tool_name = ""
+		_arguments.clear()
+
 	func release_owner() -> void:
 		_owner_id = 0
-		_loader = null
+		release_payload()
 
 
 var _get_tool_loader := Callable()
@@ -77,6 +87,7 @@ var _editor_automation_generation := 0
 var _tool_call_timeout_ms := DEFAULT_TOOL_CALL_TIMEOUT_MS
 var _editor_automation_stale_timeout_ms := DEFAULT_EDITOR_AUTOMATION_STALE_TIMEOUT_MS
 var _active_tool_call_tasks: Dictionary = {}
+var _retired_tool_call_tasks: Dictionary = {}
 var _tool_call_task_sequence := 0
 
 
@@ -157,7 +168,7 @@ func build_tool_call_result_async(params: Dictionary) -> Dictionary:
 	var loader = _get_loader()
 	if loader == null:
 		return _create_tool_result_payload({"success": false, "error": "Tool loader is unavailable"})
-	var include_structured_content := _tool_has_output_schema(loader, tool_name)
+	var include_structured_content := _tool_has_advertised_output_schema(loader, tool_name)
 	if loader.has_method("is_public_removed_tool") and bool(loader.is_public_removed_tool(tool_name)):
 		if loader.has_method("build_removed_public_tool_result"):
 			var removed_tool_result = loader.build_removed_public_tool_result(tool_name, arguments)
@@ -219,6 +230,7 @@ func _execute_tool_with_timeout_async(loader, category: String, actual_tool_name
 	var started_msec := Time.get_ticks_msec()
 	while not task.completed:
 		if Time.get_ticks_msec() - started_msec >= _tool_call_timeout_ms:
+			_release_tool_call_task(task_id)
 			return {
 				"success": false,
 				"error": "Tool '%s' timed out after %dms" % [public_tool_name, _tool_call_timeout_ms],
@@ -230,6 +242,7 @@ func _execute_tool_with_timeout_async(loader, category: String, actual_tool_name
 			}
 		await (tree as SceneTree).process_frame
 	_active_tool_call_tasks.erase(task_id)
+	_retired_tool_call_tasks.erase(task_id)
 	return task.result
 
 
@@ -472,8 +485,21 @@ func _call_bool(callable_obj: Callable, args: Array, default_value: bool) -> boo
 	return default_value
 
 
-func _tool_has_output_schema(loader, tool_name: String) -> bool:
-	if loader == null or not loader.has_method("get_tool_definitions"):
+func _tool_has_advertised_output_schema(loader, tool_name: String) -> bool:
+	if loader == null:
+		return false
+	if loader != null and loader.has_method("get_exposed_tool_definitions"):
+		for tool_def in loader.get_exposed_tool_definitions():
+			if not (tool_def is Dictionary):
+				continue
+			var exposed_def := tool_def as Dictionary
+			var exposed_name := str(exposed_def.get("full_name", exposed_def.get("name", "")))
+			if exposed_name != tool_name:
+				continue
+			var presented_schema := ToolPresentationService.build_tool_output_schema(exposed_def)
+			return presented_schema is Dictionary and not (presented_schema as Dictionary).is_empty()
+		return false
+	if not loader.has_method("get_tool_definitions"):
 		return false
 	for tool_def in loader.get_tool_definitions():
 		if not (tool_def is Dictionary):
@@ -501,19 +527,28 @@ func _resolve_timeout_ms(context_value, environment_name: String, default_value:
 	return default_value
 
 
+func _release_tool_call_task(task_id: int) -> void:
+	var task = _active_tool_call_tasks.get(task_id, null)
+	if task is ToolCallTask:
+		task.release_payload()
+	_active_tool_call_tasks.erase(task_id)
+	_retired_tool_call_tasks[task_id] = task
+
+
 func _release_tool_call_tasks() -> void:
-	var task_ids: Array = []
-	for task_id in _active_tool_call_tasks:
-		var task = _active_tool_call_tasks[task_id]
+	for task in _active_tool_call_tasks.values():
 		if task is ToolCallTask:
 			task.release_owner()
-		task_ids.append(task_id)
-	for task_id in task_ids:
-		_active_tool_call_tasks.erase(task_id)
+	for task in _retired_tool_call_tasks.values():
+		if task is ToolCallTask:
+			task.release_owner()
+	_active_tool_call_tasks.clear()
+	_retired_tool_call_tasks.clear()
 
 
 func _complete_tool_call_task(task_id: int) -> void:
 	_active_tool_call_tasks.erase(task_id)
+	_retired_tool_call_tasks.erase(task_id)
 
 
 func _log_message(message: String, level: String) -> void:

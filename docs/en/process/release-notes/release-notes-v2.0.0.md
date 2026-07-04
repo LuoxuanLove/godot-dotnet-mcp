@@ -52,7 +52,7 @@ Clean install validation now checks both sides of that contract: exported addon 
 
 Catalog snapshots, catalog resources, `/api/tools`, Dock model metadata, Tools tab previews, search, and schema-copy paths use `ToolCatalogManifest` and `ToolCatalogSnapshotService` as the shared catalog fact path. This reduces drift between client discovery, HTTP diagnostics, and editor UI previews.
 
-Tool-call results now reserve `structuredContent` for tools that explicitly declare output schemas, while keeping text JSON content available for all clients. This makes the call result shape easier for strict MCP clients to reason about.
+Tool-call results now reserve `structuredContent` for tools whose `tools/list` entries advertise output schemas, while keeping text JSON content available for all clients. This keeps discovery metadata and call results aligned for strict MCP clients.
 
 The v2.0 line also splits many large root domain implementations into focused executors while keeping public facades where compatibility requires them. Audio, animation, signal, TileMap, UI, filesystem, node, project, resource, scene, group, geometry, material, lighting, navigation, particle, physics, shader, debug, and editor domains all move toward smaller implementation units.
 
