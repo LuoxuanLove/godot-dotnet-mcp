@@ -136,6 +136,7 @@ func build_refs_status(context: Dictionary) -> Dictionary:
 		"refresh_error": str(context.get("refs_refresh_error", "")),
 		"last_checked_unix": int(context.get("refs_last_checked_unix", 0)),
 		"refresh_serial": int(context.get("refs_refresh_serial", 0)),
+		"pending": _duplicate_dictionary(context.get("refs_pending", {})),
 		"branches": _duplicate_array(context.get("branches", [])),
 		"releases": _duplicate_array(context.get("releases", [])),
 		"latest_stable_release": str(context.get("latest_stable_release", "")),

@@ -118,6 +118,113 @@ func build_final_snapshot(pending: Dictionary) -> Dictionary:
 	}
 
 
+func record_active_request(
+	pending: Dictionary,
+	kind: String,
+	url: String,
+	serial: int,
+	started_msec: int,
+	timeout_msec: int,
+	request_name: String,
+	page: int
+) -> Dictionary:
+	var next_pending := pending.duplicate(true)
+	var active_requests := duplicate_dictionary(next_pending.get("active_requests", {}))
+	active_requests[kind] = {
+		"kind": kind,
+		"url": url,
+		"serial": serial,
+		"started_msec": started_msec,
+		"timeout_msec": timeout_msec,
+		"request_name": request_name,
+		"page": page
+	}
+	next_pending["active_requests"] = active_requests
+	return next_pending
+
+
+func clear_active_request(pending: Dictionary, kind: String) -> Dictionary:
+	var next_pending := pending.duplicate(true)
+	var active_requests := duplicate_dictionary(next_pending.get("active_requests", {}))
+	active_requests.erase(kind)
+	next_pending["active_requests"] = active_requests
+	return next_pending
+
+
+func find_stale_active_requests(pending: Dictionary, now_msec: int) -> Array[Dictionary]:
+	var stale: Array[Dictionary] = []
+	var active_requests := duplicate_dictionary(pending.get("active_requests", {}))
+	for raw_kind in active_requests.keys():
+		var kind := str(raw_kind)
+		if is_kind_done(pending, kind):
+			continue
+		var request = active_requests.get(raw_kind, {})
+		if not (request is Dictionary):
+			continue
+		var request_dict: Dictionary = request as Dictionary
+		var timeout_msec := int(request_dict.get("timeout_msec", 0))
+		var started_msec := int(request_dict.get("started_msec", 0))
+		if timeout_msec <= 0 or started_msec <= 0:
+			continue
+		if now_msec - started_msec >= timeout_msec:
+			stale.append(request_dict.duplicate(true))
+	return stale
+
+
+func build_pending_status(pending: Dictionary, now_msec: int) -> Dictionary:
+	if pending.is_empty():
+		return {}
+	var active: Array[Dictionary] = []
+	var active_requests := duplicate_dictionary(pending.get("active_requests", {}))
+	for raw_kind in active_requests.keys():
+		var request = active_requests.get(raw_kind, {})
+		if not (request is Dictionary):
+			continue
+		var request_dict: Dictionary = (request as Dictionary).duplicate(true)
+		request_dict["elapsed_msec"] = maxi(0, now_msec - int(request_dict.get("started_msec", now_msec)))
+		active.append(request_dict)
+	return {
+		"serial": int(pending.get("serial", 0)),
+		"background": bool(pending.get("background", false)),
+		"waiting_kinds": get_waiting_kinds(pending),
+		"active_requests": active,
+		"errors": to_string_array(pending.get("errors", []))
+	}
+
+
+func format_stale_request_error(request: Dictionary) -> String:
+	var kind := str(request.get("kind", "refs")).capitalize()
+	var page := int(request.get("page", 1))
+	var timeout_sec := float(int(request.get("timeout_msec", 0))) / 1000.0
+	return "%s request timed out after %.1fs without completion (page %s)." % [kind, timeout_sec, page]
+
+
+func get_waiting_kinds(pending: Dictionary) -> Array[String]:
+	var waiting: Array[String] = []
+	for kind in ["branches", "releases", "tags"]:
+		if not is_kind_done(pending, kind):
+			waiting.append(kind)
+	return waiting
+
+
+func is_kind_done(pending: Dictionary, kind: String) -> bool:
+	match kind:
+		"branches":
+			return bool(pending.get("branch_done", false))
+		"releases":
+			return bool(pending.get("release_done", false))
+		"tags":
+			return bool(pending.get("tag_done", false))
+		_:
+			return false
+
+
+func duplicate_dictionary(raw_value) -> Dictionary:
+	if raw_value is Dictionary:
+		return (raw_value as Dictionary).duplicate(true)
+	return {}
+
+
 func append_unique_ref(values: Array[String], value: String) -> void:
 	var normalized := value.strip_edges()
 	if normalized.is_empty() or values.has(normalized):

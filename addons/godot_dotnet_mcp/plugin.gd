@@ -49,6 +49,7 @@ const RUNTIME_BRIDGE_AUTOLOAD_PATH := "res://addons/godot_dotnet_mcp/plugin/runt
 const UPDATE_BACKGROUND_REFRESH_TICK_INTERVAL_SEC := 5.0
 const UPDATE_REFS_BACKGROUND_REFRESH_TTL_SEC := 300
 const UPDATE_COMPARE_BACKGROUND_REFRESH_TTL_SEC := 30
+const UPDATE_REFS_STALE_REQUEST_GRACE_SEC := 2.0
 
 var _state = null
 var _settings_store = null
@@ -716,6 +717,7 @@ func _build_dock_refresh_status_signature() -> String:
 		"update_refs_refresh_error",
 		"update_refs_last_checked_unix",
 		"update_refs_refresh_serial",
+		"update_refs_pending_signature",
 		"update_refs_branch_count",
 		"update_refs_release_count",
 		"update_refs_latest_stable_release",
@@ -796,6 +798,7 @@ func _build_dock_refresh_status_signature_data() -> Dictionary:
 		"update_refs_refresh_error": str(_get_state_value("update_refs_refresh_error", "")),
 		"update_refs_last_checked_unix": int(_get_state_value("update_refs_last_checked_unix", 0)),
 		"update_refs_refresh_serial": int(_get_state_value("update_refs_refresh_serial", 0)),
+		"update_refs_pending_signature": _build_update_refs_pending_signature(),
 		"update_refs_branch_count": (_get_state_value("update_ref_branches", []) as Array).size(),
 		"update_refs_release_count": (_get_state_value("update_ref_releases", []) as Array).size(),
 		"update_refs_latest_stable_release": str(_get_state_value("update_ref_latest_stable_release", "")),
@@ -837,6 +840,30 @@ func _build_string_dictionary_signature(raw_value) -> String:
 	for key in keys:
 		parts.append("%s=%s" % [str(key), str(dictionary.get(key, ""))])
 	return "|".join(parts)
+
+
+func _build_update_refs_pending_signature() -> String:
+	var pending_status := _build_update_refs_pending_status()
+	if pending_status.is_empty():
+		return ""
+	var waiting_parts := PackedStringArray()
+	for kind in (pending_status.get("waiting_kinds", []) as Array):
+		waiting_parts.append(str(kind))
+	var active_parts := PackedStringArray()
+	for request in (pending_status.get("active_requests", []) as Array):
+		if not (request is Dictionary):
+			continue
+		var request_dict: Dictionary = request as Dictionary
+		active_parts.append("%s:%s:%s" % [
+			str(request_dict.get("kind", "")),
+			int(request_dict.get("page", 0)),
+			int(request_dict.get("elapsed_msec", 0))
+		])
+	return "serial=%s|waiting=%s|active=%s" % [
+		int(pending_status.get("serial", 0)),
+		",".join(waiting_parts),
+		",".join(active_parts)
+	]
 
 
 func _apply_initial_tool_profile_if_needed() -> void:
@@ -945,6 +972,7 @@ func _normalize_update_source(source: String) -> String:
 func _ensure_update_refs_discovery_requested(force_refresh: bool = false) -> bool:
 	if _state == null:
 		return false
+	_sweep_stale_update_refs_requests()
 	if str(_state.update_refs_state) == "loading" or str(_state.update_sync_state) == "loading":
 		return false
 	if not force_refresh and str(_state.update_refs_state) == "success" and _update_refs_discovery_loaded:
@@ -973,6 +1001,7 @@ func _tick_background_update_info_refresh(delta: float) -> void:
 	if _update_background_refresh_tick_accumulator < UPDATE_BACKGROUND_REFRESH_TICK_INTERVAL_SEC:
 		return
 	_update_background_refresh_tick_accumulator = 0.0
+	_sweep_stale_update_refs_requests()
 	_maybe_start_background_update_info_refresh()
 
 
@@ -1041,6 +1070,7 @@ func _should_queue_update_sync_for_verification(target: Dictionary) -> bool:
 func _start_background_update_refs_refresh() -> bool:
 	if _state == null:
 		return false
+	_sweep_stale_update_refs_requests()
 	if str(_state.update_refs_state) == "loading" or str(_state.update_refs_refresh_state) == "loading" or str(_state.update_sync_state) == "loading":
 		return false
 	if _get_update_request_parent() == null:
@@ -1278,7 +1308,8 @@ func _on_update_check_requested(background_refresh: bool = false) -> void:
 		"commits": {},
 		"branches_pages": 1,
 		"releases_pages": 1,
-		"tags_pages": 1
+		"tags_pages": 1,
+		"active_requests": {}
 	}
 	if not background_refresh:
 		_state.update_refs_state = "loading"
@@ -1362,15 +1393,30 @@ func _start_update_refs_request(kind: String, url: String, serial: int) -> void:
 	if request_parent == null:
 		_mark_update_refs_request_failed(kind, "No active update refs request host.", serial)
 		return
+	var request_name := "UpdateRefs%sRequest" % kind.capitalize()
+	var page_key := "%s_pages" % kind
+	var page_count := int(_update_refs_pending.get(page_key, 1))
+	var timeout_msec := int(ceil((_ensure_plugin_update_endpoint_config_service().get_refs_http_timeout() + UPDATE_REFS_STALE_REQUEST_GRACE_SEC) * 1000.0))
+	_update_refs_pending = _ensure_plugin_update_refs_discovery_service().record_active_request(
+		_update_refs_pending,
+		kind,
+		url,
+		serial,
+		Time.get_ticks_msec(),
+		timeout_msec,
+		request_name,
+		page_count
+	)
 	var start_result: Dictionary = _ensure_plugin_update_http_request_service().start_refs_request(
 		request_parent,
-		"UpdateRefs%sRequest" % kind.capitalize(),
+		request_name,
 		url,
 		_get_update_refs_headers(),
 		Callable(self, "_on_update_refs_request_completed").bind(kind, serial),
 		_ensure_plugin_update_endpoint_config_service()
 	)
 	if not bool(start_result.get("success", false)):
+		_update_refs_pending = _ensure_plugin_update_refs_discovery_service().clear_active_request(_update_refs_pending, kind)
 		_mark_update_refs_request_failed(kind, "Failed to start %s request: %s" % [kind, int(start_result.get("error", FAILED))], serial)
 
 
@@ -1549,6 +1595,9 @@ func _parse_update_target_plugin_cfg_version(content: String) -> String:
 func _on_update_refs_request_completed(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, kind: String, serial: int) -> void:
 	if _state == null or serial != _update_refs_request_serial:
 		return
+	if _ensure_plugin_update_refs_discovery_service().is_kind_done(_update_refs_pending, kind):
+		return
+	_update_refs_pending = _ensure_plugin_update_refs_discovery_service().clear_active_request(_update_refs_pending, kind)
 	if result != HTTPRequest.RESULT_SUCCESS or response_code < 200 or response_code >= 300:
 		_handle_update_refs_http_failure(kind, result, response_code, serial)
 		return
@@ -1627,6 +1676,9 @@ func _handle_update_refs_parse_failure(kind: String, error: String, serial: int)
 func _mark_update_refs_request_failed(kind: String, message: String, serial: int) -> void:
 	if _state == null or serial != _update_refs_request_serial:
 		return
+	if _ensure_plugin_update_refs_discovery_service().is_kind_done(_update_refs_pending, kind):
+		return
+	_update_refs_pending = _ensure_plugin_update_refs_discovery_service().clear_active_request(_update_refs_pending, kind)
 	var errors: Array = _update_refs_pending.get("errors", [])
 	errors.append(message)
 	_update_refs_pending["errors"] = errors
@@ -1637,6 +1689,26 @@ func _mark_update_refs_request_failed(kind: String, message: String, serial: int
 	else:
 		_update_refs_pending["release_done"] = true
 	_finalize_update_refs_discovery_if_ready(serial)
+
+
+func _sweep_stale_update_refs_requests() -> bool:
+	if _state == null or _update_refs_pending.is_empty():
+		return false
+	var serial := int(_update_refs_pending.get("serial", 0))
+	if serial != _update_refs_request_serial:
+		return false
+	var stale_requests: Array[Dictionary] = _ensure_plugin_update_refs_discovery_service().find_stale_active_requests(
+		_update_refs_pending,
+		Time.get_ticks_msec()
+	)
+	if stale_requests.is_empty():
+		return false
+	for request in stale_requests:
+		var kind := str(request.get("kind", ""))
+		if kind.is_empty():
+			continue
+		_mark_update_refs_request_failed(kind, _ensure_plugin_update_refs_discovery_service().format_stale_request_error(request), serial)
+	return true
 
 
 func _fail_pending_update_sync_after_refs_discovery(message: String) -> void:
@@ -2281,6 +2353,7 @@ func _build_plugin_update_tool_context(target: Dictionary = {}) -> Dictionary:
 		"refs_refresh_error": str(_state.update_refs_refresh_error),
 		"refs_last_checked_unix": int(_state.update_refs_last_checked_unix),
 		"refs_refresh_serial": int(_state.update_refs_refresh_serial),
+		"refs_pending": _build_update_refs_pending_status(),
 		"branches": _state.update_ref_branches,
 		"releases": _state.update_ref_releases,
 		"latest_stable_release": str(_state.update_ref_latest_stable_release),
@@ -2324,6 +2397,12 @@ func _build_plugin_update_tool_response(response: Dictionary) -> Dictionary:
 
 func _build_plugin_update_refs_status() -> Dictionary:
 	return _ensure_plugin_update_tool_facade().build_refs_status(_build_plugin_update_tool_context())
+
+
+func _build_update_refs_pending_status() -> Dictionary:
+	if _update_refs_pending.is_empty():
+		return {}
+	return _ensure_plugin_update_refs_discovery_service().build_pending_status(_update_refs_pending, Time.get_ticks_msec())
 
 
 func _build_plugin_update_compare_status() -> Dictionary:
