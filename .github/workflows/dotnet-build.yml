@@ -47,7 +47,7 @@ jobs:
 
       - name: Build plugin Roslyn library
         shell: pwsh
-        run: .\scripts\dotnet_build_failure_diagnostics.ps1 -Description "Build plugin Roslyn library" -ProjectPath ".\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj" -Configuration Release
+        run: .\scripts\dotnet_build_failure_diagnostics.ps1 -Description "Build plugin Roslyn library" -ProjectPath ".\addons\godot_dotnet_mcp\.dotnet_bridge\DotnetBridge.csproj" -Configuration Release
 
       - name: Build harness runner
         shell: pwsh

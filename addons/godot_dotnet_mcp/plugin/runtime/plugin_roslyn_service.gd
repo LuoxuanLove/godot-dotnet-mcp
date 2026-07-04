@@ -648,6 +648,9 @@ func _cleanup_stale_runtime_temp_dir(path: String, now_ms: int) -> void:
 		var child_path := path.path_join(entry)
 		var child_absolute := ProjectSettings.globalize_path(child_path)
 		if dir.current_is_dir():
+			if dir.is_link(entry):
+				entry = dir.get_next()
+				continue
 			_cleanup_stale_runtime_temp_dir(child_path, now_ms)
 			_cleanup_empty_runtime_temp_dir(child_absolute)
 		else:
@@ -685,6 +688,9 @@ func _cleanup_runtime_temp_dir(path: String) -> void:
 		var child_path := path.path_join(entry)
 		var child_absolute := ProjectSettings.globalize_path(child_path)
 		if dir.current_is_dir():
+			if dir.is_link(entry):
+				entry = dir.get_next()
+				continue
 			_cleanup_runtime_temp_dir(child_path)
 		else:
 			DirAccess.remove_absolute(child_absolute)

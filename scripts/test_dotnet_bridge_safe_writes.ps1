@@ -218,6 +218,31 @@ try {
         if (Test-Path -LiteralPath $junctionResponsePath) {
             throw "--response-json-file wrote through a junction/reparse-point segment."
         }
+
+        $allowedRootJunctionPath = Join-Path $stageRoot "allowed-response-root-junction"
+        $allowedRootJunctionTarget = Join-Path $outsideRoot "allowed-response-root-junction-target"
+        New-Item -ItemType Directory -Path $allowedRootJunctionTarget | Out-Null
+        New-Item -ItemType Junction -Path $allowedRootJunctionPath -Target $allowedRootJunctionTarget -ErrorAction Stop | Out-Null
+        $junctionAllowedRootResponsePath = Join-Path $allowedRootJunctionPath "response.json"
+        $env:GODOT_DOTNET_MCP_RESPONSE_ROOTS = $allowedRootJunctionPath
+        try {
+            $junctionAllowedRootResponseOutput = & $bridgeExe --response-json-file $junctionAllowedRootResponsePath --capabilities
+            if ($LASTEXITCODE -eq 0) {
+                throw "--response-json-file should reject allowed roots that are junction/reparse-point directories. Output: $junctionAllowedRootResponseOutput"
+            }
+            if (Test-Path -LiteralPath $junctionAllowedRootResponsePath) {
+                throw "--response-json-file wrote through a junction/reparse-point allowed root."
+            }
+            if (-not (($junctionAllowedRootResponseOutput | Out-String).Contains("response_json_file_reparse_point"))) {
+                throw "--response-json-file junction allowed-root rejection should report response_json_file_reparse_point. Output: $junctionAllowedRootResponseOutput"
+            }
+        }
+        finally {
+            Remove-Item Env:\GODOT_DOTNET_MCP_RESPONSE_ROOTS -ErrorAction SilentlyContinue
+            if (Test-Path -LiteralPath $allowedRootJunctionPath) {
+                [System.IO.Directory]::Delete($allowedRootJunctionPath)
+            }
+        }
     }
 
     $outsideResponsePath = Join-Path $outsideRoot "response.json"

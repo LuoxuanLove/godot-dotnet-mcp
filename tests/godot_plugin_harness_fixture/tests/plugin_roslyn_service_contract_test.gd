@@ -241,6 +241,7 @@ func _assert_isolated_runtime_process_has_timeout_guards() -> Dictionary:
 		"_cleanup_runtime_request_file",
 		"RUNTIME_TEMP_ROOT",
 		"GODOT_DOTNET_MCP_RESPONSE_ROOTS",
+		"dir.is_link(entry)",
 		"await _await_process_frame()",
 		"roslyn_runtime_process_requires_async"
 	]:

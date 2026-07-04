@@ -152,6 +152,11 @@ internal static class Program
             throw new UnauthorizedAccessException("response_json_file_outside_allowed_roots: --response-json-file must stay inside the Godot project root or GODOT_DOTNET_MCP_RESPONSE_ROOTS.");
         }
 
+        if (WorkspacePathResolver.ResolvedPathUsesReparsePointSegment(Path.GetPathRoot(allowedRoot) ?? allowedRoot, allowedRoot))
+        {
+            throw new UnauthorizedAccessException("response_json_file_reparse_point: --response-json-file allowed root must not be a symlink, junction, or reparse point.");
+        }
+
         var parent = Path.GetDirectoryName(resolved);
         if (string.IsNullOrWhiteSpace(parent))
         {
