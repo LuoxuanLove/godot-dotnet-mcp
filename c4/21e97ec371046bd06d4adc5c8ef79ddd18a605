@@ -1,0 +1,93 @@
+addons/godot_dotnet_mcp/.dotnet_bridge/BridgeWorkspace.cs
+  s_23543e5ed94f7d::t_f05ec0d8ff4ae6 12-13
+  s_23543e5ed94f7d::t_72b844871010e1 14-18
+addons/godot_dotnet_mcp/.dotnet_bridge/DotnetBridge.csproj
+  s_23543e5ed94f7d::t_96be7e7f83c6e5 25
+tests/godot_plugin_harness_fixture/tests/plugin_roslyn_service_contract_test.gd
+  s_23543e5ed94f7d::t_76866ac0295cb0 286,292,304
+  s_23543e5ed94f7d::t_15a2d63ef6a8da 67-72,242-243,255-256,285,287-291,293-303,305-326
+  s_23543e5ed94f7d::t_8ba70f1c28e150 327-328
+docs/en/CHANGELOG.md
+  s_23543e5ed94f7d::t_c97bd933114048 76
+docs/zh-CN/变更日志.md
+  s_23543e5ed94f7d::t_c97bd933114048 77
+.gitattributes
+  s_23543e5ed94f7d::t_814560236d0cd5 8-9
+tests/godot_plugin_harness/Program.cs
+  s_23543e5ed94f7d::t_20408458f4db30 963-969,971-972,974-985
+  s_23543e5ed94f7d::t_a2fded6816b748 312,970
+  s_23543e5ed94f7d::t_267e99292dd48d 112-113,360-363,410,436
+  s_23543e5ed94f7d::t_83f3b9dcc7c1c9 875,900,909,917,973
+  s_23543e5ed94f7d::t_4ce845b476a1a1 103
+  s_23543e5ed94f7d::t_9ffc913e1270a9 887
+  s_23543e5ed94f7d::t_b8b17166fd30de 1155-1168
+  s_23543e5ed94f7d::t_91eb7fe7b3ddc8 359
+addons/godot_dotnet_mcp/.dotnet_bridge/Program.cs
+  s_23543e5ed94f7d::t_4ac13796dcc1ce 149-150,153-160,163-164
+  s_23543e5ed94f7d::t_de0374c2e44968 2,8-11,14,60,114-116,123-148,151-152,165-207
+  s_23543e5ed94f7d::t_4f4106746d2d08 161-162
+tests/godot_plugin_harness_fixture/tests/plugin_path_csharp_registration_contract_test.gd
+  s_23543e5ed94f7d::t_2d11aa1249584c 18-21,23,25,38-39
+  s_23543e5ed94f7d::t_a24afc1fd7ea2e 6-8,15-16,22,24,26-30,37
+  s_23543e5ed94f7d::t_879e97b4e2db17 17
+addons/godot_dotnet_mcp/.dotnet_bridge/CsPluginPatchTool.cs
+  s_23543e5ed94f7d::t_7407a92d390ff0 16,377,379
+scripts/validate_roslyn_runtime_bundle.ps1
+  s_23543e5ed94f7d::t_bc93cea5a3ddb0 10
+docs/ko/변경-로그.md
+  s_23543e5ed94f7d::t_c97bd933114048 73
+docs/ja/変更履歴.md
+  s_23543e5ed94f7d::t_c97bd933114048 73
+addons/godot_dotnet_mcp/.dotnet_bridge/PatchOperationResult.cs
+  s_23543e5ed94f7d::t_4e882f12d48b9b 3
+addons/godot_dotnet_mcp/plugin/runtime/plugin_roslyn_service.gd
+  s_23543e5ed94f7d::t_86a8934bd20bea 6-7,13-15,29,111,329,410-412,414,431-433,435,484-485,487,574-575,577,582-584,594,696-717
+  s_23543e5ed94f7d::t_ea23063ae1d0a9 610-631,633-673,694-695
+  s_23543e5ed94f7d::t_bdcf0406531725 479,818-819,823-826
+  s_23543e5ed94f7d::t_46825bb2f33804 632,674-693
+  s_23543e5ed94f7d::t_7aa5b7512aef9b 718-719
+scripts/test_dotnet_bridge_safe_writes.ps1
+  s_23543e5ed94f7d::t_961af66a780ede 14,251,295-296,303,309
+  s_23543e5ed94f7d::t_35023b292d9343 297-302
+  s_23543e5ed94f7d::t_61aeee57537c32 10-11,124-250
+  s_23543e5ed94f7d::t_f1726b35458616 13,307-308
+  s_23543e5ed94f7d::t_0078e7922b7a53 252
+addons/godot_dotnet_mcp/.dotnet_bridge/CsFilePatchTool.cs
+  s_23543e5ed94f7d::t_83bf1737686e57 21,62,75,82,91,277,279
+addons/godot_dotnet_mcp/.dotnet_bridge/README.md
+  s_23543e5ed94f7d::t_78b4f4bd12701e 15,19,23
+addons/godot_dotnet_mcp/.dotnet_bridge/WriteToolResults.cs
+  s_23543e5ed94f7d::t_7960f4c87a1795 20
+addons/godot_dotnet_mcp/tools/debug/executor.gd
+  s_23543e5ed94f7d::t_b9a74eb867a62a 11
+scripts/test_dotnet_bridge_runtime_cli.ps1
+  s_23543e5ed94f7d::t_2e217ec4e2af78 10-11
+scripts/test_plugin_side_roslyn.ps1
+  s_23543e5ed94f7d::t_dd8390c7e0b84b 634,714-715
+scripts/test_pr_version_policy.ps1
+  s_23543e5ed94f7d::t_4235b0483a0acd 9,26
+scripts/test_refactor_guardrails.ps1
+  s_23543e5ed94f7d::t_5d538249d300fd 13,44,55,148
+scripts/validate_pr_version_policy.ps1
+  s_23543e5ed94f7d::t_bfeef146e8dfc1 33,38,43,48,53
+scripts/validate_refactor_guardrails.ps1
+  s_23543e5ed94f7d::t_47696d39b7134d 44,321,334,337,347,350
+tests/godot_plugin_harness_fixture/tests/debug_tool_executor_contract_test.gd
+  s_23543e5ed94f7d::t_4abe1927a7e335 7-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c421e97ec371046bd06d4adc5c8ef79ddd18a605",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
