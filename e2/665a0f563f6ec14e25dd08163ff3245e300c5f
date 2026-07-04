@@ -1,0 +1,19 @@
+docs/ko/변경-로그.md
+  s_9214b0fc2ec5df::t_e1a6588446619f 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e2665a0f563f6ec14e25dd08163ff3245e300c5f",
+  "prompts": {},
+  "sessions": {
+    "s_9214b0fc2ec5df": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2c90-ab55-79a0-b70b-51d684f83e96",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
