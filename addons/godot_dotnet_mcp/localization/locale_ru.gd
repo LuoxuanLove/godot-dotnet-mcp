@@ -471,6 +471,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_compare_difference": "впереди: %d / позади: %d",
 	"settings_update_compare_loading": "сравнение...",
 	"settings_update_refs_error": "Не удалось обнаружить ссылки обновления.",
+	"settings_update_refs_request_timeout": "Запрос %s не завершился за %.1f с и был прерван по тайм-ауту (страница %s).",
 	"settings_update_selected_target": "Выбранная цель:",
 	"settings_update_check": "Обнаружить",
 	"settings_update_prepare": "Подготовить",

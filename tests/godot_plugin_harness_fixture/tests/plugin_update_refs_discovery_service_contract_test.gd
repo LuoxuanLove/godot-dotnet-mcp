@@ -94,9 +94,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var stale_requests := service.find_stale_active_requests(request_pending, 13000)
 	if stale_requests.size() != 1 or str(stale_requests[0].get("kind", "")) != "branches":
 		return _failure("PluginUpdateRefsDiscoveryService should find stale active refs requests.", {"stale": stale_requests})
-	var stale_error := service.format_stale_request_error(stale_requests[0])
-	if stale_error.find("Branches request timed out after 12.0s") == -1:
-		return _failure("PluginUpdateRefsDiscoveryService should format stale refs timeout errors.", {"error": stale_error})
+	if int(stale_requests[0].get("timeout_msec", 0)) != 12000 or int(stale_requests[0].get("page", 0)) != 1:
+		return _failure("PluginUpdateRefsDiscoveryService should preserve stale refs timeout metadata.", {"stale": stale_requests})
 	var pending_status := service.build_pending_status(request_pending, 13000)
 	if int(pending_status.get("serial", 0)) != 7 or not bool(pending_status.get("background", false)):
 		return _failure("PluginUpdateRefsDiscoveryService should expose pending refs metadata.", pending_status)
@@ -122,7 +121,8 @@ func _verify_plugin_entrypoint_delegates_update_refs_discovery() -> String:
 		"_ensure_plugin_update_refs_discovery_service().append_names(",
 		"_ensure_plugin_update_refs_discovery_service().append_commits(",
 		"_ensure_plugin_update_refs_discovery_service().build_final_snapshot(",
-		"_ensure_plugin_update_refs_discovery_service().parse_refs_json_array("
+		"_ensure_plugin_update_refs_discovery_service().parse_refs_json_array(",
+		"_format_stale_update_refs_request_error("
 	]:
 		if plugin_source.find(required) == -1:
 			return "plugin.gd should delegate update refs discovery responsibility: %s" % required

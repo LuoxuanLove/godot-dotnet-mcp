@@ -690,6 +690,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_compare_difference": "current ahead %d / target ahead %d",
 	"settings_update_compare_loading": "checking...",
 	"settings_update_refs_error": "Update refs discovery failed.",
+	"settings_update_refs_request_timeout": "%s request timed out after %.1fs without completion (page %s).",
 	"settings_update_selected_target": "Selected target:",
 	"settings_update_check": "Discover",
 	"settings_update_prepare": "Prepare",

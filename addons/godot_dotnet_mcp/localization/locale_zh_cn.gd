@@ -690,6 +690,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_compare_difference": "当前领先 %d / 目标领先 %d",
 	"settings_update_compare_loading": "正在比较...",
 	"settings_update_refs_error": "更新引用发现失败。",
+	"settings_update_refs_request_timeout": "%s 请求在 %.1f 秒内未完成，已超时（第 %s 页）。",
 	"settings_update_selected_target": "选择目标：",
 	"settings_update_check": "发现",
 	"settings_update_prepare": "准备",

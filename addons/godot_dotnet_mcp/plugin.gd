@@ -1707,8 +1707,19 @@ func _sweep_stale_update_refs_requests() -> bool:
 		var kind := str(request.get("kind", ""))
 		if kind.is_empty():
 			continue
-		_mark_update_refs_request_failed(kind, _ensure_plugin_update_refs_discovery_service().format_stale_request_error(request), serial)
+		_mark_update_refs_request_failed(kind, _format_stale_update_refs_request_error(request), serial)
 	return true
+
+
+func _format_stale_update_refs_request_error(request: Dictionary) -> String:
+	var template := _get_localized_text("settings_update_refs_request_timeout")
+	if template.is_empty() or template == "settings_update_refs_request_timeout":
+		template = "%s request timed out after %.1fs without completion (page %s)."
+	return template % [
+		str(request.get("kind", "refs")).capitalize(),
+		float(int(request.get("timeout_msec", 0))) / 1000.0,
+		int(request.get("page", 1))
+	]
 
 
 func _fail_pending_update_sync_after_refs_discovery(message: String) -> void:

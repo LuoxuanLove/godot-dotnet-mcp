@@ -192,13 +192,6 @@ func build_pending_status(pending: Dictionary, now_msec: int) -> Dictionary:
 	}
 
 
-func format_stale_request_error(request: Dictionary) -> String:
-	var kind := str(request.get("kind", "refs")).capitalize()
-	var page := int(request.get("page", 1))
-	var timeout_sec := float(int(request.get("timeout_msec", 0))) / 1000.0
-	return "%s request timed out after %.1fs without completion (page %s)." % [kind, timeout_sec, page]
-
-
 func get_waiting_kinds(pending: Dictionary) -> Array[String]:
 	var waiting: Array[String] = []
 	for kind in ["branches", "releases", "tags"]:

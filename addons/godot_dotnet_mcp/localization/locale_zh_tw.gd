@@ -652,6 +652,7 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_compare_difference": "領先 %d / 落後 %d",
 	"settings_update_compare_loading": "正在比較...",
 	"settings_update_refs_error": "更新引用探索失敗。",
+	"settings_update_refs_request_timeout": "%s 請求在 %.1f 秒內未完成，已逾時（第 %s 頁）。",
 	"settings_update_selected_target": "已選目標：",
 	"settings_update_check": "探索",
 	"settings_update_prepare": "準備",
