@@ -234,7 +234,7 @@ function Test-VersionMetadataPathExists {
     return $entries -contains $Path
 }
 
-function Read-VersionFieldContent {
+function Read-VersionFieldCandidates {
     param(
         [hashtable]$Field,
         [string]$Ref,
@@ -248,15 +248,20 @@ function Read-VersionFieldContent {
         $paths = @($Field.Path)
     }
 
+    $candidates = New-Object System.Collections.Generic.List[object]
     foreach ($path in $paths) {
         if (Test-VersionMetadataPathExists -Ref $Ref -Path $path) {
             $source = if ([string]::IsNullOrWhiteSpace($Ref)) { $path } else { "${Ref}:$path" }
-            return [pscustomobject]@{
+            $candidates.Add([pscustomobject]@{
                 Content = Read-VersionContent -Ref $Ref -Path $path -Label $Label
                 Path = $path
                 Source = $source
-            }
+            })
         }
+    }
+
+    if ($candidates.Count -gt 0) {
+        return $candidates.ToArray()
     }
 
     throw "Cannot find $Label metadata file for $($Field.Name): $($paths -join ', ')"
@@ -303,6 +308,33 @@ function Get-VersionValue {
     return $Matches[1]
 }
 
+function Get-VersionFieldValue {
+    param(
+        [hashtable]$Field,
+        [string]$Ref,
+        [string]$Label
+    )
+
+    $candidates = @(Read-VersionFieldCandidates -Field $Field -Ref $Ref -Label $Label)
+    $values = New-Object System.Collections.Generic.List[object]
+    foreach ($candidate in $candidates) {
+        $values.Add([pscustomobject]@{
+            Value = Get-VersionValue -Content $candidate.Content -Pattern $Field.Pattern -Source $candidate.Source -Name $Field.Name
+            Path = $candidate.Path
+            Source = $candidate.Source
+        })
+    }
+
+    $first = $values[0]
+    $drifted = @($values | Where-Object { $_.Value -ne $first.Value })
+    if ($drifted.Count -gt 0) {
+        $summary = @($values | ForEach-Object { "$($_.Source)='$($_.Value)'" }) -join "; "
+        throw "$Label $($Field.Name) metadata candidates disagree: $summary"
+    }
+
+    return $first
+}
+
 $hasExplicitContext = -not [string]::IsNullOrWhiteSpace($BaseBranch) -or -not [string]::IsNullOrWhiteSpace($HeadBranch) -or -not [string]::IsNullOrWhiteSpace($BaseRef) -or -not [string]::IsNullOrWhiteSpace($HeadRef) -or $PullNumber -gt 0
 if (-not $hasExplicitContext) {
     Write-Host "Version policy validation skipped: no pull request context was provided."
@@ -339,10 +371,10 @@ Assert-ProtocolFactsParity -Ref $HeadRef -Label "head"
 
 $changes = New-Object System.Collections.Generic.List[string]
 foreach ($field in $versionFields) {
-    $baseMetadata = Read-VersionFieldContent -Field $field -Ref $BaseRef -Label "base"
-    $headMetadata = Read-VersionFieldContent -Field $field -Ref $HeadRef -Label "head"
-    $baseValue = Get-VersionValue -Content $baseMetadata.Content -Pattern $field.Pattern -Source $baseMetadata.Source -Name $field.Name
-    $headValue = Get-VersionValue -Content $headMetadata.Content -Pattern $field.Pattern -Source $headMetadata.Source -Name $field.Name
+    $baseMetadata = Get-VersionFieldValue -Field $field -Ref $BaseRef -Label "base"
+    $headMetadata = Get-VersionFieldValue -Field $field -Ref $HeadRef -Label "head"
+    $baseValue = $baseMetadata.Value
+    $headValue = $headMetadata.Value
 
     if ($baseValue -ne $headValue) {
         $changes.Add("$($field.Name): $baseValue -> $headValue")

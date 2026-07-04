@@ -16,6 +16,31 @@ function Convert-ToAssemblyVersion {
     return "$Version.0"
 }
 
+function Write-BridgeMetadataFixture {
+    param(
+        [string]$RepositoryRoot,
+        [string]$Version,
+        [switch]$UseLegacyBridgePath
+    )
+
+    $bridgeMetadataPath = if ($UseLegacyBridgePath) { $legacyBridgeMetadataPath } else { $metadataFiles[3] }
+    $bridgeDir = Split-Path -Parent (Join-Path $RepositoryRoot $bridgeMetadataPath)
+    New-Item -ItemType Directory -Path $bridgeDir -Force | Out-Null
+
+    $assemblyVersion = Convert-ToAssemblyVersion -Version $Version
+    @"
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Version>$Version</Version>
+    <VersionPrefix>$Version</VersionPrefix>
+    <AssemblyVersion>$assemblyVersion</AssemblyVersion>
+    <FileVersion>$assemblyVersion</FileVersion>
+    <InformationalVersion>$Version</InformationalVersion>
+  </PropertyGroup>
+</Project>
+"@ | Set-Content -LiteralPath (Join-Path $RepositoryRoot $bridgeMetadataPath) -Encoding UTF8
+}
+
 function Write-MetadataFixture {
     param(
         [string]$RepositoryRoot,
@@ -69,18 +94,7 @@ static func _default_facts() -> Dictionary:
 `t}
 "@ | Set-Content -LiteralPath (Join-Path $RepositoryRoot $metadataFiles[2]) -Encoding UTF8
 
-    $assemblyVersion = Convert-ToAssemblyVersion -Version $Version
-    @"
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <Version>$Version</Version>
-    <VersionPrefix>$Version</VersionPrefix>
-    <AssemblyVersion>$assemblyVersion</AssemblyVersion>
-    <FileVersion>$assemblyVersion</FileVersion>
-    <InformationalVersion>$Version</InformationalVersion>
-  </PropertyGroup>
-</Project>
-"@ | Set-Content -LiteralPath (Join-Path $RepositoryRoot $bridgeMetadataPath) -Encoding UTF8
+    Write-BridgeMetadataFixture -RepositoryRoot $RepositoryRoot -Version $Version -UseLegacyBridgePath:$UseLegacyBridgePath
 }
 
 function New-PolicyFixture {
@@ -181,6 +195,7 @@ Invoke-PolicyScenario -Name "non-release unchanged metadata" -HeadBranch "featur
 Invoke-PolicyScenario -Name "refactor base unchanged metadata" -BaseBranch "refactor/v2.0.0" -HeadBranch "feature/v2.0-tooling" -HeadVersion "1.0.0" -ShouldPass $true
 Invoke-PolicyScenario -Name "refactor base compares against refactor ref, not default branch checkout" -BaseBranch "refactor/v2.0.0" -BaseVersion "1.3.0" -ComparisonBaseVersion "2.0.0" -HeadBranch "feature/v2.0-policy" -HeadVersion "2.0.0" -ShouldPass $true
 Invoke-PolicyScenario -Name "refactor base bridge metadata can move from legacy to hidden path" -BaseBranch "refactor/v2.0.0" -BaseVersion "1.3.0" -ComparisonBaseVersion "2.0.0" -ComparisonBaseUsesLegacyBridgePath -HeadBranch "feature/v2.0-bridge-path" -HeadVersion "2.0.0" -ShouldPass $true
+Invoke-PolicyScenario -Name "duplicate bridge metadata candidate drift is rejected" -BaseBranch "refactor/v2.0.0" -BaseVersion "1.3.0" -ComparisonBaseVersion "2.0.0" -ComparisonBaseUsesLegacyBridgePath -HeadBranch "feature/v2.0-duplicate-bridge-path" -HeadVersion "2.0.0" -MutateHead { param($repo) Write-BridgeMetadataFixture -RepositoryRoot $repo -Version "2.1.0" -UseLegacyBridgePath } -ShouldPass $false -ExpectedErrorContains "head bridge Version metadata candidates disagree"
 Invoke-PolicyScenario -Name "v2 base unchanged metadata" -BaseBranch "v2.0" -HeadBranch "feature/v2-tooling" -HeadVersion "1.0.0" -ShouldPass $true
 Invoke-PolicyScenario -Name "v2 release baseline stacked base unchanged metadata" -BaseBranch "release/v2.0.0-baseline" -HeadBranch "feature/v2-session-contracts" -HeadVersion "1.0.0" -ShouldPass $true
 Invoke-PolicyScenario -Name "v2 feature stacked base unchanged metadata" -BaseBranch "feature/v2-resource-reference-graph" -HeadBranch "feature/v2-session-lifecycle-contract" -HeadVersion "1.0.0" -ShouldPass $true
