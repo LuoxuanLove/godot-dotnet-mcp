@@ -9,6 +9,13 @@ internal static class WorkspacePathResolver
 {
     private static readonly string ProjectRoot = ResolveProjectRoot();
 
+    public static string ProjectRootPath => ProjectRoot;
+
+    public static bool ResolvedPathUsesReparsePointSegment(string rootPath, string path)
+    {
+        return PathUsesReparsePointSegment(rootPath, path);
+    }
+
     public static string ResolveExistingPath(string path)
     {
         var resolved = ResolvePath(path);

@@ -631,7 +631,7 @@ $HarnessSucceeded = $false
 
 try {
     $TimingRecords.Add((Invoke-CommandOrThrow -Description "Build plugin Roslyn library" -Command {
-        Invoke-DotnetBuildWithDiagnostics -Description "Build plugin Roslyn library" -ProjectPath ".\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj" -Configuration Release
+        Invoke-DotnetBuildWithDiagnostics -Description "Build plugin Roslyn library" -ProjectPath ".\addons\godot_dotnet_mcp\.dotnet_bridge\DotnetBridge.csproj" -Configuration Release
     }))
 
     $TimingRecords.Add((Invoke-CommandOrThrow -Description "Validate isolated Roslyn runtime bundle" -Command {
@@ -711,8 +711,8 @@ finally {
         ".\tests\godot_plugin_harness\obj",
         ".\tests\godot_plugin_harness\.godot",
         ".\tests\godot_plugin_harness_fixture\.godot",
-        ".\addons\godot_dotnet_mcp\dotnet_bridge\bin",
-        ".\addons\godot_dotnet_mcp\dotnet_bridge\obj",
+        ".\addons\godot_dotnet_mcp\.dotnet_bridge\bin",
+        ".\addons\godot_dotnet_mcp\.dotnet_bridge\obj",
         ".\dist",
         ".\release_dist"
     )

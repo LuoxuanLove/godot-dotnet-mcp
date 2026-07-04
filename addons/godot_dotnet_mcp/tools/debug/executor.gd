@@ -8,7 +8,7 @@ const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_bu
 const MCPRuntimeDebugStore = preload("res://addons/godot_dotnet_mcp/tools/shared/mcp_runtime_debug_store.gd")
 
 const DOTNET_DEFAULT_TIMEOUT_SEC := 30
-const DOTNET_BRIDGE_CSPROJ_PATH := "res://addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+const DOTNET_BRIDGE_CSPROJ_PATH := "res://addons/godot_dotnet_mcp/.dotnet_bridge/DotnetBridge.csproj"
 
 func get_tools() -> Array[Dictionary]:
 	return [

@@ -22,10 +22,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\plugin\runtime\roslyn\PluginRoslynSyntaxCore.cs" Link="Runtime\PluginRoslynSyntaxCore.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Remove="SemanticCSharpEditor.cs" />
+    <Compile Include="..\.roslyn_source\PluginRoslynSyntaxCore.cs" Link="Runtime\PluginRoslynSyntaxCore.cs" />
   </ItemGroup>
 </Project>

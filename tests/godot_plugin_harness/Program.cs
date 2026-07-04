@@ -100,6 +100,7 @@ internal static class Program
             var copyStopwatch = Stopwatch.StartNew();
             CopyDirectory(Path.Combine(repoRoot, "tests", "godot_plugin_harness_fixture"), stageRoot);
             CopyDirectory(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp"), Path.Combine(stageRoot, "addons", "godot_dotnet_mcp"));
+            CopyBuildContextFiles(repoRoot, stageRoot);
             CopyContractCaseManifest(repoRoot, stageRoot);
             copyStopwatch.Stop();
             phaseTimings.Add(new PhaseTiming("copy_stage_inputs", copyStopwatch.ElapsedMilliseconds));
@@ -108,7 +109,8 @@ internal static class Program
                 DisableProductionPluginForEditorProbe(stageRoot);
             }
             DeleteDirectoryIfExists(Path.Combine(stageRoot, ".godot"));
-            DeleteDirectoryIfExists(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "dotnet_bridge"));
+            DeleteDirectoryIfExists(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", ".dotnet_bridge"));
+            DeleteDirectoryIfExists(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", ".roslyn_source"));
             var appDataRoot = Path.Combine(stageRoot, ".appdata");
             var localAppDataRoot = Path.Combine(stageRoot, ".localappdata");
             Directory.CreateDirectory(appDataRoot);
@@ -307,6 +309,7 @@ internal static class Program
         {
             var copyStopwatch = Stopwatch.StartNew();
             CopyDirectory(Path.Combine(repoRoot, "tests", "godot_plugin_harness_fixture"), stageRoot);
+            CopyBuildContextFiles(repoRoot, stageRoot);
             var dirtyArchiveInputs = await GetDirtyAssetLibraryArchiveInputsAsync(repoRoot, processRegistry);
             if (dirtyArchiveInputs.Length > 0)
             {
@@ -353,10 +356,11 @@ internal static class Program
             var fixtureHasRoslynPackageReference = FileContainsText(
                 Path.Combine(stageRoot, "GodotDotnetMcpPluginHarness.csproj"),
                 "Microsoft.CodeAnalysis.CSharp");
-            var exportedRoslynRuntimeSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "plugin", "runtime", "roslyn"));
-            var exportedDotnetBridgeSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", "dotnet_bridge"));
-            var rawSourceCopyRoslynRuntimeSources = HasExportedSourceFiles(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp", "plugin", "runtime", "roslyn"));
-            var rawSourceCopyDotnetBridgeSources = HasExportedSourceFiles(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp", "dotnet_bridge"));
+            var exportedRoslynRuntimeSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", ".roslyn_source"));
+            var exportedDotnetBridgeSources = HasExportedSourceFiles(Path.Combine(stageRoot, "addons", "godot_dotnet_mcp", ".dotnet_bridge"));
+            var rawSourceCopyRoslynRuntimeSources = HasExportedSourceFiles(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp", ".roslyn_source"));
+            var rawSourceCopyDotnetBridgeSources = HasExportedSourceFiles(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp", ".dotnet_bridge"));
+            var rawSourceCopyCompileSurfaceClean = DotnetDefaultCompileSurfaceIgnoresHiddenAddonSources(repoRoot);
             var releaseDocsAdvertiseRawSourceCopy = ReleaseDocsAdvertiseRawSourceCopy(repoRoot);
             var exportedRoslynRuntimeManifest = File.Exists(Path.Combine(
                 stageRoot,
@@ -403,6 +407,7 @@ internal static class Program
                 && !fixtureHasRoslynPackageReference
                 && !exportedRoslynRuntimeSources
                 && !exportedDotnetBridgeSources
+                && rawSourceCopyCompileSurfaceClean
                 && !releaseDocsAdvertiseRawSourceCopy
                 && exportedRoslynRuntimeManifest
                 && missingRoslynRuntimeManifestFiles.Length == 0
@@ -428,6 +433,7 @@ internal static class Program
                 exportedDotnetBridgeSources,
                 rawSourceCopyRoslynRuntimeSources,
                 rawSourceCopyDotnetBridgeSources,
+                rawSourceCopyCompileSurfaceClean,
                 releaseDocsAdvertiseRawSourceCopy,
                 exportedRoslynRuntimeManifest,
                 missingRoslynRuntimeManifestFiles,
@@ -866,7 +872,7 @@ internal static class Program
         }
     }
 
-    private static async Task<(bool Succeeded, int ExitCode, string StdOut, string StdErr, bool TimedOut)> BuildStageRootProject(string stageRoot, HarnessProcessRegistry processRegistry)
+    private static async Task<(bool Succeeded, int ExitCode, string StdOut, string StdErr, bool TimedOut)> BuildStageRootProject(string stageRoot, HarnessProcessRegistry? processRegistry = null)
     {
         Process? process = null;
         Task<string>? stdoutTask = null;
@@ -878,7 +884,7 @@ internal static class Program
             {
                 StartInfo = new ProcessStartInfo("dotnet")
                 {
-                    WorkingDirectory = Path.GetTempPath(),
+                    WorkingDirectory = stageRoot,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
@@ -891,7 +897,7 @@ internal static class Program
             process.StartInfo.ArgumentList.Add("Debug");
             process.StartInfo.ArgumentList.Add("--nologo");
             process.Start();
-            processRegistry.Register(process, "dotnet-build", "dotnet", stageRoot, process.StartInfo.ArgumentList);
+            processRegistry?.Register(process, "dotnet-build", "dotnet", stageRoot, process.StartInfo.ArgumentList);
             stdoutTask = process.StandardOutput.ReadToEndAsync();
             stderrTask = process.StandardError.ReadToEndAsync();
 
@@ -900,7 +906,7 @@ internal static class Program
 
             var stdout = await TryReadOutputAsync(stdoutTask);
             var stderr = await TryReadOutputAsync(stderrTask);
-            processRegistry.Unregister(process);
+            processRegistry?.Unregister(process);
             return (process.ExitCode == 0, process.ExitCode, stdout, stderr, false);
         }
         catch (OperationCanceledException)
@@ -908,7 +914,7 @@ internal static class Program
             TryKillProcessTree(process);
             var stdout = await TryReadOutputAsync(stdoutTask);
             var stderr = await TryReadOutputAsync(stderrTask);
-            processRegistry.Unregister(process);
+            processRegistry?.Unregister(process);
             return (false, -1, stdout, stderr, true);
         }
     }
@@ -952,6 +958,29 @@ internal static class Program
         return Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories)
             .Any(path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
                 || path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool DotnetDefaultCompileSurfaceIgnoresHiddenAddonSources(string repoRoot)
+    {
+        var rawStageRoot = Path.Combine(repoRoot, ".tmp", "godot_plugin_harness", "raw_source_copy_compile_surface_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            CopyDirectory(Path.Combine(repoRoot, "tests", "godot_plugin_harness_fixture"), rawStageRoot);
+            CopyDirectory(Path.Combine(repoRoot, "addons", "godot_dotnet_mcp"), Path.Combine(rawStageRoot, "addons", "godot_dotnet_mcp"));
+            CopyBuildContextFiles(repoRoot, rawStageRoot);
+            DeleteDirectoryIfExists(Path.Combine(rawStageRoot, ".godot"));
+            RemoveRoslynPackageReference(Path.Combine(rawStageRoot, "GodotDotnetMcpPluginHarness.csproj"));
+            var build = BuildStageRootProject(rawStageRoot).GetAwaiter().GetResult();
+            return build.Succeeded;
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            DeleteDirectoryIfExists(rawStageRoot);
+        }
     }
 
     private static bool HasRoslynRuntimeExecutable(string directoryPath)
@@ -1120,6 +1149,20 @@ internal static class Program
             var destinationPath = Path.Combine(destinationRoot, relativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
             File.Copy(file, destinationPath, overwrite: true);
+        }
+    }
+
+    private static void CopyBuildContextFiles(string repoRoot, string stageRoot)
+    {
+        foreach (var fileName in new[] { "global.json", "Directory.Build.props" })
+        {
+            var sourcePath = Path.Combine(repoRoot, fileName);
+            if (!File.Exists(sourcePath))
+            {
+                continue;
+            }
+
+            File.Copy(sourcePath, Path.Combine(stageRoot, fileName), overwrite: true);
         }
     }
 

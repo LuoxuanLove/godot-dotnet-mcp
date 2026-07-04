@@ -7,8 +7,8 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
-$projectPath = Join-Path $repoRoot "addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj"
-$bridgeExe = Join-Path $repoRoot "addons\godot_dotnet_mcp\dotnet_bridge\bin\$Configuration\net8.0\GodotDotnetMcp.PluginBridge.exe"
+$projectPath = Join-Path $repoRoot "addons\godot_dotnet_mcp\.dotnet_bridge\DotnetBridge.csproj"
+$bridgeExe = Join-Path $repoRoot "addons\godot_dotnet_mcp\.dotnet_bridge\bin\$Configuration\net8.0\GodotDotnetMcp.PluginBridge.exe"
 
 dotnet build $projectPath -c $Configuration | Out-Host
 if ($LASTEXITCODE -ne 0) {

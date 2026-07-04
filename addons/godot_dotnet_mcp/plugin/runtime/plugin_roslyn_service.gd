@@ -3,11 +3,16 @@ extends Node
 
 const RUNTIME_MANIFEST_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/roslyn_runtime/roslyn-runtime-manifest.json"
 const RUNTIME_BRIDGE_DLL_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/roslyn_runtime/GodotDotnetMcp.PluginBridge.dll"
+const EXPECTED_RUNTIME_COMPONENT := "godot-dotnet-mcp-roslyn-runtime"
+const EXPECTED_BRIDGE_VERSION := "2.0.0"
 const LOAD_MODE_RUNTIME_PROCESS := "isolated_runtime_process"
 const LOAD_MODE_PLACEHOLDER := "gdscript_placeholder"
 const LOAD_MODE_TESTING := "testing_double"
 const CACHE_LIMIT := 32
 const RUNTIME_PROCESS_TIMEOUT_MS := 15000
+const RUNTIME_RESPONSE_ROOTS_ENV := "GODOT_DOTNET_MCP_RESPONSE_ROOTS"
+const RUNTIME_TEMP_ROOT := "user://godot_dotnet_mcp/tmp/roslyn_runtime"
+const RUNTIME_TEMP_MAX_AGE_MS := 3600000
 const RUNTIME_DOTNET_REQUIREMENT := ".NET 8 runtime"
 const ERROR_TYPE_INVALID_ARGUMENT := "invalid_argument"
 const ERROR_TYPE_SOURCE_UNAVAILABLE := "source_unavailable"
@@ -21,6 +26,7 @@ var _load_error := "Roslyn runtime source has not been evaluated yet"
 var _cache_by_key: Dictionary = {}
 var _cache_order: Array[String] = []
 var _last_source_hash := ""
+var _runtime_temp_sequence := 0
 
 
 class PlaceholderRoslynFacade extends RefCounted:
@@ -102,6 +108,7 @@ class RuntimeProcessRoslynFacade extends RefCounted:
 
 func _init() -> void:
 	_facade = null
+	_cleanup_stale_runtime_temp_files()
 
 
 func _notification(what: int) -> void:
@@ -319,6 +326,7 @@ func clear() -> void:
 	_cache_by_key.clear()
 	_cache_order.clear()
 	_last_source_hash = ""
+	_cleanup_runtime_temp_dir(_runtime_temp_dir())
 	var facade = _facade
 	_facade = null
 	if facade is Node:
@@ -399,8 +407,11 @@ func _execute_runtime_capabilities() -> Dictionary:
 	if not bool(result.get("success", false)):
 		return result
 	var payload := _coerce_dictionary(result.get("payload", {}))
+	var validation := _validate_runtime_capabilities_payload(payload)
+	if not bool(validation.get("success", false)):
+		return validation
 	var data := _base_metadata(false)
-	data["component"] = str(payload.get("component", "godot-dotnet-mcp-roslyn-runtime"))
+	data["component"] = str(payload.get("component", EXPECTED_RUNTIME_COMPONENT))
 	data["version"] = str(payload.get("version", ""))
 	data["mode"] = str(payload.get("mode", "syntax"))
 	data["semantic_runtime"] = "Roslyn"
@@ -417,8 +428,11 @@ func _execute_runtime_capabilities_async() -> Dictionary:
 	if not bool(result.get("success", false)):
 		return result
 	var payload := _coerce_dictionary(result.get("payload", {}))
+	var validation := _validate_runtime_capabilities_payload(payload)
+	if not bool(validation.get("success", false)):
+		return validation
 	var data := _base_metadata(false)
-	data["component"] = str(payload.get("component", "godot-dotnet-mcp-roslyn-runtime"))
+	data["component"] = str(payload.get("component", EXPECTED_RUNTIME_COMPONENT))
 	data["version"] = str(payload.get("version", ""))
 	data["mode"] = str(payload.get("mode", "syntax"))
 	data["semantic_runtime"] = "Roslyn"
@@ -462,11 +476,23 @@ func _execute_runtime_process(args: Array[String]) -> Dictionary:
 
 func _execute_runtime_process_async(args: Array[String]) -> Dictionary:
 	var runtime_dll := ProjectSettings.globalize_path(RUNTIME_BRIDGE_DLL_PATH)
+	var temp_result := _ensure_runtime_temp_dir()
+	if not bool(temp_result.get("success", false)):
+		return {
+			"success": false,
+			"error": str(temp_result.get("error", "Failed to create Roslyn runtime temp directory.")),
+			"exit_code": -1,
+			"stdout": "",
+			"error_code": str(temp_result.get("error_code", "roslyn_runtime_temp_unavailable"))
+		}
 	var response_path := _make_runtime_response_path()
 	var command_args: Array[String] = [runtime_dll]
 	command_args.append_array(["--timeout-ms", str(RUNTIME_PROCESS_TIMEOUT_MS), "--response-json-file", ProjectSettings.globalize_path(response_path)])
 	command_args.append_array(args)
+	var previous_response_roots := OS.get_environment(RUNTIME_RESPONSE_ROOTS_ENV)
+	OS.set_environment(RUNTIME_RESPONSE_ROOTS_ENV, ProjectSettings.globalize_path(RUNTIME_TEMP_ROOT))
 	var pid := OS.create_process("dotnet", PackedStringArray(command_args), false)
+	OS.set_environment(RUNTIME_RESPONSE_ROOTS_ENV, previous_response_roots)
 	if pid <= 0:
 		_remove_file_if_exists(response_path)
 		return {
@@ -553,17 +579,17 @@ func _is_runtime_tool_response_payload(payload: Dictionary) -> bool:
 
 func _make_runtime_request_path(tool_name: String) -> String:
 	var safe_tool_name := tool_name.replace("/", "_").replace("\\", "_").replace(":", "_")
-	return "user://godot_dotnet_mcp_roslyn_%s_%d_%d.json" % [
+	return "%s/request_%s_%s.json" % [
+		_runtime_temp_dir(),
 		safe_tool_name,
-		Time.get_ticks_msec(),
-		randi()
+		_next_runtime_temp_token()
 	]
 
 
 func _make_runtime_response_path() -> String:
-	return "user://godot_dotnet_mcp_roslyn_response_%d_%d.json" % [
-		Time.get_ticks_msec(),
-		randi()
+	return "%s/response_%s.json" % [
+		_runtime_temp_dir(),
+		_next_runtime_temp_token()
 	]
 
 
@@ -573,6 +599,9 @@ func _remove_file_if_exists(path: String) -> void:
 
 
 func _write_runtime_request_file(request_path: String, request: Dictionary) -> Dictionary:
+	var temp_result := _ensure_runtime_temp_dir()
+	if not bool(temp_result.get("success", false)):
+		return temp_result
 	var file := FileAccess.open(request_path, FileAccess.WRITE)
 	if file == null:
 		return {
@@ -586,6 +615,185 @@ func _write_runtime_request_file(request_path: String, request: Dictionary) -> D
 
 func _cleanup_runtime_request_file(request_path: String) -> void:
 	_remove_file_if_exists(request_path)
+
+
+func _runtime_temp_dir() -> String:
+	return "%s/%d/%d" % [
+		RUNTIME_TEMP_ROOT,
+		OS.get_process_id(),
+		get_instance_id()
+	]
+
+
+func _next_runtime_temp_token() -> String:
+	_runtime_temp_sequence += 1
+	return "%d_%d_%d" % [
+		OS.get_process_id(),
+		_runtime_temp_sequence,
+		Time.get_ticks_usec()
+	]
+
+
+func _ensure_runtime_temp_dir() -> Dictionary:
+	var temp_dir := _runtime_temp_dir()
+	if _runtime_temp_path_or_ancestor_is_link(temp_dir):
+		return {
+			"success": false,
+			"error": "Roslyn runtime temp directory path contains a link: %s" % temp_dir,
+			"error_code": "roslyn_runtime_temp_link"
+		}
+	var absolute_temp_dir := ProjectSettings.globalize_path(temp_dir)
+	var error := DirAccess.make_dir_recursive_absolute(absolute_temp_dir)
+	if error != OK:
+		return {
+			"success": false,
+			"error": "Failed to create Roslyn runtime temp directory: %s" % temp_dir,
+			"error_code": "roslyn_runtime_temp_create_failed"
+		}
+	if _runtime_temp_path_or_ancestor_is_link(temp_dir) or _runtime_temp_path_or_ancestor_is_link(absolute_temp_dir):
+		return {
+			"success": false,
+			"error": "Roslyn runtime temp directory path contains a link: %s" % temp_dir,
+			"error_code": "roslyn_runtime_temp_link"
+		}
+	return {"success": true}
+
+
+func _cleanup_stale_runtime_temp_files() -> void:
+	_cleanup_stale_runtime_temp_dir(RUNTIME_TEMP_ROOT, int(Time.get_unix_time_from_system() * 1000.0))
+
+
+func _cleanup_stale_runtime_temp_dir(path: String, now_ms: int) -> void:
+	var absolute_path := ProjectSettings.globalize_path(path)
+	if not DirAccess.dir_exists_absolute(absolute_path):
+		return
+	if _runtime_temp_path_or_ancestor_is_link(path) or _runtime_temp_path_or_ancestor_is_link(absolute_path):
+		return
+	var dir := DirAccess.open(absolute_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while not entry.is_empty():
+		if entry == "." or entry == "..":
+			entry = dir.get_next()
+			continue
+		var child_path := path.path_join(entry)
+		var child_absolute := ProjectSettings.globalize_path(child_path)
+		if dir.current_is_dir():
+			if dir.is_link(entry):
+				entry = dir.get_next()
+				continue
+			_cleanup_stale_runtime_temp_dir(child_path, now_ms)
+			_cleanup_empty_runtime_temp_dir(child_absolute)
+		else:
+			var modified_ms := FileAccess.get_modified_time(child_absolute) * 1000
+			if modified_ms <= 0 or now_ms - modified_ms > RUNTIME_TEMP_MAX_AGE_MS:
+				DirAccess.remove_absolute(child_absolute)
+		entry = dir.get_next()
+	dir.list_dir_end()
+
+
+func _cleanup_empty_runtime_temp_dir(absolute_path: String) -> void:
+	if _runtime_temp_path_or_ancestor_is_link(absolute_path):
+		return
+	var dir := DirAccess.open(absolute_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	dir.list_dir_end()
+	if entry.is_empty():
+		DirAccess.remove_absolute(absolute_path)
+
+
+func _cleanup_runtime_temp_dir(path: String) -> void:
+	var absolute_path := ProjectSettings.globalize_path(path)
+	if not DirAccess.dir_exists_absolute(absolute_path):
+		return
+	if _runtime_temp_path_or_ancestor_is_link(path) or _runtime_temp_path_or_ancestor_is_link(absolute_path):
+		return
+	var dir := DirAccess.open(absolute_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while not entry.is_empty():
+		if entry == "." or entry == "..":
+			entry = dir.get_next()
+			continue
+		var child_path := path.path_join(entry)
+		var child_absolute := ProjectSettings.globalize_path(child_path)
+		if dir.current_is_dir():
+			if dir.is_link(entry):
+				entry = dir.get_next()
+				continue
+			_cleanup_runtime_temp_dir(child_path)
+		else:
+			DirAccess.remove_absolute(child_absolute)
+		entry = dir.get_next()
+	dir.list_dir_end()
+	DirAccess.remove_absolute(absolute_path)
+
+
+func _runtime_temp_path_or_ancestor_is_link(path: String) -> bool:
+	var normalized := path.replace("\\", "/").simplify_path().trim_suffix("/")
+	if normalized.is_empty():
+		return false
+	var current := ""
+	var remainder := normalized
+	if normalized.begins_with("user://"):
+		current = "user://"
+		remainder = normalized.substr("user://".length())
+	elif normalized.begins_with("res://"):
+		current = "res://"
+		remainder = normalized.substr("res://".length())
+	elif normalized.length() >= 3 and normalized.substr(1, 2) == ":/":
+		current = normalized.substr(0, 3)
+		remainder = normalized.substr(3)
+	elif normalized.begins_with("/"):
+		current = "/"
+		remainder = normalized.substr(1)
+	for part in remainder.split("/", false):
+		current = current.path_join(str(part)).simplify_path()
+		if _is_link_path(current):
+			return true
+	return false
+
+
+func _is_link_path(path: String) -> bool:
+	var parent_path := path.get_base_dir()
+	var name := path.get_file()
+	if parent_path.is_empty() or name.is_empty():
+		return false
+	var parent := DirAccess.open(parent_path)
+	if parent == null:
+		return false
+	return parent.is_link(name)
+
+
+func _validate_runtime_capabilities_payload(payload: Dictionary) -> Dictionary:
+	var component := str(payload.get("component", ""))
+	var version := str(payload.get("version", ""))
+	if component != EXPECTED_RUNTIME_COMPONENT or version != EXPECTED_BRIDGE_VERSION:
+		var data := _base_metadata(true)
+		data["component"] = component
+		data["version"] = version
+		data["expected_component"] = EXPECTED_RUNTIME_COMPONENT
+		data["expected_version"] = EXPECTED_BRIDGE_VERSION
+		data["error_type"] = ERROR_TYPE_PROTOCOL_ERROR
+		data["error_code"] = "bridge_version_mismatch"
+		return {
+			"success": false,
+			"error": "Roslyn runtime bridge version mismatch: expected %s %s, got %s %s." % [
+				EXPECTED_RUNTIME_COMPONENT,
+				EXPECTED_BRIDGE_VERSION,
+				component,
+				version
+			],
+			"data": data
+		}
+	return {"success": true}
 
 
 func _convert_bridge_read_response(response: Dictionary, script_path: String) -> Dictionary:
@@ -686,12 +894,15 @@ func _normalize_capabilities_result(result) -> Dictionary:
 	if not payload.has("message"):
 		payload["message"] = "Isolated Roslyn runtime facade is ready."
 	if not bool(payload.get("success", false)):
+		var error_type := str(data.get("error_type", ERROR_TYPE_ROSLYN_FAILURE))
+		var error_code := str(data.get("error_code", "roslyn_capabilities_failed"))
 		return _build_error_result(
 			"",
 			"",
-			ERROR_TYPE_ROSLYN_FAILURE,
-			"roslyn_capabilities_failed",
-			str(payload.get("error", payload.get("message", "Failed to fetch Roslyn capabilities")))
+			error_type,
+			error_code,
+			str(payload.get("error", payload.get("message", "Failed to fetch Roslyn capabilities"))),
+			data
 		)
 	return payload
 

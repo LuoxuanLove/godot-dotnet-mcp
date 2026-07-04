@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
-$projectPath = Join-Path $repoRoot "addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj"
+$projectPath = Join-Path $repoRoot "addons\godot_dotnet_mcp\.dotnet_bridge\DotnetBridge.csproj"
 $runtimeDirectory = Join-Path $repoRoot "addons\godot_dotnet_mcp\plugin\runtime\roslyn_runtime"
 $manifestPath = Join-Path $runtimeDirectory "roslyn-runtime-manifest.json"
 $publishDirectory = Join-Path $repoRoot ".tmp\roslyn_runtime_bundle_publish"

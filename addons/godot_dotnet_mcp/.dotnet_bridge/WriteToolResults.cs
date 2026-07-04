@@ -17,7 +17,7 @@ internal sealed record CsFilePatchResult(
     string Path,
     bool DryRun,
     bool Written,
-    IReadOnlyList<PatchOperationResult> Operations,
+    IReadOnlyList<BridgePatchOperationResult> Operations,
     IReadOnlyList<string> Warnings,
     string Preview,
     string ContentHash,

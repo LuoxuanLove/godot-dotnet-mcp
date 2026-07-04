@@ -100,7 +100,7 @@ jobs:
 
       - name: Build plugin Roslyn library
         shell: pwsh
-        run: dotnet build .\addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj -c Release
+        run: dotnet build .\addons\godot_dotnet_mcp\.dotnet_bridge\DotnetBridge.csproj -c Release
 
       - name: Setup Godot 4.6
         shell: pwsh

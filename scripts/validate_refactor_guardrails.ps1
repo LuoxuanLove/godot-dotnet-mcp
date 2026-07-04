@@ -41,7 +41,7 @@ function Find-BannedSourceMatches {
                     --glob "README.md" `
                     --glob "AGENTS.md" `
                     --glob "CLAUDE.md" `
-                    --glob "addons/godot_dotnet_mcp/dotnet_bridge/**/*.cs" `
+                    --glob "addons/godot_dotnet_mcp/.dotnet_bridge/**/*.cs" `
                     $Pattern $RepositoryRoot 2>$null
             )
             if ($LASTEXITCODE -eq 0) {
@@ -318,7 +318,7 @@ else {
     $errors.Add("PluginRoslynService runtime file is missing: addons\godot_dotnet_mcp\plugin\runtime\plugin_roslyn_service.gd")
 }
 
-$dotnetBridgeProgramPath = Join-Path $repoRoot "addons\godot_dotnet_mcp\dotnet_bridge\Program.cs"
+$dotnetBridgeProgramPath = Join-Path $repoRoot "addons\godot_dotnet_mcp\.dotnet_bridge\Program.cs"
 if (Test-Path -LiteralPath $dotnetBridgeProgramPath) {
     $dotnetBridgeProgramText = Get-Content -LiteralPath $dotnetBridgeProgramPath -Raw -Encoding UTF8
     foreach ($requiredText in @("--timeout-ms", "--response-json-file", "FindResponseJsonFile", "CancellationTokenSource", "OperationCanceledException", "runtime_timeout")) {
@@ -331,10 +331,10 @@ if (Test-Path -LiteralPath $dotnetBridgeProgramPath) {
     }
 }
 else {
-    $errors.Add("DotnetBridge Program.cs is missing: addons\godot_dotnet_mcp\dotnet_bridge\Program.cs")
+    $errors.Add("DotnetBridge Program.cs is missing: addons\godot_dotnet_mcp\.dotnet_bridge\Program.cs")
 }
 
-$dotnetBridgeSafeXmlLoaderPath = Join-Path $repoRoot "addons\godot_dotnet_mcp\dotnet_bridge\SafeXmlDocumentLoader.cs"
+$dotnetBridgeSafeXmlLoaderPath = Join-Path $repoRoot "addons\godot_dotnet_mcp\.dotnet_bridge\SafeXmlDocumentLoader.cs"
 if (Test-Path -LiteralPath $dotnetBridgeSafeXmlLoaderPath) {
     $dotnetBridgeSafeXmlLoaderText = Get-Content -LiteralPath $dotnetBridgeSafeXmlLoaderPath -Raw -Encoding UTF8
     foreach ($requiredText in @("XmlReaderSettings", "DtdProcessing = DtdProcessing.Prohibit", "XmlResolver = null", "XDocument.Load(reader")) {
@@ -344,10 +344,10 @@ if (Test-Path -LiteralPath $dotnetBridgeSafeXmlLoaderPath) {
     }
 }
 else {
-    $errors.Add("DotnetBridge SafeXmlDocumentLoader is missing: addons\godot_dotnet_mcp\dotnet_bridge\SafeXmlDocumentLoader.cs")
+    $errors.Add("DotnetBridge SafeXmlDocumentLoader is missing: addons\godot_dotnet_mcp\.dotnet_bridge\SafeXmlDocumentLoader.cs")
 }
 
-foreach ($relativePath in @("addons\godot_dotnet_mcp\dotnet_bridge\CsprojReader.cs", "addons\godot_dotnet_mcp\dotnet_bridge\CsprojWriteTool.cs")) {
+foreach ($relativePath in @("addons\godot_dotnet_mcp\.dotnet_bridge\CsprojReader.cs", "addons\godot_dotnet_mcp\.dotnet_bridge\CsprojWriteTool.cs")) {
     $absolutePath = Join-Path $repoRoot $relativePath
     if (-not (Test-Path -LiteralPath $absolutePath)) {
         $errors.Add("DotnetBridge csproj helper is missing: $relativePath")

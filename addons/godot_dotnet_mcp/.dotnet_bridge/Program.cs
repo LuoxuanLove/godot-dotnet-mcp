@@ -1,12 +1,17 @@
 using System.Text.Json;
+using System.Reflection;
 
 namespace GodotDotnetMcp.DotnetBridge;
 
 internal static class Program
 {
-    private const string Version = "2.0.0";
+    private static readonly string Version =
+        typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+        ?? typeof(Program).Assembly.GetName().Version?.ToString()
+        ?? "0.0.0";
     private const int DefaultTimeoutMs = 15000;
     private const int MaxTimeoutMs = 120000;
+    private const string ResponseRootsEnvironmentVariable = "GODOT_DOTNET_MCP_RESPONSE_ROOTS";
 
     public static async Task<int> Main(string[] args)
     {
@@ -52,7 +57,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            WriteJson(options?.ResponseJsonFile ?? responseJsonFile, new
+            WriteJsonOrConsole(options?.ResponseJsonFile ?? responseJsonFile, new
             {
                 success = false,
                 error = ex.Message,
@@ -106,12 +111,104 @@ internal static class Program
         var json = JsonSerializer.Serialize(payload, BridgeSerialization.JsonOptions);
         if (!string.IsNullOrWhiteSpace(responseJsonFile))
         {
-            File.WriteAllText(responseJsonFile!, json);
+            var resolved = ResolveResponseJsonFile(responseJsonFile!);
+            Directory.CreateDirectory(Path.GetDirectoryName(resolved)!);
+            File.WriteAllText(resolved, json);
             return;
         }
 
         Console.WriteLine(json);
     }
+
+    private static void WriteJsonOrConsole(string? responseJsonFile, object payload)
+    {
+        try
+        {
+            WriteJson(responseJsonFile, payload);
+        }
+        catch
+        {
+            WriteJson(null, payload);
+        }
+    }
+
+    private static string ResolveResponseJsonFile(string responseJsonFile)
+    {
+        var resolved = Path.GetFullPath(Environment.ExpandEnvironmentVariables(responseJsonFile));
+        if (Directory.Exists(resolved))
+        {
+            throw new ArgumentException("--response-json-file must point at a JSON file, not a directory.");
+        }
+
+        if (!Path.GetExtension(resolved).Equals(".json", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("--response-json-file must point at a .json file.");
+        }
+
+        var allowedRoots = GetResponseJsonAllowedRoots();
+        var allowedRoot = allowedRoots.FirstOrDefault(root => IsPathInsideRoot(resolved, root));
+        if (string.IsNullOrWhiteSpace(allowedRoot))
+        {
+            throw new UnauthorizedAccessException("response_json_file_outside_allowed_roots: --response-json-file must stay inside the Godot project root or GODOT_DOTNET_MCP_RESPONSE_ROOTS.");
+        }
+
+        if (WorkspacePathResolver.ResolvedPathUsesReparsePointSegment(Path.GetPathRoot(allowedRoot) ?? allowedRoot, allowedRoot))
+        {
+            throw new UnauthorizedAccessException("response_json_file_reparse_point: --response-json-file allowed root must not be a symlink, junction, or reparse point.");
+        }
+
+        var parent = Path.GetDirectoryName(resolved);
+        if (string.IsNullOrWhiteSpace(parent))
+        {
+            throw new ArgumentException("--response-json-file must include a parent directory.");
+        }
+
+        if (WorkspacePathResolver.ResolvedPathUsesReparsePointSegment(allowedRoot, parent)
+            || (File.Exists(resolved) && WorkspacePathResolver.ResolvedPathUsesReparsePointSegment(allowedRoot, resolved)))
+        {
+            throw new UnauthorizedAccessException("response_json_file_reparse_point: --response-json-file must not traverse symlink, junction, or reparse-point segments.");
+        }
+
+        return resolved;
+    }
+
+    private static IReadOnlyList<string> GetResponseJsonAllowedRoots()
+    {
+        var roots = new List<string> { WorkspacePathResolver.ProjectRootPath };
+        var configuredRoots = Environment.GetEnvironmentVariable(ResponseRootsEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(configuredRoots))
+        {
+            roots.AddRange(configuredRoots
+                .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(root => Path.GetFullPath(Environment.ExpandEnvironmentVariables(root))));
+        }
+
+        return roots
+            .Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static bool IsPathInsideRoot(string path, string root)
+    {
+        var resolvedPath = Path.GetFullPath(path);
+        var resolvedRoot = Path.GetFullPath(root);
+        return string.Equals(
+                Path.TrimEndingDirectorySeparator(resolvedPath),
+                Path.TrimEndingDirectorySeparator(resolvedRoot),
+                PathComparison)
+            || resolvedPath.StartsWith(EnsureTrailingSeparator(resolvedRoot), PathComparison);
+    }
+
+    private static string EnsureTrailingSeparator(string path)
+    {
+        var normalized = Path.GetFullPath(path);
+        return Path.EndsInDirectorySeparator(normalized)
+            ? normalized
+            : normalized + Path.DirectorySeparatorChar;
+    }
+
+    private static StringComparison PathComparison =>
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     private sealed record BridgeCommandOptions(string? Command, IReadOnlyList<string> Arguments, int TimeoutMs, string? ResponseJsonFile)
     {
