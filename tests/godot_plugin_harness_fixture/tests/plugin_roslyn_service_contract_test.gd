@@ -70,6 +70,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var temp_guard := _assert_runtime_temp_paths_are_isolated(_service)
 	if not bool(temp_guard.get("success", false)):
 		return temp_guard
+	var link_guard := _assert_runtime_temp_root_link_guard(_service)
+	if not bool(link_guard.get("success", false)):
+		return link_guard
 	_fake = FakeRoslynFacade.new()
 	_service.set_facade_for_testing(_fake)
 
@@ -214,6 +217,7 @@ func _ensure_dir(path: String) -> void:
 
 
 func _write_text(path: String, content: String) -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))
 	var file = FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		push_error("Failed to create fixture: %s" % path)
@@ -242,6 +246,8 @@ func _assert_isolated_runtime_process_has_timeout_guards() -> Dictionary:
 		"RUNTIME_TEMP_ROOT",
 		"GODOT_DOTNET_MCP_RESPONSE_ROOTS",
 		"dir.is_link(entry)",
+		"_runtime_temp_path_or_ancestor_is_link",
+		"roslyn_runtime_temp_link",
 		"await _await_process_frame()",
 		"roslyn_runtime_process_requires_async"
 	]:
@@ -255,6 +261,19 @@ func _assert_isolated_runtime_process_has_timeout_guards() -> Dictionary:
 		return _failure("PluginRoslynService should cleanup runtime request files through the shared cleanup helper.")
 	if service_source.find("user://godot_dotnet_mcp_roslyn_request") != -1 or service_source.find("user://godot_dotnet_mcp_roslyn_response") != -1:
 		return _failure("PluginRoslynService should not create runtime JSON temp files in a shared user:// filename namespace.")
+	var stale_cleanup := _extract_function_source(service_source, "_cleanup_stale_runtime_temp_dir")
+	if stale_cleanup.find("_runtime_temp_path_or_ancestor_is_link(path)") == -1 or stale_cleanup.find("_runtime_temp_path_or_ancestor_is_link(absolute_path)") == -1:
+		return _failure("PluginRoslynService stale cleanup should reject linked runtime temp roots before opening them.")
+	if _index_or_large(stale_cleanup, "_runtime_temp_path_or_ancestor_is_link(path)") > _index_or_large(stale_cleanup, "DirAccess.open(absolute_path)"):
+		return _failure("PluginRoslynService stale cleanup should check for linked roots before DirAccess.open.")
+	var runtime_cleanup := _extract_function_source(service_source, "_cleanup_runtime_temp_dir")
+	if runtime_cleanup.find("_runtime_temp_path_or_ancestor_is_link(path)") == -1 or runtime_cleanup.find("_runtime_temp_path_or_ancestor_is_link(absolute_path)") == -1:
+		return _failure("PluginRoslynService runtime temp cleanup should reject linked roots before opening them.")
+	if _index_or_large(runtime_cleanup, "_runtime_temp_path_or_ancestor_is_link(path)") > _index_or_large(runtime_cleanup, "DirAccess.open(absolute_path)"):
+		return _failure("PluginRoslynService runtime temp cleanup should check for linked roots before DirAccess.open.")
+	var ensure_temp := _extract_function_source(service_source, "_ensure_runtime_temp_dir")
+	if _index_or_large(ensure_temp, "_runtime_temp_path_or_ancestor_is_link(temp_dir)") > _index_or_large(ensure_temp, "DirAccess.make_dir_recursive_absolute"):
+		return _failure("PluginRoslynService should reject linked runtime temp roots before creating request/response files.")
 
 	return {"success": true}
 
@@ -327,6 +346,37 @@ func _assert_runtime_temp_paths_are_isolated(service: Node) -> Dictionary:
 	return {"success": true}
 
 
+func _assert_runtime_temp_root_link_guard(service: Node) -> Dictionary:
+	var temp_root := "user://godot_dotnet_mcp/tmp/roslyn_runtime"
+	var outside_root := "user://godot_dotnet_mcp/tests/roslyn_runtime_link_target"
+	_remove_tree(temp_root)
+	_remove_tree(outside_root)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(outside_root))
+	_write_text(outside_root.path_join("sentinel.txt"), "keep")
+	if not _create_directory_link(temp_root, outside_root):
+		_remove_tree(temp_root)
+		_remove_tree(outside_root)
+		return {"success": true}
+	var ensure_result: Dictionary = service._ensure_runtime_temp_dir()
+	if bool(ensure_result.get("success", true)):
+		_remove_tree(temp_root)
+		_remove_tree(outside_root)
+		return _failure("PluginRoslynService should reject linked Roslyn runtime temp roots before creating request/response files.")
+	if str(ensure_result.get("error_code", "")) != "roslyn_runtime_temp_link":
+		_remove_tree(temp_root)
+		_remove_tree(outside_root)
+		return _failure("PluginRoslynService linked temp root rejection should report error_code=roslyn_runtime_temp_link.")
+	service._cleanup_stale_runtime_temp_files()
+	service._cleanup_runtime_temp_dir(temp_root)
+	if not FileAccess.file_exists(outside_root.path_join("sentinel.txt")):
+		_remove_tree(temp_root)
+		_remove_tree(outside_root)
+		return _failure("PluginRoslynService cleanup should not recurse through a linked Roslyn runtime temp root.")
+	_remove_tree(temp_root)
+	_remove_tree(outside_root)
+	return {"success": true}
+
+
 func _read_text(path: String) -> String:
 	if not FileAccess.file_exists(path):
 		return ""
@@ -336,6 +386,80 @@ func _read_text(path: String) -> String:
 	var text := file.get_as_text()
 	file.close()
 	return text
+
+
+func _create_directory_link(link_path: String, target_path: String) -> bool:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(link_path.get_base_dir()))
+	var absolute_link := ProjectSettings.globalize_path(link_path)
+	var absolute_target := ProjectSettings.globalize_path(target_path)
+	var output: Array = []
+	var exit_code := -1
+	if OS.get_name() == "Windows":
+		exit_code = OS.execute("cmd", ["/c", "mklink", "/D", absolute_link, absolute_target], output, true)
+		if exit_code != 0:
+			output.clear()
+			exit_code = OS.execute("cmd", ["/c", "mklink", "/J", absolute_link, absolute_target], output, true)
+	else:
+		exit_code = OS.execute("ln", ["-s", absolute_target, absolute_link], output, true)
+	if exit_code != 0:
+		return false
+	if _is_link_path(link_path):
+		return true
+	DirAccess.remove_absolute(absolute_link)
+	return false
+
+
+func _is_link_path(path: String) -> bool:
+	var parent_path := path.get_base_dir()
+	var name := path.get_file()
+	if parent_path.is_empty() or name.is_empty():
+		return false
+	var parent := DirAccess.open(parent_path)
+	if parent == null:
+		return false
+	return parent.is_link(name)
+
+
+func _remove_tree(path: String) -> void:
+	var absolute_path := ProjectSettings.globalize_path(path)
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(absolute_path)
+		return
+	var dir := DirAccess.open(absolute_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while not entry.is_empty():
+		if entry != "." and entry != "..":
+			var child := absolute_path.path_join(entry)
+			if dir.is_link(entry):
+				DirAccess.remove_absolute(child)
+			elif dir.current_is_dir():
+				_remove_tree(ProjectSettings.localize_path(child))
+			else:
+				DirAccess.remove_absolute(child)
+		entry = dir.get_next()
+	dir.list_dir_end()
+	DirAccess.remove_absolute(absolute_path)
+
+
+func _extract_function_source(source: String, function_name: String) -> String:
+	var marker := "func %s(" % function_name
+	var start := source.find(marker)
+	if start == -1:
+		return ""
+	var next := source.find("\n\nfunc ", start + marker.length())
+	if next == -1:
+		return source.substr(start)
+	return source.substr(start, next - start)
+
+
+func _index_or_large(source: String, text: String) -> int:
+	var index := source.find(text)
+	if index == -1:
+		return 1000000000
+	return index
 
 
 func _failure(message: String) -> Dictionary:

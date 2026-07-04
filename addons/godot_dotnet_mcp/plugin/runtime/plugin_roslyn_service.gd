@@ -476,7 +476,15 @@ func _execute_runtime_process(args: Array[String]) -> Dictionary:
 
 func _execute_runtime_process_async(args: Array[String]) -> Dictionary:
 	var runtime_dll := ProjectSettings.globalize_path(RUNTIME_BRIDGE_DLL_PATH)
-	_ensure_runtime_temp_dir()
+	var temp_result := _ensure_runtime_temp_dir()
+	if not bool(temp_result.get("success", false)):
+		return {
+			"success": false,
+			"error": str(temp_result.get("error", "Failed to create Roslyn runtime temp directory.")),
+			"exit_code": -1,
+			"stdout": "",
+			"error_code": str(temp_result.get("error_code", "roslyn_runtime_temp_unavailable"))
+		}
 	var response_path := _make_runtime_response_path()
 	var command_args: Array[String] = [runtime_dll]
 	command_args.append_array(["--timeout-ms", str(RUNTIME_PROCESS_TIMEOUT_MS), "--response-json-file", ProjectSettings.globalize_path(response_path)])
@@ -591,7 +599,9 @@ func _remove_file_if_exists(path: String) -> void:
 
 
 func _write_runtime_request_file(request_path: String, request: Dictionary) -> Dictionary:
-	_ensure_runtime_temp_dir()
+	var temp_result := _ensure_runtime_temp_dir()
+	if not bool(temp_result.get("success", false)):
+		return temp_result
 	var file := FileAccess.open(request_path, FileAccess.WRITE)
 	if file == null:
 		return {
@@ -624,8 +634,29 @@ func _next_runtime_temp_token() -> String:
 	]
 
 
-func _ensure_runtime_temp_dir() -> void:
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_runtime_temp_dir()))
+func _ensure_runtime_temp_dir() -> Dictionary:
+	var temp_dir := _runtime_temp_dir()
+	if _runtime_temp_path_or_ancestor_is_link(temp_dir):
+		return {
+			"success": false,
+			"error": "Roslyn runtime temp directory path contains a link: %s" % temp_dir,
+			"error_code": "roslyn_runtime_temp_link"
+		}
+	var absolute_temp_dir := ProjectSettings.globalize_path(temp_dir)
+	var error := DirAccess.make_dir_recursive_absolute(absolute_temp_dir)
+	if error != OK:
+		return {
+			"success": false,
+			"error": "Failed to create Roslyn runtime temp directory: %s" % temp_dir,
+			"error_code": "roslyn_runtime_temp_create_failed"
+		}
+	if _runtime_temp_path_or_ancestor_is_link(temp_dir) or _runtime_temp_path_or_ancestor_is_link(absolute_temp_dir):
+		return {
+			"success": false,
+			"error": "Roslyn runtime temp directory path contains a link: %s" % temp_dir,
+			"error_code": "roslyn_runtime_temp_link"
+		}
+	return {"success": true}
 
 
 func _cleanup_stale_runtime_temp_files() -> void:
@@ -635,6 +666,8 @@ func _cleanup_stale_runtime_temp_files() -> void:
 func _cleanup_stale_runtime_temp_dir(path: String, now_ms: int) -> void:
 	var absolute_path := ProjectSettings.globalize_path(path)
 	if not DirAccess.dir_exists_absolute(absolute_path):
+		return
+	if _runtime_temp_path_or_ancestor_is_link(path) or _runtime_temp_path_or_ancestor_is_link(absolute_path):
 		return
 	var dir := DirAccess.open(absolute_path)
 	if dir == null:
@@ -662,6 +695,8 @@ func _cleanup_stale_runtime_temp_dir(path: String, now_ms: int) -> void:
 
 
 func _cleanup_empty_runtime_temp_dir(absolute_path: String) -> void:
+	if _runtime_temp_path_or_ancestor_is_link(absolute_path):
+		return
 	var dir := DirAccess.open(absolute_path)
 	if dir == null:
 		return
@@ -675,6 +710,8 @@ func _cleanup_empty_runtime_temp_dir(absolute_path: String) -> void:
 func _cleanup_runtime_temp_dir(path: String) -> void:
 	var absolute_path := ProjectSettings.globalize_path(path)
 	if not DirAccess.dir_exists_absolute(absolute_path):
+		return
+	if _runtime_temp_path_or_ancestor_is_link(path) or _runtime_temp_path_or_ancestor_is_link(absolute_path):
 		return
 	var dir := DirAccess.open(absolute_path)
 	if dir == null:
@@ -697,6 +734,42 @@ func _cleanup_runtime_temp_dir(path: String) -> void:
 		entry = dir.get_next()
 	dir.list_dir_end()
 	DirAccess.remove_absolute(absolute_path)
+
+
+func _runtime_temp_path_or_ancestor_is_link(path: String) -> bool:
+	var normalized := path.replace("\\", "/").simplify_path().trim_suffix("/")
+	if normalized.is_empty():
+		return false
+	var current := ""
+	var remainder := normalized
+	if normalized.begins_with("user://"):
+		current = "user://"
+		remainder = normalized.substr("user://".length())
+	elif normalized.begins_with("res://"):
+		current = "res://"
+		remainder = normalized.substr("res://".length())
+	elif normalized.length() >= 3 and normalized.substr(1, 2) == ":/":
+		current = normalized.substr(0, 3)
+		remainder = normalized.substr(3)
+	elif normalized.begins_with("/"):
+		current = "/"
+		remainder = normalized.substr(1)
+	for part in remainder.split("/", false):
+		current = current.path_join(str(part)).simplify_path()
+		if _is_link_path(current):
+			return true
+	return false
+
+
+func _is_link_path(path: String) -> bool:
+	var parent_path := path.get_base_dir()
+	var name := path.get_file()
+	if parent_path.is_empty() or name.is_empty():
+		return false
+	var parent := DirAccess.open(parent_path)
+	if parent == null:
+		return false
+	return parent.is_link(name)
 
 
 func _validate_runtime_capabilities_payload(payload: Dictionary) -> Dictionary:
