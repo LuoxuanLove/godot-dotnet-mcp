@@ -1,0 +1,23 @@
+scripts/test_pr_version_policy.ps1
+  s_23543e5ed94f7d::t_809bd272d5f995 9,12-13,23-24,29,31,83,92-94,100,111,117,136-138,146,183
+  s_23543e5ed94f7d::t_ea9a44db4058df 30,33
+scripts/validate_pr_version_policy.ps1
+  s_23543e5ed94f7d::t_eb03664c65d771 16-20,38,43,48,53,58,222-231,235-264,342-345
+  s_23543e5ed94f7d::t_9d906f720d95fa 232-234
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "17ccd3f99fa16ed497546dd2116f65f7ac8d0e8a",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
