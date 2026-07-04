@@ -1,0 +1,22 @@
+tests/godot_plugin_harness_fixture/tests/json_rpc_request_service_contract_test.gd
+  s_23543e5ed94f7d::t_79a412a581eaff 232-233
+  s_23543e5ed94f7d::t_d0b192f1d5089c 210,212,223-224,230-231,235-237,249,264,267
+addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_request_service.gd
+  s_23543e5ed94f7d::t_8e6535a4eb3412 8,76-82,137-138,143,145,148-152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4d52ce56f80fd21f16bd689d03aa25378e2321be",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
