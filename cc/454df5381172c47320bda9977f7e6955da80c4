@@ -1,0 +1,31 @@
+.github/workflows/publish-plugin.yml
+  s_23543e5ed94f7d::t_d1cb934b4fc122 103
+addons/godot_dotnet_mcp/.dotnet_bridge/Program.cs
+  s_23543e5ed94f7d::t_e2b593bdaeea9e 155-159
+tests/godot_plugin_harness_fixture/tests/plugin_roslyn_service_contract_test.gd
+  s_23543e5ed94f7d::t_4608b0c7dc3634 244
+.github/workflows/publish-release.yml
+  s_23543e5ed94f7d::t_b14a7d7ea334c2 215
+scripts/test_dotnet_bridge_safe_writes.ps1
+  s_23543e5ed94f7d::t_33e069130a6318 221-245
+addons/godot_dotnet_mcp/plugin/runtime/plugin_roslyn_service.gd
+  s_23543e5ed94f7d::t_b308993dfc3c1e 651-653,691-693
+.github/workflows/dotnet-build.yml
+  s_23543e5ed94f7d::t_50fbecd9d1310f 50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cc454df5381172c47320bda9977f7e6955da80c4",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
