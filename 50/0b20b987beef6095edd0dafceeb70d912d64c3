@@ -1,0 +1,41 @@
+docs/zh-CN/流程/发布说明/发布说明-v2.0.0.md
+  s_9214b0fc2ec5df::t_6867c1c0dd7873 1,3,61
+docs/ja/プロセス/リリースノート/リリースノート-v2.0.0.md
+  s_9214b0fc2ec5df::t_6867c1c0dd7873 1,3,61
+docs/en/process/v2.0.0-refactor-progress-tracker.md
+  s_9214b0fc2ec5df::t_40b5c5cf75bdbe 16-21
+docs/zh-CN/流程/v2.0.0-重构进度跟踪.md
+  s_9214b0fc2ec5df::t_40b5c5cf75bdbe 16-21
+docs/en/process/release-notes/release-notes-v2.0.0.md
+  s_9214b0fc2ec5df::t_6867c1c0dd7873 1,3,61
+docs/ko/프로세스/v2.0.0-리팩터-진행-추적.md
+  s_9214b0fc2ec5df::t_40b5c5cf75bdbe 16-21
+docs/en/CHANGELOG.md
+  s_9214b0fc2ec5df::t_49fa1d8396d16e 7,9-11,116,670-671
+docs/zh-CN/变更日志.md
+  s_9214b0fc2ec5df::t_49fa1d8396d16e 8,10-12,117,667-668
+docs/ko/변경-로그.md
+  s_9214b0fc2ec5df::t_49fa1d8396d16e 7,9-11,113,662-663
+docs/ja/プロセス/v2.0.0-リファクタ進捗トラッカー.md
+  s_9214b0fc2ec5df::t_40b5c5cf75bdbe 16-21
+docs/ko/프로세스/릴리스-노트/릴리스-노트-v2.0.0.md
+  s_9214b0fc2ec5df::t_6867c1c0dd7873 1,3,61
+docs/ja/変更履歴.md
+  s_9214b0fc2ec5df::t_49fa1d8396d16e 7,9-11,113,663-664
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "500b20b987beef6095edd0dafceeb70d912d64c3",
+  "prompts": {},
+  "sessions": {
+    "s_9214b0fc2ec5df": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2c90-ab55-79a0-b70b-51d684f83e96",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
