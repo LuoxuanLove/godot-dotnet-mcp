@@ -1,0 +1,42 @@
+addons/godot_dotnet_mcp/localization/locale_ru.gd
+  s_66d6019d75d323::t_673082b0892765 474
+addons/godot_dotnet_mcp/localization/locale_zh_tw.gd
+  s_66d6019d75d323::t_673082b0892765 655
+addons/godot_dotnet_mcp/localization/locale_zh_cn.gd
+  s_66d6019d75d323::t_673082b0892765 693
+addons/godot_dotnet_mcp/localization/locale_ko.gd
+  s_66d6019d75d323::t_673082b0892765 641
+addons/godot_dotnet_mcp/localization/locale_ja.gd
+  s_66d6019d75d323::t_673082b0892765 475
+addons/godot_dotnet_mcp/plugin.gd
+  s_66d6019d75d323::t_dbb86b4f9e4834 1710,1714-1722
+  s_66d6019d75d323::t_1033feff117968 1723-1724
+tests/godot_plugin_harness_fixture/tests/plugin_update_refs_discovery_service_contract_test.gd
+  s_66d6019d75d323::t_e5ddb8815fa039 97-98,124-125
+addons/godot_dotnet_mcp/localization/locale_es.gd
+  s_66d6019d75d323::t_673082b0892765 474
+addons/godot_dotnet_mcp/localization/locale_fr.gd
+  s_66d6019d75d323::t_673082b0892765 474
+addons/godot_dotnet_mcp/localization/locale_pt.gd
+  s_66d6019d75d323::t_673082b0892765 474
+addons/godot_dotnet_mcp/localization/locale_de.gd
+  s_66d6019d75d323::t_673082b0892765 474
+addons/godot_dotnet_mcp/localization/locale_en.gd
+  s_66d6019d75d323::t_673082b0892765 693
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ebcc8832b4703e51eea1934ec17a52e0a5fdb503",
+  "prompts": {},
+  "sessions": {
+    "s_66d6019d75d323": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2c37-c0dd-7fd1-91a0-bba363bbbc8d",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
