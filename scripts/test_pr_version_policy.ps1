@@ -114,6 +114,8 @@ function New-PolicyFixture {
     Write-MetadataFixture -RepositoryRoot $repo -Version $BaseVersion -PluginDescription "Base fixture" -UseLegacyBridgePath:$BaseUsesLegacyBridgePath
 
     git -C $repo init -q
+    git -C $repo config core.autocrlf false
+    git -C $repo config core.safecrlf false
     git -C $repo config user.email "ci@example.invalid"
     git -C $repo config user.name "CI"
     git -C $repo add addons
