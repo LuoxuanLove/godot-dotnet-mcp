@@ -12,13 +12,13 @@ Release validation publishes framework-dependent Roslyn runtime files so C# synt
 ## Build
 
 ```bash
-dotnet build addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj
+dotnet build addons/godot_dotnet_mcp/.dotnet_bridge/DotnetBridge.csproj
 ```
 
 ```bash
-dotnet run --project addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj -- --capabilities
+dotnet run --project addons/godot_dotnet_mcp/.dotnet_bridge/DotnetBridge.csproj -- --capabilities
 ```
 
 ```bash
-dotnet run --project addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj -- --call-json-file cs_file_read request.json
+dotnet run --project addons/godot_dotnet_mcp/.dotnet_bridge/DotnetBridge.csproj -- --call-json-file cs_file_read request.json
 ```

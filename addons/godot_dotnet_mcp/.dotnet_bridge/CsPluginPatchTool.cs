@@ -13,7 +13,7 @@ internal sealed record PluginPatchResult(
     string Action,
     string TypeName,
     string MemberName,
-    PatchOperationResult Operation,
+    BridgePatchOperationResult Operation,
     IReadOnlyList<CSharpTypeSummary> Types,
     IReadOnlyList<CSharpMethodSummary> Methods,
     IReadOnlyList<CSharpExportSummary> Exports,
@@ -374,9 +374,9 @@ internal static class CsPluginPatchTool
         return Array.Empty<string>();
     }
 
-    private static PatchOperationResult ConvertOperation(RuntimePatchOperationResult operation)
+    private static BridgePatchOperationResult ConvertOperation(RuntimePatchOperationResult operation)
     {
-        return new PatchOperationResult(
+        return new BridgePatchOperationResult(
             operation.Kind,
             operation.Target,
             operation.MatchCount,

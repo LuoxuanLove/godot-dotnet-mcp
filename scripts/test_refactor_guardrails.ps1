@@ -10,7 +10,7 @@ $roslynRuntimeGuardPath = Join-Path $scriptRoot "scripts\validate_roslyn_runtime
 $releaseChangelogValidatorPath = Join-Path $scriptRoot "scripts\validate_release_changelog_section.ps1"
 $releaseChangelogTestPath = Join-Path $scriptRoot "scripts\test_release_changelog_section.ps1"
 $roslynRuntimeServicePath = Join-Path $scriptRoot "addons\godot_dotnet_mcp\plugin\runtime\plugin_roslyn_service.gd"
-$dotnetBridgeProgramPath = Join-Path $scriptRoot "addons\godot_dotnet_mcp\dotnet_bridge\Program.cs"
+$dotnetBridgeProgramPath = Join-Path $scriptRoot "addons\godot_dotnet_mcp\.dotnet_bridge\Program.cs"
 $dotnetBridgeRuntimeCliTestPath = Join-Path $scriptRoot "scripts\test_dotnet_bridge_runtime_cli.ps1"
 
 function Write-Utf8NoBom {
@@ -41,7 +41,7 @@ function Write-GuardrailFixture {
 
     New-Item -ItemType Directory -Path (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp") -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\plugin\runtime") -Force | Out-Null
-    New-Item -ItemType Directory -Path (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\dotnet_bridge") -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\.dotnet_bridge") -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $RepositoryRoot "scripts") -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $RepositoryRoot ".github\workflows") -Force | Out-Null
 
@@ -52,7 +52,7 @@ function Write-GuardrailFixture {
     Copy-Item -LiteralPath $releaseChangelogValidatorPath -Destination (Join-Path $RepositoryRoot "scripts\validate_release_changelog_section.ps1")
     Copy-Item -LiteralPath $releaseChangelogTestPath -Destination (Join-Path $RepositoryRoot "scripts\test_release_changelog_section.ps1")
     Copy-Item -LiteralPath $roslynRuntimeServicePath -Destination (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\plugin\runtime\plugin_roslyn_service.gd")
-    Copy-Item -LiteralPath $dotnetBridgeProgramPath -Destination (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\dotnet_bridge\Program.cs")
+    Copy-Item -LiteralPath $dotnetBridgeProgramPath -Destination (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\.dotnet_bridge\Program.cs")
     Copy-Item -LiteralPath $dotnetBridgeRuntimeCliTestPath -Destination (Join-Path $RepositoryRoot "scripts\test_dotnet_bridge_runtime_cli.ps1")
     Set-Content -LiteralPath (Join-Path $RepositoryRoot "README.md") -Value $RootReadmeText -Encoding UTF8
     Set-Content -LiteralPath (Join-Path $RepositoryRoot "addons\godot_dotnet_mcp\README.md") -Value $AddonReadmeText -Encoding UTF8
@@ -145,7 +145,7 @@ jobs:
         run: echo ok
 '@
 
-    git -C $RepositoryRoot add README.md addons/godot_dotnet_mcp/README.md addons/godot_dotnet_mcp/README.zh-CN.md addons/godot_dotnet_mcp/plugin/runtime/plugin_roslyn_service.gd addons/godot_dotnet_mcp/dotnet_bridge/Program.cs scripts/validate_refactor_guardrails.ps1 scripts/validate_pr_version_policy.ps1 scripts/contract_case_manifest.json scripts/validate_roslyn_runtime_bundle.ps1 scripts/test_dotnet_bridge_runtime_cli.ps1 .github/workflows/pr-policy.yml .github/workflows/version-policy.yml .github/workflows/publish-plugin.yml docs/en/process/v2.0.0-protocol-refactor-plan.md docs/en/process/v2.0.0-refactor-progress-tracker.md | Out-Null
+    git -C $RepositoryRoot add README.md addons/godot_dotnet_mcp/README.md addons/godot_dotnet_mcp/README.zh-CN.md addons/godot_dotnet_mcp/plugin/runtime/plugin_roslyn_service.gd addons/godot_dotnet_mcp/.dotnet_bridge/Program.cs scripts/validate_refactor_guardrails.ps1 scripts/validate_pr_version_policy.ps1 scripts/contract_case_manifest.json scripts/validate_roslyn_runtime_bundle.ps1 scripts/test_dotnet_bridge_runtime_cli.ps1 .github/workflows/pr-policy.yml .github/workflows/version-policy.yml .github/workflows/publish-plugin.yml docs/en/process/v2.0.0-protocol-refactor-plan.md docs/en/process/v2.0.0-refactor-progress-tracker.md | Out-Null
     git -C $RepositoryRoot commit -m "fixture" | Out-Null
 }
 

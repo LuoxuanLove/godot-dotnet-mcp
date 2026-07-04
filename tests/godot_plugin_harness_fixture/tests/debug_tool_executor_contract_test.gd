@@ -4,8 +4,8 @@ const DebugExecutorScript = preload("res://addons/godot_dotnet_mcp/tools/debug/e
 const DebugCompatibilityScript = preload("res://addons/godot_dotnet_mcp/tools/debug_tools.gd")
 const TEMP_ROOT := "res://tests_tmp/godot_dotnet_mcp_debug_contracts"
 const TEMP_USER_DOTNET_BRIDGE_CSPROJ := "res://tests_tmp/godot_dotnet_mcp_debug_contracts/UserDotnetBridge/DotnetBridge.csproj"
-const PLUGIN_BRIDGE_DIR := "res://addons/godot_dotnet_mcp/dotnet_bridge"
-const PLUGIN_BRIDGE_CSPROJ := "res://addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+const PLUGIN_BRIDGE_DIR := "res://addons/godot_dotnet_mcp/.dotnet_bridge"
+const PLUGIN_BRIDGE_CSPROJ := "res://addons/godot_dotnet_mcp/.dotnet_bridge/DotnetBridge.csproj"
 
 var _created_plugin_bridge_fixture := false
 

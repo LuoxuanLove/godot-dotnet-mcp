@@ -18,7 +18,7 @@ internal static class CsFilePatchTool
             var text = File.ReadAllText(path);
             var originalLength = text.Length;
             var warnings = new List<string>();
-            var operations = new List<PatchOperationResult>();
+            var operations = new List<BridgePatchOperationResult>();
 
             if (!TryGetArray(arguments, "patches", out var patchesElement))
             {
@@ -59,7 +59,7 @@ internal static class CsFilePatchTool
         }
     }
 
-    private static string ApplyPatch(string text, JsonElement patchElement, ICollection<PatchOperationResult> operations, ICollection<string> warnings)
+    private static string ApplyPatch(string text, JsonElement patchElement, ICollection<BridgePatchOperationResult> operations, ICollection<string> warnings)
     {
         var kind = ReadRequiredString(patchElement, "kind").ToLowerInvariant();
         var occurrence = ReadOptionalString(patchElement, "occurrence")?.ToLowerInvariant() ?? "first";
@@ -72,14 +72,14 @@ internal static class CsFilePatchTool
                 var find = ReadRequiredString(patchElement, "find");
                 var replacement = ReadRequiredString(patchElement, "replacement");
                 var (updated, matchCount, appliedCount, note) = ReplaceText(text, find, replacement, occurrence, expectedCount);
-                operations.Add(new PatchOperationResult(kind, find, matchCount, appliedCount, note));
+                operations.Add(new BridgePatchOperationResult(kind, find, matchCount, appliedCount, note));
                 return updated;
             }
             case "remove":
             {
                 var find = ReadRequiredString(patchElement, "find");
                 var (updated, matchCount, appliedCount, note) = RemoveText(text, find, occurrence, expectedCount);
-                operations.Add(new PatchOperationResult(kind, find, matchCount, appliedCount, note));
+                operations.Add(new BridgePatchOperationResult(kind, find, matchCount, appliedCount, note));
                 return updated;
             }
             case "insert_before":
@@ -88,7 +88,7 @@ internal static class CsFilePatchTool
                 var anchor = ReadRequiredString(patchElement, "anchor");
                 var insertText = ReadRequiredString(patchElement, "text");
                 var (updated, matchCount, appliedCount, note) = InsertText(text, anchor, insertText, kind == "insert_before", occurrence, expectedCount);
-                operations.Add(new PatchOperationResult(kind, anchor, matchCount, appliedCount, note));
+                operations.Add(new BridgePatchOperationResult(kind, anchor, matchCount, appliedCount, note));
                 return updated;
             }
             case "method_upsert":
@@ -274,9 +274,9 @@ internal static class CsFilePatchTool
         return text.LastIndexOf(value, StringComparison.Ordinal);
     }
 
-    private static PatchOperationResult ConvertOperation(GodotDotnetMcp.PluginRuntime.Roslyn.PatchOperationResult operation)
+    private static BridgePatchOperationResult ConvertOperation(GodotDotnetMcp.PluginRuntime.Roslyn.PatchOperationResult operation)
     {
-        return new PatchOperationResult(
+        return new BridgePatchOperationResult(
             operation.Kind,
             operation.Target,
             operation.MatchCount,

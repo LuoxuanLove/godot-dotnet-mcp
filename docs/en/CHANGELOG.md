@@ -73,6 +73,7 @@ Target version: 2.0.0.
 - Fixed Prompt and Resource validation so unknown or incorrectly typed prompt arguments are rejected with allowed-argument metadata and binary `.scn` / `.res` files are not read as text resources.
 - Fixed Dock catalog rendering so visible tool families are retained and invalid Resource/Prompt icons are bounded before SVG loading.
 - Fixed C# bridge patch/write actions to revalidate project-root and reparse-point boundaries before and after writes.
+- Fixed Roslyn bridge install hardening so raw source copies keep bridge sources under hidden non-compiling directories, runtime temp JSON files use scoped cleanup roots, bridge capabilities reject version mismatches, and response JSON files cannot be written outside allowed roots.
 - Fixed clean Asset Library validation so exported addon installs prove isolated Roslyn runtime availability, exclude plugin bridge/Roslyn source files, and reject dirty addon/archive inputs.
 - Fixed PR policy validation so BOM-prefixed titles/headings are recognized and policy/version workflows run on merge queue events.
 - Fixed startup stability for upgraded addon copies by preventing split tool executors from registering legacy global `MCP*Tools` class names and by removing Dock scene script reloads during Dock creation that could stall the editor or emit `Cannot reload script while instances exist`.

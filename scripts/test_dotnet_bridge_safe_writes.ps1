@@ -7,9 +7,11 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
-$bridgeProject = Join-Path $repoRoot "addons\godot_dotnet_mcp\dotnet_bridge\DotnetBridge.csproj"
-$bridgeExe = Join-Path $repoRoot "addons\godot_dotnet_mcp\dotnet_bridge\bin\$Configuration\net8.0\GodotDotnetMcp.PluginBridge.exe"
+$bridgeProject = Join-Path $repoRoot "addons\godot_dotnet_mcp\.dotnet_bridge\DotnetBridge.csproj"
+$bridgeExe = Join-Path $repoRoot "addons\godot_dotnet_mcp\.dotnet_bridge\bin\$Configuration\net8.0\GodotDotnetMcp.PluginBridge.exe"
 $stageRoot = Join-Path $repoRoot (".tmp\dotnet_bridge_safe_writes_" + [System.Guid]::NewGuid().ToString("N"))
+$outsideRoot = Join-Path $repoRoot (".tmp\dotnet_bridge_safe_writes_outside_" + [System.Guid]::NewGuid().ToString("N"))
+$junctionPath = Join-Path $stageRoot "junction"
 
 if (Test-Path -LiteralPath $stageRoot) {
     Remove-Item -LiteralPath $stageRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -119,6 +121,135 @@ try {
         throw "cs_plugin_patch dryRun=false did not persist the safe-write update."
     }
 
+    New-Item -ItemType Directory -Path $outsideRoot | Out-Null
+    $outsideScriptPath = Join-Path $outsideRoot "Outside.cs"
+    [System.IO.File]::WriteAllText(
+        $outsideScriptPath,
+        "public partial class Outside { public int Value() { return 1; } }",
+        (New-Object System.Text.UTF8Encoding($false)))
+
+    $outsidePatchRequestPath = Join-Path $stageRoot "cs-file-patch-outside-request.json"
+    [System.IO.File]::WriteAllText(
+        $outsidePatchRequestPath,
+        (@{
+            path = $outsideScriptPath
+            dryRun = $false
+            patches = @(
+                @{
+                    kind = "replace"
+                    find = "return 1;"
+                    replacement = "return 9;"
+                    expectedCount = 1
+                }
+            )
+        } | ConvertTo-Json -Depth 8),
+        (New-Object System.Text.UTF8Encoding($false)))
+
+    $outsidePatchOutput = & $bridgeExe --call-json-file cs_file_patch $outsidePatchRequestPath
+    if ($LASTEXITCODE -eq 0) {
+        throw "cs_file_patch should reject absolute paths outside the project root. Output: $outsidePatchOutput"
+    }
+    if ([System.IO.File]::ReadAllText($outsideScriptPath).Contains("return 9;")) {
+        throw "cs_file_patch wrote through an absolute path outside the project root."
+    }
+
+    $traversalPatchRequestPath = Join-Path $stageRoot "cs-file-patch-traversal-request.json"
+    [System.IO.File]::WriteAllText(
+        $traversalPatchRequestPath,
+        (@{
+            path = "..\dotnet_bridge_safe_writes_outside_traversal\Traversal.cs"
+            dryRun = $false
+            patches = @(
+                @{
+                    kind = "replace"
+                    find = "return 1;"
+                    replacement = "return 9;"
+                    expectedCount = 1
+                }
+            )
+        } | ConvertTo-Json -Depth 8),
+        (New-Object System.Text.UTF8Encoding($false)))
+    $traversalPatchOutput = & $bridgeExe --call-json-file cs_file_patch $traversalPatchRequestPath
+    if ($LASTEXITCODE -eq 0) {
+        throw "cs_file_patch should reject traversal segments. Output: $traversalPatchOutput"
+    }
+
+    $junctionTarget = Join-Path $outsideRoot "junction-target"
+    New-Item -ItemType Directory -Path $junctionTarget | Out-Null
+    $junctionScriptPath = Join-Path $junctionTarget "JunctionTarget.cs"
+    [System.IO.File]::WriteAllText(
+        $junctionScriptPath,
+        "public partial class JunctionTarget { public int Value() { return 1; } }",
+        (New-Object System.Text.UTF8Encoding($false)))
+    $junctionCreated = $false
+    try {
+        New-Item -ItemType Junction -Path $junctionPath -Target $junctionTarget -ErrorAction Stop | Out-Null
+        $junctionCreated = $true
+    }
+    catch {
+        Write-Host "Skipping junction write-negative coverage because junction creation failed: $($_.Exception.Message)"
+    }
+    if ($junctionCreated) {
+        $junctionPatchRequestPath = Join-Path $stageRoot "cs-plugin-patch-junction-request.json"
+        [System.IO.File]::WriteAllText(
+            $junctionPatchRequestPath,
+            (@{
+                path = (Join-Path $junctionPath "JunctionTarget.cs")
+                dryRun = $false
+                action = "replace_method_body"
+                type_name = "JunctionTarget"
+                member_name = "Value"
+                body = "return 9;"
+            } | ConvertTo-Json -Depth 8),
+            (New-Object System.Text.UTF8Encoding($false)))
+        $junctionPatchOutput = & $bridgeExe --call-json-file cs_plugin_patch $junctionPatchRequestPath
+        if ($LASTEXITCODE -eq 0) {
+            throw "cs_plugin_patch should reject writes through junction/reparse-point segments. Output: $junctionPatchOutput"
+        }
+        if ([System.IO.File]::ReadAllText($junctionScriptPath).Contains("return 9;")) {
+            throw "cs_plugin_patch wrote through a junction/reparse-point segment."
+        }
+
+        $junctionResponsePath = Join-Path $junctionPath "response.json"
+        $junctionResponseOutput = & $bridgeExe --response-json-file $junctionResponsePath --capabilities
+        if ($LASTEXITCODE -eq 0) {
+            throw "--response-json-file should reject paths through junction/reparse-point segments. Output: $junctionResponseOutput"
+        }
+        if (Test-Path -LiteralPath $junctionResponsePath) {
+            throw "--response-json-file wrote through a junction/reparse-point segment."
+        }
+    }
+
+    $outsideResponsePath = Join-Path $outsideRoot "response.json"
+    $outsideResponseOutput = & $bridgeExe --response-json-file $outsideResponsePath --capabilities
+    if ($LASTEXITCODE -eq 0) {
+        throw "--response-json-file should reject paths outside the project root unless explicitly allowed. Output: $outsideResponseOutput"
+    }
+    if (Test-Path -LiteralPath $outsideResponsePath) {
+        throw "--response-json-file wrote outside the project root."
+    }
+    if (-not (($outsideResponseOutput | Out-String).Contains("response_json_file_outside_allowed_roots"))) {
+        throw "--response-json-file outside-root rejection should report response_json_file_outside_allowed_roots. Output: $outsideResponseOutput"
+    }
+
+    $allowedResponseRoot = Join-Path $outsideRoot "allowed-response-root"
+    New-Item -ItemType Directory -Path $allowedResponseRoot | Out-Null
+    $allowedResponsePath = Join-Path $allowedResponseRoot "response.json"
+    $env:GODOT_DOTNET_MCP_RESPONSE_ROOTS = $allowedResponseRoot
+    try {
+        $allowedResponseOutput = & $bridgeExe --response-json-file $allowedResponsePath --capabilities
+        if ($LASTEXITCODE -ne 0) {
+            throw "--response-json-file should allow paths under GODOT_DOTNET_MCP_RESPONSE_ROOTS. Output: $allowedResponseOutput"
+        }
+        $allowedResponseJson = Get-Content -LiteralPath $allowedResponsePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($allowedResponseJson.success -ne $true -or $allowedResponseJson.component -ne "godot-dotnet-mcp-roslyn-runtime") {
+            throw "--response-json-file allowed root should receive bridge capabilities JSON."
+        }
+    }
+    finally {
+        Remove-Item Env:\GODOT_DOTNET_MCP_RESPONSE_ROOTS -ErrorAction SilentlyContinue
+    }
+
     $projectPath = Join-Path $stageRoot "SafeWriteProbe.csproj"
     [System.IO.File]::WriteAllText(
         $projectPath,
@@ -161,7 +292,19 @@ try {
 }
 finally {
     Remove-Item Env:\GODOT_DOTNET_MCP_PROJECT_ROOT -ErrorAction SilentlyContinue
+    Remove-Item Env:\GODOT_DOTNET_MCP_RESPONSE_ROOTS -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $junctionPath) {
+        try {
+            [System.IO.Directory]::Delete($junctionPath)
+        }
+        catch {
+            Write-Host "Warning: failed to remove junction '$junctionPath': $($_.Exception.Message)"
+        }
+    }
     if (Test-Path -LiteralPath $stageRoot) {
         Remove-Item -LiteralPath $stageRoot -Recurse -Force
+    }
+    if (Test-Path -LiteralPath $outsideRoot) {
+        Remove-Item -LiteralPath $outsideRoot -Recurse -Force
     }
 }

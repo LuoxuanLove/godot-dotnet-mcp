@@ -64,6 +64,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return isolation_guard
 
 	_service = PluginRoslynServiceScript.new()
+	var compatibility_guard := _assert_runtime_bridge_version_contract(_service)
+	if not bool(compatibility_guard.get("success", false)):
+		return compatibility_guard
+	var temp_guard := _assert_runtime_temp_paths_are_isolated(_service)
+	if not bool(temp_guard.get("success", false)):
+		return temp_guard
 	_fake = FakeRoslynFacade.new()
 	_service.set_facade_for_testing(_fake)
 
@@ -233,6 +239,8 @@ func _assert_isolated_runtime_process_has_timeout_guards() -> Dictionary:
 		"_execute_runtime_process_async",
 		"_write_runtime_request_file",
 		"_cleanup_runtime_request_file",
+		"RUNTIME_TEMP_ROOT",
+		"GODOT_DOTNET_MCP_RESPONSE_ROOTS",
 		"await _await_process_frame()",
 		"roslyn_runtime_process_requires_async"
 	]:
@@ -244,6 +252,8 @@ func _assert_isolated_runtime_process_has_timeout_guards() -> Dictionary:
 		return _failure("PluginRoslynService isolated runtime process must yield frames instead of busy-wait polling.")
 	if service_source.find("DirAccess.remove_absolute(ProjectSettings.globalize_path(request_path))") != -1:
 		return _failure("PluginRoslynService should cleanup runtime request files through the shared cleanup helper.")
+	if service_source.find("user://godot_dotnet_mcp_roslyn_request") != -1 or service_source.find("user://godot_dotnet_mcp_roslyn_response") != -1:
+		return _failure("PluginRoslynService should not create runtime JSON temp files in a shared user:// filename namespace.")
 
 	return {"success": true}
 
@@ -269,6 +279,50 @@ func _assert_production_runtime_does_not_load_in_process_facade() -> Dictionary:
 		return _failure("PluginRoslynService runtime manifest should truthfully declare the framework-dependent .NET 8 runtime requirement.")
 	if service_source.find("PluginRoslynRuntimeFacade in-process runtime is disabled for production installs") == -1:
 		return _failure("PluginRoslynService should document why production uses the isolated runtime process.")
+	return {"success": true}
+
+
+func _assert_runtime_bridge_version_contract(service: Node) -> Dictionary:
+	var ok: Dictionary = service._validate_runtime_capabilities_payload({
+		"component": "godot-dotnet-mcp-roslyn-runtime",
+		"version": "2.0.0"
+	})
+	if not bool(ok.get("success", false)):
+		return _failure("PluginRoslynService should accept the packaged bridge component and version.")
+	var mismatch: Dictionary = service._validate_runtime_capabilities_payload({
+		"component": "godot-dotnet-mcp-roslyn-runtime",
+		"version": "1.9.0"
+	})
+	if bool(mismatch.get("success", true)):
+		return _failure("PluginRoslynService should reject mismatched bridge versions.")
+	var mismatch_data: Dictionary = mismatch.get("data", {})
+	if str(mismatch_data.get("error_code", "")) != "bridge_version_mismatch":
+		return _failure("PluginRoslynService bridge mismatch should preserve error_code=bridge_version_mismatch.")
+	if str(mismatch_data.get("expected_version", "")) != "2.0.0" or str(mismatch_data.get("version", "")) != "1.9.0":
+		return _failure("PluginRoslynService bridge mismatch should report expected and actual versions.")
+
+	var normalized: Dictionary = service._normalize_capabilities_result(mismatch)
+	if bool(normalized.get("success", true)):
+		return _failure("PluginRoslynService should normalize bridge mismatches into failed capabilities.")
+	var normalized_data: Dictionary = normalized.get("data", {})
+	if str(normalized_data.get("error_code", "")) != "bridge_version_mismatch":
+		return _failure("PluginRoslynService normalized capabilities should preserve bridge_version_mismatch.")
+	return {"success": true}
+
+
+func _assert_runtime_temp_paths_are_isolated(service: Node) -> Dictionary:
+	var request_path: String = service._make_runtime_request_path("cs/file:read")
+	var response_path: String = service._make_runtime_response_path()
+	if not request_path.begins_with("user://godot_dotnet_mcp/tmp/roslyn_runtime/"):
+		return _failure("PluginRoslynService request temp files should live under the scoped Roslyn runtime temp root.")
+	if not response_path.begins_with("user://godot_dotnet_mcp/tmp/roslyn_runtime/"):
+		return _failure("PluginRoslynService response temp files should live under the scoped Roslyn runtime temp root.")
+	if request_path.find("/request_cs_file_read_") == -1:
+		return _failure("PluginRoslynService request temp files should sanitize tool names.")
+	if response_path.find("/response_") == -1:
+		return _failure("PluginRoslynService response temp files should use response-prefixed filenames.")
+	if request_path == response_path:
+		return _failure("PluginRoslynService request and response temp paths should be unique.")
 	return {"success": true}
 
 
