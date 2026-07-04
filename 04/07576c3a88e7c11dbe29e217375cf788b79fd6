@@ -1,0 +1,26 @@
+addons/godot_dotnet_mcp/plugin/runtime/plugin_roslyn_service.gd
+  s_23543e5ed94f7d::t_30855f6735fdeb 479-487,602-604,637-659,670-671,698-699,714-715,739-772
+  s_23543e5ed94f7d::t_c2bee15be47016 773-774
+tests/godot_plugin_harness_fixture/tests/plugin_roslyn_service_contract_test.gd
+  s_23543e5ed94f7d::t_68e629ac52495a 249-250,264-276,445-462
+  s_23543e5ed94f7d::t_ed0cc697c603d9 349-379
+  s_23543e5ed94f7d::t_12fe6f5546d1a8 220,391-444
+  s_23543e5ed94f7d::t_3069f12d1cf4ae 73-75
+  s_23543e5ed94f7d::t_f3bf75ca1d8c21 463-464
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0407576c3a88e7c11dbe29e217375cf788b79fd6",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
