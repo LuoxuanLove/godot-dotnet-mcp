@@ -1,0 +1,27 @@
+addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_rpc_router.gd
+  s_23543e5ed94f7d::t_7d03a8d6f29145 20-21,93,228,537-541,543-544,556,562-591
+tests/godot_plugin_harness_fixture/tests/stdio_tool_error_parity_contract_test.gd
+  s_23543e5ed94f7d::t_b7e4dcbdc13fd8 184,193,202-205
+  s_23543e5ed94f7d::t_ec76f90a5e517f 185-187
+tests/godot_plugin_harness_fixture/tests/tool_rpc_router_contract_test.gd
+  s_23543e5ed94f7d::t_a22031a14e0f52 1008
+  s_23543e5ed94f7d::t_b83540a01851c3 995-1006,1009
+  s_23543e5ed94f7d::t_eefeb1ea54a6df 11,1007
+  s_23543e5ed94f7d::t_b9722df5493558 1010
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "378a942042c28b967d82617821645d13a9356c7e",
+  "prompts": {},
+  "sessions": {
+    "s_23543e5ed94f7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2932-2b32-7111-ba35-6a6107aa022b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
