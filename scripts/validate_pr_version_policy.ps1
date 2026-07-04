@@ -13,6 +13,11 @@
 
 $ErrorActionPreference = "Stop"
 
+$bridgeMetadataPaths = @(
+    "addons/godot_dotnet_mcp/.dotnet_bridge/DotnetBridge.csproj",
+    "addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+)
+
 $versionFields = @(
     @{
         Path = "addons/godot_dotnet_mcp/plugin.cfg"
@@ -30,27 +35,27 @@ $versionFields = @(
         Pattern = '"server_version"\s*:\s*"([^"]+)"'
     },
     @{
-        Path = "addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+        Paths = $bridgeMetadataPaths
         Name = "bridge Version"
         Pattern = '<Version>([^<]+)</Version>'
     },
     @{
-        Path = "addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+        Paths = $bridgeMetadataPaths
         Name = "bridge VersionPrefix"
         Pattern = '<VersionPrefix>([^<]+)</VersionPrefix>'
     },
     @{
-        Path = "addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+        Paths = $bridgeMetadataPaths
         Name = "bridge AssemblyVersion"
         Pattern = '<AssemblyVersion>([^<]+)</AssemblyVersion>'
     },
     @{
-        Path = "addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+        Paths = $bridgeMetadataPaths
         Name = "bridge FileVersion"
         Pattern = '<FileVersion>([^<]+)</FileVersion>'
     },
     @{
-        Path = "addons/godot_dotnet_mcp/dotnet_bridge/DotnetBridge.csproj"
+        Paths = $bridgeMetadataPaths
         Name = "bridge InformationalVersion"
         Pattern = '<InformationalVersion>([^<]+)</InformationalVersion>'
     }
@@ -214,6 +219,54 @@ function Read-VersionContent {
     return Invoke-Git -Arguments @("show", "${Ref}:$Path")
 }
 
+function Test-VersionMetadataPathExists {
+    param(
+        [string]$Ref,
+        [string]$Path
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Ref)) {
+        return Test-Path -LiteralPath (Join-Path $RepositoryRoot $Path)
+    }
+
+    $output = Invoke-Git -Arguments @("ls-tree", "--name-only", $Ref, "--", $Path)
+    $entries = @($output -split "\r?\n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    return $entries -contains $Path
+}
+
+function Read-VersionFieldCandidates {
+    param(
+        [hashtable]$Field,
+        [string]$Ref,
+        [string]$Label
+    )
+
+    $paths = @()
+    if ($Field.ContainsKey("Paths")) {
+        $paths = @($Field.Paths)
+    } else {
+        $paths = @($Field.Path)
+    }
+
+    $candidates = New-Object System.Collections.Generic.List[object]
+    foreach ($path in $paths) {
+        if (Test-VersionMetadataPathExists -Ref $Ref -Path $path) {
+            $source = if ([string]::IsNullOrWhiteSpace($Ref)) { $path } else { "${Ref}:$path" }
+            $candidates.Add([pscustomobject]@{
+                Content = Read-VersionContent -Ref $Ref -Path $path -Label $Label
+                Path = $path
+                Source = $source
+            })
+        }
+    }
+
+    if ($candidates.Count -gt 0) {
+        return $candidates.ToArray()
+    }
+
+    throw "Cannot find $Label metadata file for $($Field.Name): $($paths -join ', ')"
+}
+
 function Test-IsV2StackBaseBranch {
     param([string]$Branch)
 
@@ -255,6 +308,33 @@ function Get-VersionValue {
     return $Matches[1]
 }
 
+function Get-VersionFieldValue {
+    param(
+        [hashtable]$Field,
+        [string]$Ref,
+        [string]$Label
+    )
+
+    $candidates = @(Read-VersionFieldCandidates -Field $Field -Ref $Ref -Label $Label)
+    $values = New-Object System.Collections.Generic.List[object]
+    foreach ($candidate in $candidates) {
+        $values.Add([pscustomobject]@{
+            Value = Get-VersionValue -Content $candidate.Content -Pattern $Field.Pattern -Source $candidate.Source -Name $Field.Name
+            Path = $candidate.Path
+            Source = $candidate.Source
+        })
+    }
+
+    $first = $values[0]
+    $drifted = @($values | Where-Object { $_.Value -ne $first.Value })
+    if ($drifted.Count -gt 0) {
+        $summary = @($values | ForEach-Object { "$($_.Source)='$($_.Value)'" }) -join "; "
+        throw "$Label $($Field.Name) metadata candidates disagree: $summary"
+    }
+
+    return $first
+}
+
 $hasExplicitContext = -not [string]::IsNullOrWhiteSpace($BaseBranch) -or -not [string]::IsNullOrWhiteSpace($HeadBranch) -or -not [string]::IsNullOrWhiteSpace($BaseRef) -or -not [string]::IsNullOrWhiteSpace($HeadRef) -or $PullNumber -gt 0
 if (-not $hasExplicitContext) {
     Write-Host "Version policy validation skipped: no pull request context was provided."
@@ -291,12 +371,10 @@ Assert-ProtocolFactsParity -Ref $HeadRef -Label "head"
 
 $changes = New-Object System.Collections.Generic.List[string]
 foreach ($field in $versionFields) {
-    $baseSource = "${BaseRef}:$($field.Path)"
-    $headSource = if ([string]::IsNullOrWhiteSpace($HeadRef)) { $field.Path } else { "${HeadRef}:$($field.Path)" }
-    $baseContent = Read-VersionContent -Ref $BaseRef -Path $field.Path -Label "base"
-    $headContent = Read-VersionContent -Ref $HeadRef -Path $field.Path -Label "head"
-    $baseValue = Get-VersionValue -Content $baseContent -Pattern $field.Pattern -Source $baseSource -Name $field.Name
-    $headValue = Get-VersionValue -Content $headContent -Pattern $field.Pattern -Source $headSource -Name $field.Name
+    $baseMetadata = Get-VersionFieldValue -Field $field -Ref $BaseRef -Label "base"
+    $headMetadata = Get-VersionFieldValue -Field $field -Ref $HeadRef -Label "head"
+    $baseValue = $baseMetadata.Value
+    $headValue = $headMetadata.Value
 
     if ($baseValue -ne $headValue) {
         $changes.Add("$($field.Name): $baseValue -> $headValue")
