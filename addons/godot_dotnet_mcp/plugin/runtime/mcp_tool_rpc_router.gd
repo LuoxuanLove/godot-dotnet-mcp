@@ -17,6 +17,8 @@ const SERIAL_EDITOR_AUTOMATION_TOOLS := [
 const DEFAULT_EDITOR_AUTOMATION_STALE_TIMEOUT_MS := 10000
 const DEFAULT_TOOL_CALL_TIMEOUT_MS := 60000
 const MIN_TOOL_CALL_TIMEOUT_MS := 100
+const MAX_RETIRED_TOOL_CALL_TASKS := 32
+const RETIRED_TOOL_CALL_TASK_TTL_MS := 300000
 const ENV_TOOL_CALL_TIMEOUT_MS := "GODOT_DOTNET_MCP_TOOL_CALL_TIMEOUT_MS"
 const ENV_EDITOR_AUTOMATION_STALE_TIMEOUT_MS := "GODOT_DOTNET_MCP_EDITOR_AUTOMATION_STALE_TIMEOUT_MS"
 
@@ -88,6 +90,7 @@ var _tool_call_timeout_ms := DEFAULT_TOOL_CALL_TIMEOUT_MS
 var _editor_automation_stale_timeout_ms := DEFAULT_EDITOR_AUTOMATION_STALE_TIMEOUT_MS
 var _active_tool_call_tasks: Dictionary = {}
 var _retired_tool_call_tasks: Dictionary = {}
+var _retired_tool_call_task_ticks: Dictionary = {}
 var _tool_call_task_sequence := 0
 
 
@@ -222,6 +225,7 @@ func _execute_tool_with_timeout_async(loader, category: String, actual_tool_name
 	var tree = Engine.get_main_loop()
 	if not (tree is SceneTree):
 		return await loader.execute_tool_async(category, actual_tool_name, arguments)
+	_prune_retired_tool_call_tasks()
 	var task := ToolCallTask.new()
 	_tool_call_task_sequence += 1
 	var task_id := _tool_call_task_sequence
@@ -529,10 +533,15 @@ func _resolve_timeout_ms(context_value, environment_name: String, default_value:
 
 func _release_tool_call_task(task_id: int) -> void:
 	var task = _active_tool_call_tasks.get(task_id, null)
-	if task is ToolCallTask:
-		task.release_payload()
 	_active_tool_call_tasks.erase(task_id)
+	if not (task is ToolCallTask):
+		_retired_tool_call_tasks.erase(task_id)
+		_retired_tool_call_task_ticks.erase(task_id)
+		return
+	task.release_payload()
 	_retired_tool_call_tasks[task_id] = task
+	_retired_tool_call_task_ticks[task_id] = Time.get_ticks_msec()
+	_prune_retired_tool_call_tasks()
 
 
 func _release_tool_call_tasks() -> void:
@@ -544,11 +553,42 @@ func _release_tool_call_tasks() -> void:
 			task.release_owner()
 	_active_tool_call_tasks.clear()
 	_retired_tool_call_tasks.clear()
+	_retired_tool_call_task_ticks.clear()
 
 
 func _complete_tool_call_task(task_id: int) -> void:
 	_active_tool_call_tasks.erase(task_id)
 	_retired_tool_call_tasks.erase(task_id)
+	_retired_tool_call_task_ticks.erase(task_id)
+
+
+func _prune_retired_tool_call_tasks() -> void:
+	if _retired_tool_call_tasks.is_empty():
+		return
+	var now := Time.get_ticks_msec()
+	for task_id in _retired_tool_call_tasks.keys():
+		var retired_at := int(_retired_tool_call_task_ticks.get(task_id, now))
+		if now - retired_at >= RETIRED_TOOL_CALL_TASK_TTL_MS:
+			_drop_retired_tool_call_task(int(task_id))
+	while _retired_tool_call_tasks.size() > MAX_RETIRED_TOOL_CALL_TASKS:
+		var oldest_task_id := -1
+		var oldest_ticks := now
+		for task_id in _retired_tool_call_tasks.keys():
+			var retired_at := int(_retired_tool_call_task_ticks.get(task_id, now))
+			if oldest_task_id == -1 or retired_at < oldest_ticks:
+				oldest_task_id = int(task_id)
+				oldest_ticks = retired_at
+		if oldest_task_id == -1:
+			return
+		_drop_retired_tool_call_task(oldest_task_id)
+
+
+func _drop_retired_tool_call_task(task_id: int) -> void:
+	var task = _retired_tool_call_tasks.get(task_id, null)
+	if task is ToolCallTask:
+		task.release_owner()
+	_retired_tool_call_tasks.erase(task_id)
+	_retired_tool_call_task_ticks.erase(task_id)
 
 
 func _log_message(message: String, level: String) -> void:

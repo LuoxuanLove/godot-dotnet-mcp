@@ -8,6 +8,7 @@ const ToolActivityRegistryScript = preload("res://addons/godot_dotnet_mcp/plugin
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 
 const JSON_SCHEMA_2020_12_URI := "https://json-schema.org/draft/2020-12/schema"
+const EXPECTED_RETIRED_TOOL_CALL_TASK_CAP := 32
 
 
 class FakeToolLoader:
@@ -990,6 +991,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not (slow_router.get("_retired_tool_call_tasks") as Dictionary).is_empty():
 		return _failure("Tool RPC router should clear retired timeout tasks after their coroutine settles.")
 	slow_router.dispose()
+
+	var prune_router = ToolRpcRouterScript.new()
+	var synthetic_retired_tasks := {}
+	var synthetic_retired_ticks := {}
+	var now := Time.get_ticks_msec()
+	for index in range(EXPECTED_RETIRED_TOOL_CALL_TASK_CAP + 3):
+		var task_id := index + 1
+		synthetic_retired_tasks[task_id] = RefCounted.new()
+		synthetic_retired_ticks[task_id] = now + index
+	prune_router.set("_retired_tool_call_tasks", synthetic_retired_tasks)
+	prune_router.set("_retired_tool_call_task_ticks", synthetic_retired_ticks)
+	prune_router.call("_prune_retired_tool_call_tasks")
+	var retired_tasks = prune_router.get("_retired_tool_call_tasks") as Dictionary
+	if retired_tasks.size() > EXPECTED_RETIRED_TOOL_CALL_TASK_CAP:
+		return _failure("Tool RPC router should cap retired timeout task references for permanently hung calls.")
+	prune_router.dispose()
 
 	return {
 		"name": "tool_rpc_router_contracts",

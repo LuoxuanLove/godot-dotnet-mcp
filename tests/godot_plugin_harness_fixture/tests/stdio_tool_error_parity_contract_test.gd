@@ -181,13 +181,16 @@ func _assert_stable_stdio_tool_error(stdio_result, expected_text: String, label:
 	else:
 		if stdio_result_dict.has("structuredContent"):
 			return _failure("Stdio should omit structuredContent for %s errors when outputSchema is not advertised." % label)
-	var stdio_payload := _tool_result_payload(stdio_result_dict)
+	var stdio_text_payload := _tool_result_text_payload(stdio_result_dict)
+	var stdio_payload := stdio_text_payload
+	if expect_structured_content:
+		stdio_payload = stdio_result_dict.get("structuredContent", {}) as Dictionary
 	var stdio_error := str(stdio_payload.get("error", ""))
 	if stdio_error.find(expected_text) == -1:
 		return _failure("Stdio %s error should preserve '%s'. actual=%s" % [label, expected_text, stdio_error])
 	if bool(stdio_payload.get("success", true)):
 		return _failure("Stdio %s text JSON payload should report success=false." % label)
-	if expect_structured_content and JSON.stringify(stdio_payload) != JSON.stringify(stdio_result_dict.get("structuredContent", {})):
+	if expect_structured_content and JSON.stringify(stdio_text_payload) != JSON.stringify(stdio_result_dict.get("structuredContent", {})):
 		return _failure("Stdio %s structuredContent should match the text JSON payload." % label)
 	return {"success": true, "error": ""}
 
@@ -196,6 +199,10 @@ func _tool_result_payload(result: Dictionary) -> Dictionary:
 	var structured = result.get("structuredContent", null)
 	if structured is Dictionary:
 		return structured as Dictionary
+	return _tool_result_text_payload(result)
+
+
+func _tool_result_text_payload(result: Dictionary) -> Dictionary:
 	var content = result.get("content", [])
 	if not (content is Array) or (content as Array).is_empty():
 		return {}
