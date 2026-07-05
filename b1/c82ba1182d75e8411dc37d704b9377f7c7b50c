@@ -1,0 +1,91 @@
+addons/godot_dotnet_mcp/plugin.gd
+  s_9214b0fc2ec5df::t_4c19d8075bc4c9 49,89,150,238,657,944-945,972,980,983-985,987,992,1007,1021,1046,1051-1058,1208,1212-1213,1229-1230,2141-2142
+  s_9214b0fc2ec5df::t_99a7dd99b610ba 1027-1029,1040-1044,1180-1182,1185-1186
+addons/godot_dotnet_mcp/ui/settings_tab_model_projection.gd
+  s_9214b0fc2ec5df::t_86eab3bfbceaa0 128,356
+  s_9214b0fc2ec5df::t_08e82e81322614 258
+addons/godot_dotnet_mcp/localization/locale_en.gd
+  s_9214b0fc2ec5df::t_08e82e81322614 682-684
+  s_9214b0fc2ec5df::t_236abf587430c5 667,685,695
+addons/godot_dotnet_mcp/localization/locale_ko.gd
+  s_9214b0fc2ec5df::t_236abf587430c5 615,633,643
+  s_9214b0fc2ec5df::t_08e82e81322614 630-632
+tests/godot_plugin_harness_fixture/tests/plugin_runtime_reload_completion_service_contract_test.gd
+  s_9214b0fc2ec5df::t_6ece9d610bb457 54-55
+tests/godot_plugin_harness_fixture/tests/plugin_lifecycle_service_contract_test.gd
+  s_9214b0fc2ec5df::t_6ece9d610bb457 188,234-235
+addons/godot_dotnet_mcp/localization/locale_de.gd
+  s_9214b0fc2ec5df::t_236abf587430c5 448,466,476
+  s_9214b0fc2ec5df::t_08e82e81322614 463-465
+docs/en/process/release-notes/release-notes-v2.0.0.md
+  s_9214b0fc2ec5df::t_e9be972d27ff75 73
+tests/godot_plugin_harness_fixture/tests/mcp_dock_settings_tab_contract_test.gd
+  s_9214b0fc2ec5df::t_bf421fdb31257d 59,218-219
+  s_9214b0fc2ec5df::t_6ece9d610bb457 209-210,226-227,250-251,266,268-269
+tests/godot_plugin_harness_fixture/tests/plugin_update_settings_persistence_contract_test.gd
+  s_9214b0fc2ec5df::t_de9d381d86ba0b 465
+  s_9214b0fc2ec5df::t_49c5b0cbaa65d9 593,595
+  s_9214b0fc2ec5df::t_109b4677c4cc97 437,439,460,463,468,473-474,476,485,487,490,493
+  s_9214b0fc2ec5df::t_2f8c7ff07a72f7 764,767,769,772,775,778,783,786,819-820,823,848,1040,1042,1047,1050,1060,1063,1072,1075,1086,1094,1097,1100,1103
+addons/godot_dotnet_mcp/localization/locale_zh_cn.gd
+  s_9214b0fc2ec5df::t_236abf587430c5 667,685,695
+  s_9214b0fc2ec5df::t_08e82e81322614 682-684
+docs/en/CHANGELOG.md
+  s_9214b0fc2ec5df::t_312d59872a393b 67-68
+  s_9214b0fc2ec5df::t_6d16d1e5be2619 386
+docs/ja/変更履歴.md
+  s_9214b0fc2ec5df::t_6d16d1e5be2619 380
+  s_9214b0fc2ec5df::t_312d59872a393b 65-66
+addons/godot_dotnet_mcp/ui/settings_tab.gd
+  s_9214b0fc2ec5df::t_9db0381ea496bb 18-19,72-73,108-109,133,199-208
+  s_9214b0fc2ec5df::t_7482ba2ed304a3 209-214
+addons/godot_dotnet_mcp/localization/locale_es.gd
+  s_9214b0fc2ec5df::t_236abf587430c5 448,466,476
+  s_9214b0fc2ec5df::t_08e82e81322614 463-465
+addons/godot_dotnet_mcp/localization/locale_fr.gd
+  s_9214b0fc2ec5df::t_236abf587430c5 448,466,476
+  s_9214b0fc2ec5df::t_08e82e81322614 463-465
+addons/godot_dotnet_mcp/localization/locale_ru.gd
+  s_9214b0fc2ec5df::t_236abf587430c5 448,466,476
+  s_9214b0fc2ec5df::t_08e82e81322614 463-465
+addons/godot_dotnet_mcp/localization/locale_ja.gd
+  s_9214b0fc2ec5df::t_236abf587430c5 449,467,477
+  s_9214b0fc2ec5df::t_08e82e81322614 464-466
+addons/godot_dotnet_mcp/localization/locale_pt.gd
+  s_9214b0fc2ec5df::t_08e82e81322614 463-465
+  s_9214b0fc2ec5df::t_236abf587430c5 448,466,476
+addons/godot_dotnet_mcp/localization/locale_zh_tw.gd
+  s_9214b0fc2ec5df::t_08e82e81322614 644-646
+  s_9214b0fc2ec5df::t_236abf587430c5 629,647,657
+docs/zh-CN/变更日志.md
+  s_9214b0fc2ec5df::t_6d16d1e5be2619 384
+  s_9214b0fc2ec5df::t_312d59872a393b 68-69
+docs/ko/변경-로그.md
+  s_9214b0fc2ec5df::t_312d59872a393b 65-66
+  s_9214b0fc2ec5df::t_6d16d1e5be2619 379
+tests/godot_plugin_harness_fixture/tests/settings_tab_rendering_contract_test.gd
+  s_9214b0fc2ec5df::t_bf421fdb31257d 35,171-174
+  s_9214b0fc2ec5df::t_6ece9d610bb457 180-181,198-199,210,212-213
+docs/ja/プロセス/リリースノート/リリースノート-v2.0.0.md
+  s_9214b0fc2ec5df::t_e9be972d27ff75 73
+docs/ko/프로세스/릴리스-노트/릴리스-노트-v2.0.0.md
+  s_9214b0fc2ec5df::t_e9be972d27ff75 73
+docs/zh-CN/流程/发布说明/发布说明-v2.0.0.md
+  s_9214b0fc2ec5df::t_e9be972d27ff75 73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b1c82ba1182d75e8411dc37d704b9377f7c7b50c",
+  "prompts": {},
+  "sessions": {
+    "s_9214b0fc2ec5df": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2c90-ab55-79a0-b70b-51d684f83e96",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
