@@ -39,7 +39,6 @@ func enter_tree(context: Dictionary) -> void:
 		_call_void(context.get("defer_start_server_for_lifecycle", Callable()))
 
 	_call_void(context.get("restore_pending_focus_snapshot_if_needed", Callable()))
-	_call_void(context.get("ensure_saved_update_source_discovery_requested", Callable()))
 	_finish_operation(context, operation, true, "plugin", "_enter_tree")
 	MCPDebugBuffer.record("info", "plugin", "Plugin initialized")
 
@@ -89,8 +88,6 @@ func disable_plugin(context: Dictionary) -> void:
 
 func process(delta: float, status_poll_accumulator: float, update_refs_retry_pending: bool, context: Dictionary) -> float:
 	_call_void(context.get("tick_user_tool_watch_service", Callable()))
-	if update_refs_retry_pending and _call_bool(context.get("ensure_update_refs_discovery_requested", Callable()), false):
-		return status_poll_accumulator
 	status_poll_accumulator += delta
 	if status_poll_accumulator >= STATUS_POLL_INTERVAL_SECONDS:
 		status_poll_accumulator = 0.0

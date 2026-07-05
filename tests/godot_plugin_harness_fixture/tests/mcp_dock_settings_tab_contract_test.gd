@@ -56,7 +56,7 @@ class FakeLocalization extends RefCounted:
 		"settings_update_commit_unrecorded": "unrecorded",
 		"settings_update_branch_unavailable": "No branches",
 		"settings_update_release_unavailable": "No releases",
-		"settings_update_refs_idle": "Click Check",
+		"settings_update_refs_idle": "Select an update mode to discover branches, releases, and tags.",
 		"settings_update_refs_loading": "Loading refs",
 		"settings_update_refs_success": "Refs loaded",
 		"settings_update_refs_error": "Refs failed",
@@ -206,8 +206,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should show only the branch target row for custom branch update sources.")
 	if tab_container.get_tab_control(5).find_child("ReleaseTagValue", true, false) != null or tab_container.get_tab_control(5).find_child("CustomBranchValue", true, false) is LineEdit:
 		return _failure("Settings tab update refs should not use manual LineEdit controls.")
-	if check_button.visible or not check_button.disabled or not check_button.text.is_empty():
-		return _failure("Settings tab Check should remain hidden, disabled, and label-free because refs are discovered from source selection.")
+	if not check_button.visible or check_button.disabled or check_button.text != "Check":
+		return _failure("Settings tab Check should be visible and enabled because refs refresh is manual.")
 	if prepare_button.visible or not prepare_button.disabled or not prepare_button.text.is_empty():
 		return _failure("Settings tab Prepare should remain hidden, disabled, and label-free after Dock projection.")
 	if apply_button.text != "Sync":
@@ -215,16 +215,16 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if apply_button.disabled:
 		return _failure("Settings tab Sync should be enabled for selected branch targets.")
 	var labels := tab_container.get_tab_control(5).find_children("*", "Label", true, false)
-	if _find_label_containing(labels, "Click Check") != null:
-		return _failure("Settings tab should normalize stale manual Check status copy after Dock projection.")
+	if _find_label_containing(labels, "Select an update mode") != null:
+		return _failure("Settings tab should normalize stale automatic discovery status copy after Dock projection.")
 	if _find_label_containing(labels, "Current version: 1.0.1") != null or _find_label_containing(labels, "Plugin Path:") != null or _find_label_containing(labels, "Commit: abcdef123456") != null:
 		return _failure("Settings tab should not display removed current version, plugin path, or commit summary rows after Dock projection.")
 	if _find_label_containing(labels, "Synced dev.") == null or _find_label_containing(labels, "Current plugin 1.0.1 [abcdef1] -> selected target 1.4.0 [1234567]") == null or _find_label_containing(labels, "selected target dev") != null or _find_label_containing(labels, "current ahead 0 / target ahead 1") == null:
 		return _failure("Settings tab should display sync success together with explicit current-to-target update hashes and commit difference direction.")
 	source_option.emit_signal("pressed")
 	custom_branch_value.emit_signal("pressed")
-	if recorder.update_interaction_refresh_count != 2 or recorder.update_source != "" or recorder.update_custom_branch != "":
-		return _failure("MCP Dock should request background update refresh when Settings update selectors are pressed without changing selection.")
+	if recorder.update_interaction_refresh_count != 0 or recorder.update_source != "" or recorder.update_custom_branch != "":
+		return _failure("MCP Dock should not request update refresh when Settings selectors are opened.")
 	prepare_button.text = "准备"
 	prepare_button.visible = true
 	prepare_button.disabled = false
@@ -247,8 +247,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"plugin_freshness": {}
 	})
 	await tree.process_frame
-	if check_button.visible or not check_button.disabled or not check_button.text.is_empty() or prepare_button.visible or not prepare_button.disabled or not prepare_button.text.is_empty() or apply_button.text != "Sync":
-		return _failure("MCP Dock should normalize stale Settings tab update button cache after model projection.")
+	if not check_button.visible or check_button.disabled or check_button.text != "Check" or prepare_button.visible or not prepare_button.disabled or not prepare_button.text.is_empty() or apply_button.text != "Sync":
+		return _failure("MCP Dock should preserve visible manual Check while normalizing stale hidden update controls.")
 	source_option.select(0)
 	source_option.emit_signal("item_selected", 0)
 	if custom_branch_row.visible:
@@ -263,9 +263,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should restore branch row visibility immediately when custom branch mode is selected.")
 	custom_branch_value.select(1)
 	custom_branch_value.emit_signal("item_selected", 1)
+	check_button.emit_signal("pressed")
 	apply_button.emit_signal("pressed")
-	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/dock" or recorder.update_interaction_refresh_count != 2 or recorder.update_check_count != 0 or recorder.update_apply_count != 1:
-		return _failure("Settings tab update setting and Sync changes should route through MCP Dock signals without a user-visible Check action.")
+	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/dock" or recorder.update_interaction_refresh_count != 0 or recorder.update_check_count != 1 or recorder.update_apply_count != 1:
+		return _failure("Settings tab Check should route through MCP Dock only when the explicit button is pressed.")
 
 	return {"name": "mcp_dock_settings_tab_contracts", "success": true, "error": ""}
 

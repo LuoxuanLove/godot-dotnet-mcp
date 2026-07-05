@@ -46,9 +46,7 @@ const PLUGIN_ID := "godot_dotnet_mcp"
 const PENDING_FOCUS_SNAPSHOT_KEY := "_pending_focus_snapshot"
 const RUNTIME_BRIDGE_AUTOLOAD_NAME := "MCPRuntimeBridge"
 const RUNTIME_BRIDGE_AUTOLOAD_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_bridge.gd"
-const UPDATE_BACKGROUND_REFRESH_TICK_INTERVAL_SEC := 5.0
-const UPDATE_REFS_BACKGROUND_REFRESH_TTL_SEC := 300
-const UPDATE_COMPARE_BACKGROUND_REFRESH_TTL_SEC := 30
+const UPDATE_REQUEST_MAINTENANCE_TICK_INTERVAL_SEC := 1.0
 const UPDATE_REFS_STALE_REQUEST_GRACE_SEC := 2.0
 
 var _state = null
@@ -88,7 +86,7 @@ var _localization: LocalizationService
 var _dock: Control
 var _status_poll_accumulator := 0.0
 var _user_tool_watch_tick_accumulator := 0.0
-var _update_background_refresh_tick_accumulator := 0.0
+var _update_request_maintenance_tick_accumulator := 0.0
 var _editor_debugger_bridge: EditorDebuggerPlugin
 var _pending_runtime_reload_action := ""
 var _plugin_reenable_pending := false
@@ -149,7 +147,7 @@ func _process(delta: float) -> void:
 		_plugin_lifecycle_service = PluginLifecycleServiceScript.new()
 	var started_usec := Time.get_ticks_usec()
 	_user_tool_watch_tick_accumulator += maxf(delta, 0.0)
-	_tick_background_update_info_refresh(delta)
+	_tick_update_request_maintenance(delta)
 	_status_poll_accumulator = _plugin_lifecycle_service.process(delta, _status_poll_accumulator, _update_refs_discovery_retry_pending, _get_plugin_lifecycle_context())
 	_record_process_perf(started_usec, delta)
 
@@ -237,7 +235,7 @@ func _defer_initial_dock_refresh() -> void:
 
 
 func _defer_saved_update_source_discovery_request() -> void:
-	call_deferred("_ensure_saved_update_source_discovery_requested")
+	return
 
 
 func _stop_user_tool_watch_service() -> void:
@@ -656,12 +654,8 @@ func _refresh_dock() -> void:
 		_dock_recreate_attempted = true
 		call_deferred("_recreate_dock")
 		return
-	if _update_refs_discovery_retry_pending and _ensure_update_refs_discovery_requested():
-		return
+	_sweep_stale_update_refs_requests()
 	_sync_current_tab_from_dock()
-	if _ensure_saved_update_source_discovery_requested():
-		return
-	_maybe_start_background_update_info_refresh()
 	if _dock_model_service == null:
 		_dock_model_service = DockModelServiceScript.new()
 	_dock_model_service.configure(
@@ -919,11 +913,6 @@ func _on_current_tab_changed(index: int) -> void:
 	_state.current_tab = index
 	if _state.current_tab == 4:
 		_invalidate_client_install_status_cache()
-	if _state.current_tab == 5:
-		if str(_state.update_refs_state) == "success" and _update_refs_discovery_loaded:
-			_maybe_start_background_update_info_refresh()
-		elif _ensure_update_refs_discovery_requested():
-			return
 	_refresh_dock()
 
 
@@ -952,9 +941,8 @@ func _on_update_source_changed(source: String) -> void:
 	if _state.settings["update_source"] == "custom_branch":
 		_state.settings["update_custom_branch"] = "dev"
 	_save_settings()
-	_mark_update_selection_refresh_pending()
-	if not _start_background_update_refs_refresh() and not _is_update_selection_refresh_pending():
-		_maybe_refresh_update_compare_in_background()
+	_clear_update_selection_refresh_pending()
+	_reset_update_compare_state()
 	_refresh_dock()
 
 
@@ -981,7 +969,7 @@ func _ensure_update_refs_discovery_requested(force_refresh: bool = false) -> boo
 		_update_refs_discovery_retry_pending = false
 		return false
 	if _get_update_request_parent() == null:
-		_update_refs_discovery_retry_pending = true
+		_update_refs_discovery_retry_pending = false
 		return false
 	_update_refs_discovery_retry_pending = false
 	_on_update_check_requested()
@@ -989,35 +977,19 @@ func _ensure_update_refs_discovery_requested(force_refresh: bool = false) -> boo
 
 
 func _maybe_start_background_update_info_refresh() -> bool:
-	if _state == null or int(_state.current_tab) != 5:
-		return false
-	if str(_state.update_sync_state) == "loading":
-		return false
-	if _should_refresh_update_refs_in_background():
-		return _start_background_update_refs_refresh()
-	return _maybe_refresh_update_compare_in_background()
+	return false
 
 
-func _tick_background_update_info_refresh(delta: float) -> void:
-	_update_background_refresh_tick_accumulator += maxf(delta, 0.0)
-	if _update_background_refresh_tick_accumulator < UPDATE_BACKGROUND_REFRESH_TICK_INTERVAL_SEC:
+func _tick_update_request_maintenance(delta: float) -> void:
+	_update_request_maintenance_tick_accumulator += maxf(delta, 0.0)
+	if _update_request_maintenance_tick_accumulator < UPDATE_REQUEST_MAINTENANCE_TICK_INTERVAL_SEC:
 		return
-	_update_background_refresh_tick_accumulator = 0.0
+	_update_request_maintenance_tick_accumulator = 0.0
 	_sweep_stale_update_refs_requests()
-	_maybe_start_background_update_info_refresh()
 
 
 func _should_refresh_update_refs_in_background() -> bool:
-	if _state == null:
-		return false
-	if str(_state.update_refs_state) != "success" or not _update_refs_discovery_loaded:
-		return false
-	if str(_state.update_refs_refresh_state) == "loading":
-		return false
-	var last_checked := int(_state.update_refs_last_checked_unix)
-	if last_checked <= 0:
-		return true
-	return int(Time.get_unix_time_from_system()) - last_checked >= UPDATE_REFS_BACKGROUND_REFRESH_TTL_SEC
+	return false
 
 
 func _should_refresh_update_compare_in_background() -> bool:
@@ -1032,10 +1004,7 @@ func _should_refresh_update_compare_in_background() -> bool:
 		return true
 	if not target_commit.is_empty() and str(_state.update_compare_target_commit).strip_edges() != target_commit:
 		return true
-	var last_checked := int(_state.update_compare_last_checked_unix)
-	if last_checked <= 0:
-		return true
-	return int(Time.get_unix_time_from_system()) - last_checked >= UPDATE_COMPARE_BACKGROUND_REFRESH_TTL_SEC
+	return false
 
 
 func _maybe_refresh_update_compare_in_background() -> bool:
@@ -1049,16 +1018,15 @@ func _should_refresh_update_refs_before_sync() -> bool:
 		return false
 	if str(_state.update_refs_state) == "loading" or str(_state.update_refs_refresh_state) == "loading":
 		return true
-	if str(_state.update_refs_refresh_state) == "error" or str(_state.update_refs_refresh_state) == "unavailable":
-		return true
-	if str(_state.update_refs_state) != "success" or not _update_refs_discovery_loaded:
-		return true
-	return _should_refresh_update_refs_in_background()
+	return false
 
 
 func _should_queue_update_sync_for_verification(target: Dictionary) -> bool:
 	if _state == null:
 		return false
+	if not _should_require_discovered_refs_for_sync(target):
+		if str(_state.update_refs_state) != "success" or not _update_refs_discovery_loaded:
+			return false
 	if _should_refresh_update_refs_before_sync():
 		return true
 	if _should_refresh_update_compare_in_background():
@@ -1069,22 +1037,25 @@ func _should_queue_update_sync_for_verification(target: Dictionary) -> bool:
 	return not _is_update_sync_target_verified(target, true)
 
 
+func _should_require_discovered_refs_for_sync(target: Dictionary) -> bool:
+	var target_kind := str(target.get("kind", "branch"))
+	return target_kind != "branch"
+
+
 func _start_background_update_refs_refresh() -> bool:
-	if _state == null:
-		return false
-	_sweep_stale_update_refs_requests()
-	if str(_state.update_refs_state) == "loading" or str(_state.update_refs_refresh_state) == "loading" or str(_state.update_sync_state) == "loading":
-		return false
-	if _get_update_request_parent() == null:
-		return false
-	_on_update_check_requested(true)
-	return true
+	return false
 
 
 func _on_update_interaction_refresh_requested() -> void:
 	_ensure_runtime_state()
-	if _start_background_update_refs_refresh():
-		_refresh_dock()
+	_refresh_dock()
+
+
+func _clear_update_selection_refresh_pending() -> void:
+	if _state == null:
+		return
+	_state.update_selection_refresh_pending = false
+	_state.update_selection_refresh_pending_ref = ""
 
 
 func _mark_update_selection_refresh_pending() -> void:
@@ -1206,13 +1177,13 @@ func _ensure_pending_update_sync_verification() -> bool:
 		_refresh_dock()
 		return true
 	if str(_state.update_refs_state) != "success" or not _update_refs_discovery_loaded:
-		_state.update_sync_status = _get_localized_text("settings_update_sync_refreshing_refs")
-		_state.update_sync_progress = max(float(_state.update_sync_progress), 0.04)
-		if not _start_pending_sync_refs_refresh():
-			_fail_pending_update_sync_after_refs_discovery("No active update refs request host.")
+		var target_without_refs := _resolve_update_sync_target()
+		if _should_require_discovered_refs_for_sync(target_without_refs):
+			_fail_pending_update_sync_after_refs_discovery("Run update ref discovery before syncing release-derived targets.")
 			_refresh_dock()
 			return false
-		return true
+		_clear_pending_update_sync()
+		return _request_update_sync(target_without_refs, "manual_sync")
 	var target := _resolve_update_sync_target()
 	var target_ref := str(target.get("ref", "")).strip_edges()
 	if target_ref.is_empty():
@@ -1234,32 +1205,12 @@ func _ensure_pending_update_sync_verification() -> bool:
 
 
 func _start_pending_sync_refs_refresh() -> bool:
-	if _state == null:
-		return false
-	if str(_state.update_refs_state) == "loading" or str(_state.update_refs_refresh_state) == "loading":
-		return true
-	if _get_update_request_parent() == null:
-		return false
-	_on_update_check_requested(true)
-	return true
+	return false
 
 
 func _ensure_saved_update_source_discovery_requested() -> bool:
-	if _state == null:
-		return false
-	var source := _normalize_update_source(str(_state.settings.get("update_source", "latest_stable")))
-	if not ["custom_branch", "latest_stable", "latest_release"].has(source):
-		_update_refs_discovery_retry_pending = false
-		return false
-	if str(_state.update_refs_state) == "loading" or str(_state.update_sync_state) == "loading":
-		return false
-	if str(_state.update_refs_state) == "success" and _update_refs_discovery_loaded:
-		_update_refs_discovery_retry_pending = false
-		return false
-	if _get_update_request_parent() == null:
-		_update_refs_discovery_retry_pending = true
-		return false
-	return _ensure_update_refs_discovery_requested()
+	_update_refs_discovery_retry_pending = false
+	return false
 
 
 func _get_update_request_parent() -> Node:
@@ -1275,9 +1226,8 @@ func _on_update_custom_branch_changed(branch: String) -> void:
 	_cancel_pending_update_sync("Update sync target changed before verification completed.")
 	_state.settings["update_custom_branch"] = branch
 	_save_settings()
-	_mark_update_selection_refresh_pending()
-	if not _start_background_update_refs_refresh() and not _is_update_selection_refresh_pending():
-		_maybe_refresh_update_compare_in_background()
+	_clear_update_selection_refresh_pending()
+	_reset_update_compare_state()
 	_refresh_dock()
 
 
@@ -2188,9 +2138,8 @@ func set_plugin_update_source_from_tools(source: String, custom_branch: String =
 	if normalized == "latest_release":
 		_state.settings["update_release_tag"] = release_tag.strip_edges()
 		_save_settings()
-		_mark_update_selection_refresh_pending()
-		if not _start_background_update_refs_refresh() and not _is_update_selection_refresh_pending():
-			_maybe_refresh_update_compare_in_background()
+		_clear_update_selection_refresh_pending()
+		_reset_update_compare_state()
 		_refresh_dock()
 	var data := _build_plugin_update_status_snapshot()
 	data["accepted"] = false
@@ -2237,24 +2186,6 @@ func start_plugin_update_sync_from_tools() -> Dictionary:
 	var target := _resolve_update_sync_target()
 	var target_ref := str(target.get("ref", "")).strip_edges()
 	if target_ref.is_empty():
-		if _should_discover_update_target_before_sync():
-			_update_sync_after_refs_discovery_pending = true
-			var discovery_accepted := _ensure_update_refs_discovery_requested(true)
-			var discovery_data := _build_plugin_update_status_snapshot()
-			var discovery_loading := str(_state.update_refs_state) == "loading" or _update_refs_discovery_retry_pending
-			discovery_data["accepted"] = discovery_accepted or discovery_loading
-			discovery_data["discovery_accepted"] = discovery_accepted
-			discovery_data["pending_sync_after_refs_discovery"] = _update_sync_after_refs_discovery_pending
-			discovery_data["next_action"] = "poll_update_status"
-			discovery_data["action_status"] = "preparing_sync" if discovery_loading else _resolve_plugin_update_request_status("refs", discovery_accepted)
-			return _build_plugin_update_tool_response({
-				"success": true,
-				"accepted": bool(discovery_data.get("accepted", false)),
-				"loading": discovery_loading,
-				"status": str(discovery_data.get("action_status", "")),
-				"data": discovery_data,
-				"message": "Plugin update target discovery started before sync"
-			})
 		_on_update_sync_requested()
 		var missing_target_data := _build_plugin_update_status_snapshot()
 		missing_target_data["accepted"] = false
@@ -3296,8 +3227,6 @@ func _restore_pending_focus_snapshot_if_needed() -> void:
 			_dock.call_deferred("focus_active_panel")
 	_state.settings.erase(PENDING_FOCUS_SNAPSHOT_KEY)
 	_save_settings()
-	if _state.current_tab == 5:
-		_ensure_update_refs_discovery_requested()
 
 func _schedule_plugin_reenable() -> bool:
 	return _config_reload_wiring_service.schedule_plugin_reenable(_get_config_reload_wiring_context())

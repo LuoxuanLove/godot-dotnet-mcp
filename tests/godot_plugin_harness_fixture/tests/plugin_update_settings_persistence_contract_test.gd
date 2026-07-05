@@ -434,9 +434,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		tool_facade_probe.free()
 		return _failure("plugin.gd update tool facade should clear a previously selected release tag when set_source omits release_tag.")
 	var discover_result: Dictionary = tool_facade_probe.discover_plugin_update_refs_from_tools(true)
-	if not bool(discover_result.get("success", false)) or str(discover_result.get("status", "")) != "pending":
+	if not bool(discover_result.get("success", false)) or str(discover_result.get("status", "")) != "unavailable":
 		tool_facade_probe.free()
-		return _failure("plugin.gd update tool facade should report pending discovery when no request host is available.")
+		return _failure("plugin.gd update tool facade should report unavailable discovery when no request host is available.")
 	tool_facade_probe.free()
 
 	var sync_start_probe := SyncStartProbePlugin.new()
@@ -457,23 +457,23 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	release_discovery_probe._state.update_ref_latest_stable_release = ""
 	_tree.root.add_child(release_discovery_probe.request_parent)
 	var release_start_result: Dictionary = release_discovery_probe.start_plugin_update_sync_from_tools()
-	if not bool(release_start_result.get("accepted", false)) or not bool(release_start_result.get("loading", false)) or str(release_start_result.get("status", "")) != "preparing_sync" or release_discovery_probe.discovery_request_count != 1:
+	if bool(release_start_result.get("accepted", false)) or bool(release_start_result.get("loading", false)) or str(release_start_result.get("status", "")) != "error" or release_discovery_probe.discovery_request_count != 0:
 		release_discovery_probe.request_parent.queue_free()
 		release_discovery_probe.free()
-		return _failure("plugin.gd tool update sync should accept and prepare ref discovery instead of failing release-derived targets before refs are loaded.")
+		return _failure("plugin.gd tool update sync should not auto-discover release-derived targets before refs are loaded.")
 	var release_start_data: Dictionary = release_start_result.get("data", {})
-	if not bool(release_start_data.get("pending_sync_after_refs_discovery", false)) or str(release_start_data.get("next_action", "")) != "poll_update_status":
+	if bool(release_start_data.get("pending_sync_after_refs_discovery", false)):
 		release_discovery_probe.request_parent.queue_free()
 		release_discovery_probe.free()
-		return _failure("plugin.gd tool update sync should expose a pollable pending-sync state while refs are discovered.")
+		return _failure("plugin.gd tool update sync should not expose a pending discovery state when sync needs a manual refs refresh.")
 	release_discovery_probe.request_parent.queue_free()
 	release_discovery_probe.free()
 	var prepared_sync_probe := ToolPreparedSyncProbePlugin.new()
 	prepared_sync_probe._state.settings["update_source"] = "latest_stable"
-	var prepared_start_result: Dictionary = prepared_sync_probe.start_plugin_update_sync_from_tools()
-	if not bool(prepared_start_result.get("accepted", false)) or str(prepared_start_result.get("status", "")) != "preparing_sync" or prepared_sync_probe.discovery_request_count != 1:
+	var prepared_discover_result: Dictionary = prepared_sync_probe.discover_plugin_update_refs_from_tools(true)
+	if not bool(prepared_discover_result.get("accepted", false)) or str(prepared_discover_result.get("status", "")) != "accepted" or prepared_sync_probe.discovery_request_count != 1:
 		prepared_sync_probe.free()
-		return _failure("plugin.gd tool update sync should start release target discovery from the same sync action.")
+		return _failure("plugin.gd explicit update ref discovery should still start release target discovery.")
 	prepared_sync_probe._update_refs_pending["branch_done"] = true
 	prepared_sync_probe._update_refs_pending["release_done"] = true
 	prepared_sync_probe._update_refs_pending["tag_done"] = true
@@ -482,14 +482,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	prepared_sync_probe._update_refs_pending["tags"] = ["v2.0.0"]
 	prepared_sync_probe._update_refs_pending["commits"] = {"v2.0.0": "tag-sha"}
 	prepared_sync_probe._finalize_update_refs_discovery_if_ready(prepared_sync_probe._update_refs_request_serial)
-	if prepared_sync_probe.archive_requests.size() != 0 or prepared_sync_probe.compare_requests.size() != 1 or not prepared_sync_probe._update_sync_after_refs_discovery_pending:
+	if prepared_sync_probe.archive_requests.size() != 0 or prepared_sync_probe.compare_requests.size() != 1 or prepared_sync_probe._update_sync_after_refs_discovery_pending:
 		prepared_sync_probe.free()
-		return _failure("plugin.gd tool update sync should verify the discovered release target before archive sync.")
+		return _failure("plugin.gd explicit update ref discovery should verify the discovered release target without queuing sync.")
 	var prepared_compare_body := JSON.stringify({"ahead_by": 1, "behind_by": 0}).to_utf8_buffer()
 	prepared_sync_probe._on_update_compare_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), prepared_compare_body, "current-sync-sha", "tag-sha", prepared_sync_probe._update_compare_request_serial)
+	var prepared_start_result: Dictionary = prepared_sync_probe.start_plugin_update_sync_from_tools()
 	if prepared_sync_probe.archive_requests.size() != 1:
 		prepared_sync_probe.free()
-		return _failure("plugin.gd tool update sync should continue into archive sync after release refs and compare are verified.")
+		return _failure("plugin.gd tool update sync should start after manual release refs and compare are verified.")
 	var prepared_target: Dictionary = (prepared_sync_probe.archive_requests[0] as Dictionary).get("target", {})
 	if str(prepared_target.get("kind", "")) != "tag" or str(prepared_target.get("ref", "")) != "v2.0.0" or str(prepared_target.get("commit", "")) != "tag-sha":
 		prepared_sync_probe.free()
@@ -589,9 +590,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	refs_error_probe._state.update_compare_target_ref = "feature/refs-error"
 	refs_error_probe._state.update_compare_target_commit = "target-sha"
 	refs_error_probe._on_update_sync_requested()
-	if refs_error_probe.archive_requests.size() != 0 or not refs_error_probe._update_sync_after_refs_discovery_pending or refs_error_probe.refs_refresh_requests != [true] or str(refs_error_probe._state.update_refs_refresh_state) != "loading":
+	if refs_error_probe.archive_requests.size() != 1 or refs_error_probe._update_sync_after_refs_discovery_pending or not refs_error_probe.refs_refresh_requests.is_empty() or str(refs_error_probe._state.update_refs_refresh_state) != "error":
 		refs_error_probe.free()
-		return _failure("Dock update sync should force a new refs refresh after a background refs refresh error instead of syncing a stale verified target.")
+		return _failure("Dock update sync should not start a hidden refs refresh after a manual refs refresh error when the selected branch target is already verified.")
 	refs_error_probe.free()
 
 	var pending_refs_probe := PendingSyncProbePlugin.new()
@@ -760,29 +761,29 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	refresh_probe._state.update_refs_state = "success"
 	refresh_probe._update_refs_discovery_loaded = true
 	refresh_probe._on_update_interaction_refresh_requested()
-	if refresh_probe.discovery_request_count != 1 or refresh_probe.discovery_background_flags != [true]:
+	if refresh_probe.discovery_request_count != 0 or refresh_probe.discovery_background_flags != []:
 		refresh_probe.request_parent.queue_free()
 		refresh_probe.free()
-		return _failure("plugin.gd should background-refresh update refs when Settings update selectors are pressed without changing selection.")
+		return _failure("plugin.gd should not refresh update refs when Settings update selectors are pressed without changing selection.")
 	refresh_probe._on_update_interaction_refresh_requested()
-	if refresh_probe.discovery_request_count != 1:
+	if refresh_probe.discovery_request_count != 0:
 		refresh_probe.request_parent.queue_free()
 		refresh_probe.free()
-		return _failure("plugin.gd should not start duplicate refs refreshes while an interaction-triggered refresh is already loading.")
+		return _failure("plugin.gd should keep selector interaction refresh-free.")
 	refresh_probe._state.update_refs_refresh_state = "idle"
 	refresh_probe._on_update_source_changed("custom_branch")
-	if refresh_probe.discovery_request_count != 2 or refresh_probe.discovery_background_flags != [true, true]:
+	if refresh_probe.discovery_request_count != 0 or refresh_probe.discovery_background_flags != []:
 		refresh_probe.request_parent.queue_free()
 		refresh_probe.free()
-		return _failure("plugin.gd should background-refresh update refs when the update source is selected again.")
+		return _failure("plugin.gd should not refresh update refs when the update source changes.")
 	refresh_probe._state.update_refs_state = "success"
 	refresh_probe._update_refs_discovery_loaded = true
 	refresh_probe._state.update_refs_refresh_state = "idle"
 	refresh_probe._on_update_custom_branch_changed("dev")
-	if refresh_probe.discovery_request_count != 3 or refresh_probe.discovery_background_flags != [true, true, true]:
+	if refresh_probe.discovery_request_count != 0 or refresh_probe.discovery_background_flags != []:
 		refresh_probe.request_parent.queue_free()
 		refresh_probe.free()
-		return _failure("plugin.gd should background-refresh update refs when the selected branch is selected again.")
+		return _failure("plugin.gd should not refresh update refs when the selected branch changes.")
 	refresh_probe._state.update_ref_commits = {"v1.0.0-pre3": "annotated-tag-object-sha"}
 	refresh_probe._state.update_ref_versions = {"v1.0.0-pre3": "1.0.0-pre3"}
 	refresh_probe._state.update_ref_latest_release = "v1.0.0-pre3"
@@ -815,11 +816,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	tick_background_probe._state.update_refs_state = "success"
 	tick_background_probe._state.update_refs_last_checked_unix = 1
 	tick_background_probe._update_refs_discovery_loaded = true
-	tick_background_probe._tick_background_update_info_refresh(6.0)
-	if tick_background_probe.update_check_count != 1 or tick_background_probe.update_check_background_flags != [true] or tick_background_probe._state.update_refs_state != "success":
+	tick_background_probe._tick_update_request_maintenance(6.0)
+	if tick_background_probe.update_check_count != 0 or tick_background_probe.update_check_background_flags != [] or tick_background_probe._state.update_refs_state != "success":
 		tick_background_probe.free()
 		tick_background_dock.queue_free()
-		return _failure("plugin.gd should revalidate stale Settings update refs on the editor tick using a background refresh.")
+		return _failure("plugin.gd should not revalidate stale Settings update refs on the editor tick.")
 	tick_background_probe.free()
 	tick_background_dock.queue_free()
 
@@ -844,7 +845,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	commit_drift_probe._state.update_compare_last_checked_unix = int(Time.get_unix_time_from_system())
 	if not commit_drift_probe._should_refresh_update_compare_in_background():
 		commit_drift_probe.free()
-		return _failure("plugin.gd should refresh background compare immediately when the selected ref resolves to a new commit.")
+		return _failure("plugin.gd should still require compare verification when sync sees a selected ref with a new commit.")
 	commit_drift_probe.free()
 
 	var compare_reset_probe := PluginScript.new()
@@ -1036,17 +1037,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	focus_restore_probe._state.current_tab = 0
 	focus_restore_probe._state.settings["_pending_focus_snapshot"] = {"tab_index": 5, "focus_path": ""}
 	focus_restore_probe._restore_pending_focus_snapshot_if_needed()
-	if focus_restore_probe._state.current_tab != 5 or focus_restore_probe.discovery_request_count != 1 or focus_restore_probe._state.settings.has("_pending_focus_snapshot"):
+	if focus_restore_probe._state.current_tab != 5 or focus_restore_probe.discovery_request_count != 0 or focus_restore_probe._state.settings.has("_pending_focus_snapshot"):
 		focus_restore_probe.free()
-		return _failure("plugin.gd should restore the Settings tab index and request update refs after restoring Dock focus.")
+		return _failure("plugin.gd should restore the Settings tab index without requesting update refs.")
 	focus_restore_probe._state.settings["update_source"] = "release_tag"
 	var focus_request_parent := focus_restore_probe.request_parent
 	_tree.root.add_child(focus_request_parent)
 	focus_restore_probe._ensure_saved_update_source_discovery_requested()
-	if focus_restore_probe.discovery_request_count != 2:
+	if focus_restore_probe.discovery_request_count != 0:
 		focus_request_parent.queue_free()
 		focus_restore_probe.free()
-		return _failure("plugin.gd should request update refs on startup when the saved update source needs release/tag discovery.")
+		return _failure("plugin.gd should not request update refs on startup when the saved update source needs release/tag discovery.")
 	focus_request_parent.queue_free()
 	focus_restore_probe.free()
 
@@ -1056,10 +1057,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	saved_source_probe._dock = saved_source_dock
 	saved_source_probe._state.settings["update_source"] = "release_tag"
 	saved_source_probe._refresh_dock()
-	if saved_source_probe.discovery_request_count != 1 or saved_source_dock.apply_model_count != 0:
+	if saved_source_probe.discovery_request_count != 0 or saved_source_dock.apply_model_count != 1:
 		saved_source_probe.free()
 		saved_source_dock.free()
-		return _failure("plugin.gd should auto-discover update refs during Dock refresh when the saved update source needs release/tag discovery.")
+		return _failure("plugin.gd should render Dock refresh without auto-discovering update refs for saved sources.")
 	saved_source_probe.free()
 	saved_source_dock.free()
 
@@ -1068,10 +1069,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	current_tab_probe._dock = probe_dock
 	current_tab_probe._state.current_tab = 0
 	current_tab_probe._refresh_dock()
-	if current_tab_probe._state.current_tab != 5 or current_tab_probe.discovery_request_count != 1 or probe_dock.apply_model_count != 0:
+	if current_tab_probe._state.current_tab != 5 or current_tab_probe.discovery_request_count != 0 or probe_dock.apply_model_count != 1:
 		current_tab_probe.free()
 		probe_dock.free()
-		return _failure("plugin.gd should sync the visible Dock tab before building the model and auto-discover refs on Settings.")
+		return _failure("plugin.gd should sync the visible Dock tab and build the model without auto-discovering refs on Settings.")
 	current_tab_probe.free()
 	probe_dock.free()
 
@@ -1082,7 +1083,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not request_parent_probe._ensure_update_refs_discovery_requested() or request_parent_probe.update_check_count != 1:
 		request_parent_probe.free()
 		request_parent_dock.queue_free()
-		return _failure("plugin.gd should use an active Dock request host when auto-discovering update refs.")
+		return _failure("plugin.gd should use an active Dock request host for explicit update ref discovery.")
 	request_parent_probe.free()
 	request_parent_dock.queue_free()
 
@@ -1090,16 +1091,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var pending_retry_dock := CurrentTabProbeDock.new()
 	pending_retry_probe._dock = pending_retry_dock
 	pending_retry_probe._state.settings["update_source"] = "release_tag"
-	if pending_retry_probe._ensure_saved_update_source_discovery_requested() or pending_retry_probe.update_check_count != 0 or not pending_retry_probe._update_refs_discovery_retry_pending:
+	if pending_retry_probe._ensure_saved_update_source_discovery_requested() or pending_retry_probe.update_check_count != 0 or pending_retry_probe._update_refs_discovery_retry_pending:
 		pending_retry_probe.free()
 		pending_retry_dock.free()
-		return _failure("plugin.gd should mark saved update refs discovery pending when the Dock is not in the tree yet.")
+		return _failure("plugin.gd should not mark saved update refs discovery pending when the Dock is not in the tree yet.")
 	_tree.root.add_child(pending_retry_dock)
 	pending_retry_probe._refresh_dock()
-	if pending_retry_probe.update_check_count != 1 or pending_retry_probe._update_refs_discovery_retry_pending or pending_retry_dock.apply_model_count != 0:
+	if pending_retry_probe.update_check_count != 0 or pending_retry_probe._update_refs_discovery_retry_pending or pending_retry_dock.apply_model_count != 1:
 		pending_retry_probe.free()
 		pending_retry_dock.queue_free()
-		return _failure("plugin.gd should retry pending saved-source update refs discovery after the Dock enters the tree.")
+		return _failure("plugin.gd should not retry saved-source update refs discovery after the Dock enters the tree.")
 	pending_retry_probe.free()
 	pending_retry_dock.queue_free()
 

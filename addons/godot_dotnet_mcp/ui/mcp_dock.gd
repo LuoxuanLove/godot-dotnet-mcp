@@ -134,11 +134,6 @@ func _get_tab_for_index(index: int, instantiate: bool = false) -> Control:
 func _normalize_settings_update_buttons() -> void:
 	if _settings_tab == null:
 		return
-	var check_button := _settings_tab.find_child("CheckButton", true, false) as Button
-	if check_button != null:
-		check_button.text = ""
-		check_button.visible = false
-		check_button.disabled = true
 	var prepare_button := _settings_tab.find_child("PrepareButton", true, false) as Button
 	if prepare_button != null:
 		prepare_button.text = ""
