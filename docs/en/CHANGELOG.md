@@ -64,8 +64,8 @@ No unreleased changes yet.
 - Fixed Tools tree collapse persistence so same-frame expand/collapse bursts coalesce into one settings save.
 - Fixed Agent Tools group headings in the Dock Tools tab so localized interfaces no longer fall back to raw English labels such as `Project Context` or `Runtime Debugging`.
 - Fixed Dock Tools scene tree and scene patch action localization so labels like `Reorder Node` and `Update Property` no longer fall back to English in localized interfaces.
-- Fixed Settings update interactions so touching update source or branch selectors refreshes refs in the background, while Sync queues behind fresh refs/compare verification instead of staying unavailable during refresh.
-- Fixed Settings update ref discovery so a stuck GitHub refs request times out, reports the pending branch/release/tag leg in update status, and allows later selector clicks or scheduled refreshes to retry instead of leaving the target commit stale indefinitely.
+- Fixed Settings update interactions so refs refresh only when the user clicks Check for Updates or calls the explicit maintenance refresh action; opening source or branch selectors no longer spends GitHub requests in the background.
+- Fixed Settings update ref discovery so a stuck manual GitHub refs request times out, reports the pending branch/release/tag leg in update status, and allows a later explicit Check for Updates retry instead of leaving the target commit stale indefinitely.
 - Fixed Config tab client detection so production registry paths come from the active user/profile roots instead of hard-coded test-user paths, and unknown desktop-only config paths stay empty until a real path is known.
 - Fixed plugin lifecycle context caching so server controller attach/recreate paths invalidate cached service references before later process ticks reuse them.
 - Fixed `.NET` bridge cancellation cleanup so timed-out `dotnet` child processes are terminated from one cancellation path instead of issuing duplicate process-tree kills.

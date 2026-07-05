@@ -15,10 +15,8 @@ const LAYOUT_WIDTH_BUCKET := 48.0
 const SETTING_LABEL_WIDTH := 112.0
 const SETTING_FIELD_WIDTH := 150.0
 const UPDATE_APPLY_FALLBACK_TEXT := "同步"
-const UPDATE_DESCRIPTION_FALLBACK_ZH := "选择更新方式后会自动发现 GitHub 分支、发布版和标签，然后可同步选中目标。"
-const UPDATE_DESCRIPTION_FALLBACK_EN := "Choose an update mode; branches, releases, and tags are discovered automatically."
-const UPDATE_DESCRIPTION_AUTO_ZH := "选择更新方式后会自动发现 GitHub 分支、发布版和标签，然后可同步选中目标。"
-const UPDATE_DESCRIPTION_AUTO_EN := "Choose an update mode; branches, releases, and tags are discovered automatically."
+const UPDATE_DESCRIPTION_FALLBACK_ZH := "选择更新方式后，点击检查更新以刷新 GitHub 分支、发布版和标签，然后可同步选中目标。"
+const UPDATE_DESCRIPTION_FALLBACK_EN := "Choose an update mode, then click Check for Updates to refresh GitHub branches, releases, and tags before syncing the selected target."
 const UPDATE_SELECTOR_POPUP_MAX_VISIBLE_ITEMS := 12
 const UPDATE_SELECTOR_POPUP_ROW_HEIGHT := 28.0
 const UPDATE_SELECTOR_POPUP_VERTICAL_PADDING := 12.0
@@ -69,12 +67,10 @@ func _ready() -> void:
 	_language_option.item_selected.connect(_on_language_option_selected)
 	_source_option.item_selected.connect(_on_source_option_selected)
 	_custom_branch_value.item_selected.connect(_on_custom_branch_option_selected)
-	_source_option.pressed.connect(_on_update_selector_pressed)
-	_custom_branch_value.pressed.connect(_on_update_selector_pressed)
 	_check_button.pressed.connect(_on_check_button_pressed)
 	_apply_button.pressed.connect(_on_apply_button_pressed)
-	_check_button.text = ""
-	_check_button.visible = false
+	_check_button.text = "Check"
+	_check_button.visible = true
 	_check_button.disabled = true
 	_prepare_button.text = ""
 	_prepare_button.visible = false
@@ -109,8 +105,8 @@ func apply_model(model: Dictionary) -> void:
 	_updates_description.text = _get_update_description_text(localization)
 	_source_option_label.text = localization.get_text("settings_update_source_label")
 	_custom_branch_label.text = localization.get_text("settings_update_custom_branch")
-	_check_button.text = ""
-	_check_button.visible = false
+	_check_button.text = _get_update_check_text(localization)
+	_check_button.visible = true
 	_prepare_button.text = ""
 	_apply_button.text = _get_update_apply_text(localization)
 
@@ -134,7 +130,7 @@ func apply_model(model: Dictionary) -> void:
 	_updates_progress.value = clampf(float(updates.get("progress", 0.0)), 0.0, 1.0) * 100.0
 	var update_source := str(updates.get("source", "latest_stable"))
 	_apply_update_source_rows(update_source)
-	_check_button.disabled = true
+	_check_button.disabled = not bool(updates.get("check_enabled", false))
 	_prepare_button.disabled = true
 	_prepare_button.visible = false
 	_apply_button.disabled = not bool(updates.get("apply_enabled", false))
@@ -200,11 +196,22 @@ func _get_update_apply_text(localization) -> String:
 func _get_update_description_text(localization) -> String:
 	var text := str(localization.get_text("settings_updates_description"))
 	if text.contains("准备和应用暂未实现"):
-		return UPDATE_DESCRIPTION_AUTO_ZH
-	if text.contains("点击检查"):
-		return UPDATE_DESCRIPTION_AUTO_ZH
-	if text.contains("Check"):
-		return UPDATE_DESCRIPTION_AUTO_EN
+		return UPDATE_DESCRIPTION_FALLBACK_ZH
+	if text.contains("自动发现"):
+		return UPDATE_DESCRIPTION_FALLBACK_ZH
+	if text.contains("automatically"):
+		return UPDATE_DESCRIPTION_FALLBACK_EN
+	return text
+
+
+func _get_update_check_text(localization) -> String:
+	var text := str(localization.get_text("settings_update_check")).strip_edges()
+	if text == "发现":
+		return "检查更新"
+	if text == "探索":
+		return "檢查更新"
+	if text.is_empty() or text == "Discover":
+		return "Check for Updates"
 	return text
 
 
@@ -283,11 +290,6 @@ func _on_custom_branch_option_selected(index: int) -> void:
 	if branch.is_empty():
 		return
 	update_custom_branch_changed.emit(branch)
-
-
-func _on_update_selector_pressed() -> void:
-	update_interaction_refresh_requested.emit()
-
 
 
 func _on_check_button_pressed() -> void:

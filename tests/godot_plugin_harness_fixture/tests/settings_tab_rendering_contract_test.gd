@@ -32,7 +32,7 @@ class FakeLocalization extends RefCounted:
 		"settings_update_commit_unrecorded": "unrecorded",
 		"settings_update_branch_unavailable": "No branches",
 		"settings_update_release_unavailable": "No releases",
-		"settings_update_refs_idle": "Click Check",
+		"settings_update_refs_idle": "Select an update mode to discover branches, releases, and tags.",
 		"settings_update_refs_loading": "Loading refs",
 		"settings_update_refs_success": "Refs loaded",
 		"settings_update_refs_error": "Refs failed",
@@ -168,17 +168,17 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var labels := _instance.find_children("*", "Label", true, false)
 	if _find_label_containing(labels, "准备和应用暂未实现") != null:
 		return _failure("Settings tab should normalize stale update description copy from cached localization.")
-	if _find_label_containing(labels, "Click Check") != null:
-		return _failure("Settings tab should normalize stale manual Check status copy from cached localization.")
-	if _find_label_containing(labels, "选择更新方式") == null:
-		return _failure("Settings tab should display the current update sync description copy.")
+	if _find_label_containing(labels, "Select an update mode") != null:
+		return _failure("Settings tab should normalize stale automatic discovery status copy from cached localization.")
+	if _find_label_containing(labels, "点击检查更新") == null:
+		return _failure("Settings tab should display the manual update refresh description copy.")
 	if _find_label_containing(labels, "Current version: 1.0.1") != null or _find_label_containing(labels, "Plugin Path: res://addons/godot_dotnet_mcp") != null or _find_label_containing(labels, "Commit: abcdef123456") != null:
 		return _failure("Settings tab should not display removed current version, plugin path, or commit summary rows.")
 	if _find_label_containing(labels, "Synced v1.2.3.") == null or _find_label_containing(labels, "Current plugin 1.0.1 [abcdef1] -> selected target 1.2.3 [fedcba9]") == null or _find_label_containing(labels, "current ahead 0 / target ahead 2") == null:
 		return _failure("Settings tab should display sync success together with explicit current-to-target update hashes and commit difference direction.")
 	var check_button := _instance.find_child("CheckButton", true, false) as Button
-	if check_button == null or check_button.visible or not check_button.disabled or not check_button.text.is_empty():
-		return _failure("Settings update Check should remain hidden, disabled, and label-free because refs are discovered from source selection.")
+	if check_button == null or not check_button.visible or check_button.disabled or check_button.text != "Check":
+		return _failure("Settings update Check should be visible and enabled so refs refresh only when the user clicks it.")
 	var prepare_button := _instance.find_child("PrepareButton", true, false) as Button
 	var apply_button := _instance.find_child("ApplyButton", true, false) as Button
 	if prepare_button == null or prepare_button.visible or not prepare_button.disabled:
@@ -195,8 +195,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should emit the existing persistence signals for port, log level, and language.")
 	source_option.emit_signal("pressed")
 	custom_branch.emit_signal("pressed")
-	if recorder.update_interaction_refresh_count != 2 or recorder.update_source != "" or recorder.update_custom_branch != "":
-		return _failure("Settings tab should request background update refresh when update selectors are pressed even if no item is selected.")
+	if recorder.update_interaction_refresh_count != 0 or recorder.update_source != "" or recorder.update_custom_branch != "":
+		return _failure("Settings tab should not request update refresh when selectors are opened.")
 	source_option.select(0)
 	source_option.emit_signal("item_selected", 0)
 	if custom_branch_row.visible:
@@ -207,9 +207,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should immediately show the branch selector after changing update source to custom branch.")
 	custom_branch.select(1)
 	custom_branch.emit_signal("item_selected", 1)
+	check_button.emit_signal("pressed")
 	apply_button.emit_signal("pressed")
-	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/settings" or recorder.update_interaction_refresh_count != 2 or recorder.update_check_count != 0 or recorder.update_apply_count != 1:
-		return _failure("Settings tab should emit update setting and Sync signals from selectors/buttons without a user-visible Check action.")
+	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/settings" or recorder.update_interaction_refresh_count != 0 or recorder.update_check_count != 1 or recorder.update_apply_count != 1:
+		return _failure("Settings tab should emit Check only from the explicit update refresh button.")
 
 	var branch_values: Array[String] = ["dev"]
 	for index in range(24):

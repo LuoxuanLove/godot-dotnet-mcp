@@ -125,7 +125,7 @@ func _build_update_refs_status_text(model: Dictionary, update_settings: Dictiona
 				error = _get_localized_text(localization, "settings_update_refs_error", "Update refs discovery failed.")
 			return "%s %s" % [error, target]
 		_:
-			return "%s %s" % [_get_localized_text(localization, "settings_update_refs_idle", "Select an update mode to discover branches, releases, and tags."), target]
+			return "%s %s" % [_get_localized_text(localization, "settings_update_refs_idle", "Click Check for Updates to refresh branches, releases, and tags."), target]
 
 
 func _build_update_sync_status_text(model: Dictionary, update_settings: Dictionary, localization) -> String:
@@ -255,7 +255,7 @@ func _build_selected_update_target(model: Dictionary, update_settings: Dictionar
 			target = str(model.get("update_refs_latest_stable_release", ""))
 	if target.strip_edges().is_empty():
 		var empty_key := "settings_update_branch_unavailable" if source == "custom_branch" else "settings_update_release_unavailable"
-		target = _get_localized_text(localization, empty_key, "No discovered refs yet")
+		target = _get_localized_text(localization, empty_key, "Click Check for Updates to refresh refs.")
 	return "%s %s" % [_get_localized_text(localization, "settings_update_selected_target", "Selected target:"), target]
 
 
@@ -353,4 +353,16 @@ func _get_localized_text(localization, key: String, fallback: String = "") -> St
 func _is_stale_manual_update_check_text(key: String, text: String) -> bool:
 	if not ["settings_update_refs_idle", "settings_update_branch_unavailable", "settings_update_release_unavailable", "settings_update_placeholder_status"].has(key):
 		return false
-	return text.contains("Click Check") or text.contains("点击检查") or text.contains("點擊檢查") or text.contains("Run Check") or text.contains("use Check")
+	return text.contains("Select an update mode") \
+		or text.contains("Select branch mode") \
+		or text.contains("Select release/tag mode") \
+		or text.contains("load branches") \
+		or text.contains("load releases") \
+		or text.contains("选择更新方式") \
+		or text.contains("选择分支模式") \
+		or text.contains("选择发布") \
+		or text.contains("選擇更新方式") \
+		or text.contains("選擇分支模式") \
+		or text.contains("選擇發布") \
+		or text.contains("自動") \
+		or text.contains("자동")

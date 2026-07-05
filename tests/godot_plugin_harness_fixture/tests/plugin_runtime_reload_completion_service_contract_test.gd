@@ -51,8 +51,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var full_controller: FakeServerController = recorder.get("active_controller", null)
 	if full_controller.calls != ["reinitialize:tool_full_reload"]:
 		return _failure("Runtime reload completion service should reinitialize the recreated controller when it was stopped.", {"calls": full_controller.calls})
-	if not (recorder["calls"] as Array).has("ensure_update_refs_discovery_requested"):
-		return _failure("Runtime reload completion service should trigger update refs discovery when restoring update tab focus.", {"calls": recorder["calls"]})
+	if (recorder["calls"] as Array).has("ensure_update_refs_discovery_requested"):
+		return _failure("Runtime reload completion service should not trigger update refs discovery when restoring update tab focus.", {"calls": recorder["calls"]})
 	if not (recorder["calls"] as Array).has("restore_focus_snapshot:5:dock2"):
 		return _failure("Runtime reload completion service should restore focus on the latest recreated dock after full reload.", {"calls": recorder["calls"]})
 

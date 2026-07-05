@@ -185,8 +185,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"defer_initial_dock_refresh",
 		"should_auto_start_server",
 		"defer_start_server_for_lifecycle",
-		"restore_pending_focus_snapshot_if_needed",
-		"ensure_saved_update_source_discovery_requested"
+		"restore_pending_focus_snapshot_if_needed"
 	]
 	if not _array_starts_with(enter_calls, expected_enter):
 		return _failure("Plugin lifecycle service should preserve enter_tree wiring order.", {"calls": enter_calls})
@@ -232,8 +231,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	process_context.calls.clear()
 	process_context.ensure_update_result = true
 	accumulator = service.process(0.5, 0.1, true, process_context.build())
-	if not is_equal_approx(accumulator, 0.1) or process_context.calls != ["tick_user_tool_watch_service", "ensure_update_refs_discovery_requested"]:
-		return _failure("Plugin lifecycle service should keep the poll accumulator when update discovery retry consumes the frame.", {"calls": process_context.calls, "accumulator": accumulator})
+	if not is_equal_approx(accumulator, 0.6) or process_context.calls != ["tick_user_tool_watch_service"]:
+		return _failure("Plugin lifecycle service should not retry update discovery during process ticks.", {"calls": process_context.calls, "accumulator": accumulator})
 
 	var disable_context := FakeLifecycleContext.new()
 	service.disable_plugin(disable_context.build())

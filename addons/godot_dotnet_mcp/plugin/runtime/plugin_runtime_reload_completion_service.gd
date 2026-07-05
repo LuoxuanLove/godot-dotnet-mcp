@@ -43,8 +43,6 @@ func restore_dock_focus_snapshot(context: Dictionary, snapshot: Dictionary) -> v
 		dock.restore_focus_snapshot(snapshot)
 	if dock.has_method("focus_active_panel"):
 		dock.call_deferred("focus_active_panel")
-	if state != null and int(state.current_tab) == 5:
-		_call_bool(context.get("ensure_update_refs_discovery_requested", Callable()), false)
 
 
 func _complete_plugin_reload(context: Dictionary, was_running: bool, focus_snapshot: Dictionary, reason: String) -> bool:
