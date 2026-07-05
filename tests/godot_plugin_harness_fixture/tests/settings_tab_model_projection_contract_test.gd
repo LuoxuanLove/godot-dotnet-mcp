@@ -45,6 +45,17 @@ class FakeLocalization extends RefCounted:
 		return "Chinese" if language_code == "zh_CN" else "English"
 
 
+class LegacyUpdateLocalization extends FakeLocalization:
+	func get_text(key: String) -> String:
+		match key:
+			"settings_update_branch_unavailable":
+				return "Select branch mode to load branches"
+			"settings_update_release_unavailable":
+				return "Select release/tag mode to load releases / tags"
+			_:
+				return super.get_text(key)
+
+
 func run_case(_tree: SceneTree) -> Dictionary:
 	var service = SettingsTabModelProjectionServiceScript.new()
 	var projected: Dictionary = service.project({
@@ -259,6 +270,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var fallback_branches: Array = (fallback.get("options", {}) as Dictionary).get("update_branches", [])
 	if fallback_branches.is_empty() or str((fallback_branches[0] as Dictionary).get("value", "")) != "dev":
 		return _failure("Settings projection should keep dev as a fallback branch option before network discovery succeeds.")
+	var legacy_unavailable_projection: Dictionary = service.project({
+		"localization": LegacyUpdateLocalization.new(),
+		"settings": {"update_source": "latest_stable", "update_custom_branch": "dev"},
+		"plugin_freshness": {}
+	})
+	var legacy_status_text := str((legacy_unavailable_projection.get("updates", {}) as Dictionary).get("status_text", ""))
+	if legacy_status_text.contains("Select branch mode") or legacy_status_text.contains("Select release/tag mode") or not legacy_status_text.contains("Click Check for Updates"):
+		return _failure("Settings projection should replace cached legacy ref-availability guidance with manual Check for Updates text.")
 
 	return {"name": "settings_tab_model_projection_contracts", "success": true, "error": ""}
 

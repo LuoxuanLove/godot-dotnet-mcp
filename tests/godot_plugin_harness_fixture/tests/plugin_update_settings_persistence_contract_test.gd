@@ -468,6 +468,20 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("plugin.gd tool update sync should not expose a pending discovery state when sync needs a manual refs refresh.")
 	release_discovery_probe.request_parent.queue_free()
 	release_discovery_probe.free()
+	var branch_without_refs_probe := SyncStartProbePlugin.new()
+	branch_without_refs_probe._state.settings["update_source"] = "custom_branch"
+	branch_without_refs_probe._state.settings["update_custom_branch"] = "feature/no-refs"
+	branch_without_refs_probe._state.update_refs_state = "idle"
+	branch_without_refs_probe._update_refs_discovery_loaded = false
+	var branch_without_refs_result: Dictionary = branch_without_refs_probe.start_plugin_update_sync_from_tools()
+	if not bool(branch_without_refs_result.get("accepted", false)) or branch_without_refs_probe.archive_requests.size() != 1 or branch_without_refs_probe._update_sync_after_refs_discovery_pending or str(branch_without_refs_probe._state.update_sync_state) != "loading":
+		branch_without_refs_probe.free()
+		return _failure("plugin.gd should continue custom-branch sync without hidden refs discovery when refs have not been manually loaded.")
+	var branch_without_refs_target: Dictionary = (branch_without_refs_probe.archive_requests[0] as Dictionary).get("target", {})
+	if str(branch_without_refs_target.get("kind", "")) != "branch" or str(branch_without_refs_target.get("ref", "")) != "feature/no-refs" or not str(branch_without_refs_target.get("commit", "")).is_empty():
+		branch_without_refs_probe.free()
+		return _failure("plugin.gd should let branch sync resolve commit metadata during archive sync when refs are not loaded.")
+	branch_without_refs_probe.free()
 	var prepared_sync_probe := ToolPreparedSyncProbePlugin.new()
 	prepared_sync_probe._state.settings["update_source"] = "latest_stable"
 	var prepared_discover_result: Dictionary = prepared_sync_probe.discover_plugin_update_refs_from_tools(true)

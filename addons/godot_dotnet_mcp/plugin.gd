@@ -1058,19 +1058,6 @@ func _clear_update_selection_refresh_pending() -> void:
 	_state.update_selection_refresh_pending_ref = ""
 
 
-func _mark_update_selection_refresh_pending() -> void:
-	if _state == null:
-		return
-	var target := _resolve_update_sync_target()
-	var target_ref := str(target.get("ref", "")).strip_edges()
-	if target_ref.is_empty():
-		_state.update_selection_refresh_pending = false
-		_state.update_selection_refresh_pending_ref = ""
-		return
-	_state.update_selection_refresh_pending = true
-	_state.update_selection_refresh_pending_ref = target_ref
-
-
 func _is_update_selection_refresh_pending(target: Dictionary = {}) -> bool:
 	if _state == null:
 		return false
@@ -1309,7 +1296,7 @@ func _request_update_sync(target: Dictionary, source: String = "unknown") -> boo
 	var target_ref := str(target.get("ref", "")).strip_edges()
 	if target_ref.is_empty():
 		return false
-	var continuing_pending_sync := source == "refs_discovery" and str(_state.update_sync_state) == "loading" and str(_state.update_sync_target_ref).strip_edges() == target_ref
+	var continuing_pending_sync := ["refs_discovery", "manual_sync"].has(source) and str(_state.update_sync_state) == "loading" and str(_state.update_sync_target_ref).strip_edges() == target_ref
 	if str(_state.update_sync_state) == "loading" and not continuing_pending_sync:
 		_refresh_dock()
 		return false

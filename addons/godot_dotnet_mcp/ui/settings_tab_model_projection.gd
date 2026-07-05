@@ -353,4 +353,16 @@ func _get_localized_text(localization, key: String, fallback: String = "") -> St
 func _is_stale_manual_update_check_text(key: String, text: String) -> bool:
 	if not ["settings_update_refs_idle", "settings_update_branch_unavailable", "settings_update_release_unavailable", "settings_update_placeholder_status"].has(key):
 		return false
-	return text.contains("Select an update mode") or text.contains("选择更新方式") or text.contains("選擇更新方式") or text.contains("自動") or text.contains("자동")
+	return text.contains("Select an update mode") \
+		or text.contains("Select branch mode") \
+		or text.contains("Select release/tag mode") \
+		or text.contains("load branches") \
+		or text.contains("load releases") \
+		or text.contains("选择更新方式") \
+		or text.contains("选择分支模式") \
+		or text.contains("选择发布") \
+		or text.contains("選擇更新方式") \
+		or text.contains("選擇分支模式") \
+		or text.contains("選擇發布") \
+		or text.contains("自動") \
+		or text.contains("자동")
