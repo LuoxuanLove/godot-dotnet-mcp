@@ -210,6 +210,15 @@ func build_model() -> Dictionary:
 		"update_refs_release_source": str(_get_state_value("update_refs_release_source", "")),
 		"update_refs_commits": _duplicate_string_dictionary(_get_state_value("update_ref_commits", {})),
 		"update_refs_versions": _duplicate_string_dictionary(_get_state_value("update_ref_versions", {})),
+		"update_refs_release_rows": _duplicate_row_array(_get_state_value("update_ref_release_rows", [])),
+		"update_refs_branch_commit_rows": _duplicate_branch_commit_rows(_get_state_value("update_ref_branch_commit_rows", {})),
+		"update_refs_last_trigger": str(_get_state_value("update_refs_last_trigger", "")),
+		"update_refs_last_requested_unix": int(_get_state_value("update_refs_last_requested_unix", 0)),
+		"update_refs_last_http_status": int(_get_state_value("update_refs_last_http_status", 0)),
+		"update_refs_rate_limit_remaining": str(_get_state_value("update_refs_rate_limit_remaining", "")),
+		"update_refs_rate_limit_reset_unix": int(_get_state_value("update_refs_rate_limit_reset_unix", 0)),
+		"update_refs_rate_limit_retry_after": int(_get_state_value("update_refs_rate_limit_retry_after", 0)),
+		"update_refs_audit": _duplicate_dictionary(_get_state_value("update_refs_audit", {})),
 		"update_compare_state": str(_get_state_value("update_compare_state", "idle")),
 		"update_compare_error": str(_get_state_value("update_compare_error", "")),
 		"update_compare_refresh_state": str(_get_state_value("update_compare_refresh_state", "idle")),
@@ -247,6 +256,15 @@ func build_model() -> Dictionary:
 	model["update_refs_release_source"] = str(_get_state_value("update_refs_release_source", ""))
 	model["update_refs_commits"] = _duplicate_string_dictionary(_get_state_value("update_ref_commits", {}))
 	model["update_refs_versions"] = _duplicate_string_dictionary(_get_state_value("update_ref_versions", {}))
+	model["update_refs_release_rows"] = _duplicate_row_array(_get_state_value("update_ref_release_rows", []))
+	model["update_refs_branch_commit_rows"] = _duplicate_branch_commit_rows(_get_state_value("update_ref_branch_commit_rows", {}))
+	model["update_refs_last_trigger"] = str(_get_state_value("update_refs_last_trigger", ""))
+	model["update_refs_last_requested_unix"] = int(_get_state_value("update_refs_last_requested_unix", 0))
+	model["update_refs_last_http_status"] = int(_get_state_value("update_refs_last_http_status", 0))
+	model["update_refs_rate_limit_remaining"] = str(_get_state_value("update_refs_rate_limit_remaining", ""))
+	model["update_refs_rate_limit_reset_unix"] = int(_get_state_value("update_refs_rate_limit_reset_unix", 0))
+	model["update_refs_rate_limit_retry_after"] = int(_get_state_value("update_refs_rate_limit_retry_after", 0))
+	model["update_refs_audit"] = _duplicate_dictionary(_get_state_value("update_refs_audit", {}))
 	model["update_compare_state"] = str(_get_state_value("update_compare_state", "idle"))
 	model["update_compare_error"] = str(_get_state_value("update_compare_error", ""))
 	model["update_compare_refresh_state"] = str(_get_state_value("update_compare_refresh_state", "idle"))
@@ -714,4 +732,29 @@ func _duplicate_string_dictionary(values) -> Dictionary:
 		var normalized_value := str((values as Dictionary).get(key, "")).strip_edges()
 		if not normalized_key.is_empty() and not normalized_value.is_empty():
 			result[normalized_key] = normalized_value
+	return result
+
+
+func _duplicate_dictionary(values) -> Dictionary:
+	if values is Dictionary:
+		return (values as Dictionary).duplicate(true)
+	return {}
+
+
+func _duplicate_row_array(values) -> Array:
+	var result: Array = []
+	if not (values is Array):
+		return result
+	for value in values:
+		if value is Dictionary:
+			result.append((value as Dictionary).duplicate(true))
+	return result
+
+
+func _duplicate_branch_commit_rows(values) -> Dictionary:
+	var result: Dictionary = {}
+	if not (values is Dictionary):
+		return result
+	for key in (values as Dictionary).keys():
+		result[str(key)] = _duplicate_row_array((values as Dictionary).get(key, []))
 	return result

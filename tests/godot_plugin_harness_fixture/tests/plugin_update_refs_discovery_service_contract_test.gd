@@ -41,14 +41,24 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		{"tag_name": "v2.0.0"},
 		{"tag_name": "v2.1.0-preview"}
 	], "tag_name"))
+	pending = service.append_release_rows(pending, [
+		{"tag_name": "v2.0.0", "name": "Release 2.0.0\nnotes", "target_commitish": "release-sha", "published_at": "2026-07-01T12:00:00Z", "prerelease": false},
+		{"tag_name": "v2.1.0-preview", "name": "Preview", "target_commitish": "preview-sha", "published_at": "2026-07-02T12:00:00Z", "prerelease": true}
+	])
 	pending = service.append_names(pending, "stable_releases", service.collect_stable_release_names([
 		{"tag_name": "v2.0.0", "prerelease": false},
 		{"tag_name": "v2.1.0-preview", "prerelease": true}
 	]))
 	pending = service.append_names(pending, "tags", ["v1.3.0", "v2.0.0"])
+	pending = service.append_tag_rows(pending, [
+		{"name": "v1.3.0", "commit": {"sha": "tag-sha"}}
+	])
 	pending = service.append_commits(pending, [
 		{"tag_name": "v2.0.0", "target_commitish": "release-sha"}
 	], "tag_name")
+	pending = service.append_branch_commit_rows(pending, "refactor/v2.0.0", [
+		{"sha": "branch-history-sha", "commit": {"message": "History commit\nbody", "author": {"date": "2026-07-03T12:00:00Z"}}}
+	])
 
 	var snapshot: Dictionary = service.build_final_snapshot(pending)
 	if snapshot.get("branches", []) != ["dev", "refactor/v2.0.0"]:
@@ -62,6 +72,13 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("PluginUpdateRefsDiscoveryService should derive latest release metadata.", snapshot)
 	if str(snapshot.get("release_source", "")) != "releases_and_tags":
 		return _failure("PluginUpdateRefsDiscoveryService should declare release source.", snapshot)
+	var release_rows: Array = snapshot.get("release_rows", [])
+	if release_rows.size() != 3 or str((release_rows[0] as Dictionary).get("title", "")) != "Release 2.0.0" or str((release_rows[2] as Dictionary).get("ref", "")) != "v1.3.0":
+		return _failure("PluginUpdateRefsDiscoveryService should build version-management release/tag rows.", snapshot)
+	var branch_commit_rows: Dictionary = snapshot.get("branch_commit_rows", {})
+	var branch_rows: Array = branch_commit_rows.get("refactor/v2.0.0", [])
+	if branch_rows.size() != 1 or str((branch_rows[0] as Dictionary).get("title", "")) != "History commit":
+		return _failure("PluginUpdateRefsDiscoveryService should build development branch commit rows.", snapshot)
 
 	var duplicated: Dictionary = service.duplicate_commits({"dev": "one", 2: "two"})
 	if str(duplicated.get("2", "")) != "two":
@@ -73,6 +90,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"branch_done": false,
 		"release_done": true,
 		"tag_done": false,
+		"branch_commits_done": false,
 		"errors": []
 	}
 	request_pending = service.record_active_request(
@@ -86,7 +104,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		1
 	)
 	var waiting_kinds := service.get_waiting_kinds(request_pending)
-	if waiting_kinds != ["branches", "tags"]:
+	if waiting_kinds != ["branches", "tags", "branch_commits"]:
 		return _failure("PluginUpdateRefsDiscoveryService should report unfinished refs kinds.", {"waiting": waiting_kinds})
 	var early_stale := service.find_stale_active_requests(request_pending, 12999)
 	if not early_stale.is_empty():
@@ -120,6 +138,9 @@ func _verify_plugin_entrypoint_delegates_update_refs_discovery() -> String:
 		"_ensure_plugin_update_refs_discovery_service().extract_next_url(",
 		"_ensure_plugin_update_refs_discovery_service().append_names(",
 		"_ensure_plugin_update_refs_discovery_service().append_commits(",
+		"_ensure_plugin_update_refs_discovery_service().append_release_rows(",
+		"_ensure_plugin_update_refs_discovery_service().append_tag_rows(",
+		"_ensure_plugin_update_refs_discovery_service().append_branch_commit_rows(",
 		"_ensure_plugin_update_refs_discovery_service().build_final_snapshot(",
 		"_ensure_plugin_update_refs_discovery_service().parse_refs_json_array(",
 		"_format_stale_update_refs_request_error("

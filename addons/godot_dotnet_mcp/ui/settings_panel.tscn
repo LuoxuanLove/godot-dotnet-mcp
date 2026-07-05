@@ -110,18 +110,59 @@ horizontal_alignment = 0
 unique_name_in_owner = true
 autowrap_mode = 3
 
-[node name="UpdateSourceRow" type="HBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+[node name="UpdateSummaryGrid" type="GridContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+columns = 2
+
+[node name="RemoteUrlLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateSummaryGrid"]
+unique_name_in_owner = true
+vertical_alignment = 1
+
+[node name="RemoteUrlValue" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateSummaryGrid"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+text_overrun_behavior = 3
+
+[node name="CurrentBranchLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateSummaryGrid"]
+unique_name_in_owner = true
+vertical_alignment = 1
+
+[node name="CurrentBranchValue" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateSummaryGrid"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+text_overrun_behavior = 3
+
+[node name="CurrentVersionLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateSummaryGrid"]
+unique_name_in_owner = true
+vertical_alignment = 1
+
+[node name="CurrentVersionValue" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateSummaryGrid"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+text_overrun_behavior = 3
+
+[node name="UpdateToolbar" type="HBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
-[node name="SourceOptionLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateSourceRow"]
-unique_name_in_owner = true
-vertical_alignment = 1
-
-[node name="SourceOption" type="OptionButton" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateSourceRow"]
+[node name="UpdateChannelTabs" type="TabBar" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateToolbar"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
+tab_count = 2
+tab_0/title = "Stable"
+tab_1/title = "Development"
+
+[node name="CheckButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateToolbar"]
+unique_name_in_owner = true
+disabled = true
+text = ""
+
+[node name="ApplyButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateToolbar"]
+unique_name_in_owner = true
+disabled = true
+text = ""
 
 [node name="CustomBranchRow" type="HBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
 unique_name_in_owner = true
@@ -140,6 +181,10 @@ size_flags_horizontal = 3
 unique_name_in_owner = true
 autowrap_mode = 3
 
+[node name="UpdatesAudit" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+unique_name_in_owner = true
+autowrap_mode = 3
+
 [node name="UpdatesProgress" type="ProgressBar" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
 unique_name_in_owner = true
 visible = false
@@ -147,27 +192,22 @@ size_flags_horizontal = 3
 max_value = 100.0
 show_percentage = false
 
-[node name="UpdateButtonsRow" type="HBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+[node name="VersionTree" type="Tree" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
-theme_override_constants/separation = 8
+size_flags_vertical = 3
+custom_minimum_size = Vector2(0, 220)
+columns = 5
+hide_root = true
 
-[node name="CheckButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateButtonsRow"]
+[node name="VersionEmptyLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+autowrap_mode = 3
+
+[node name="PrepareButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
 visible = false
-disabled = true
-text = ""
-
-[node name="PrepareButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateButtonsRow"]
-unique_name_in_owner = true
-size_flags_horizontal = 3
-visible = false
-disabled = true
-text = ""
-
-[node name="ApplyButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateButtonsRow"]
-unique_name_in_owner = true
-size_flags_horizontal = 3
 disabled = true
 text = ""

@@ -143,7 +143,16 @@ func build_refs_status(context: Dictionary) -> Dictionary:
 		"latest_release": str(context.get("latest_release", "")),
 		"release_source": str(context.get("release_source", "")),
 		"commits": _duplicate_dictionary(context.get("commits", {})),
-		"versions": _duplicate_dictionary(context.get("versions", {}))
+		"versions": _duplicate_dictionary(context.get("versions", {})),
+		"release_rows": _duplicate_array(context.get("release_rows", [])),
+		"branch_commit_rows": _duplicate_dictionary(context.get("branch_commit_rows", {})),
+		"last_trigger": str(context.get("refs_last_trigger", "")),
+		"last_requested_unix": int(context.get("refs_last_requested_unix", 0)),
+		"last_http_status": int(context.get("refs_last_http_status", 0)),
+		"rate_limit_remaining": str(context.get("refs_rate_limit_remaining", "")),
+		"rate_limit_reset_unix": int(context.get("refs_rate_limit_reset_unix", 0)),
+		"rate_limit_retry_after": int(context.get("refs_rate_limit_retry_after", 0)),
+		"audit": _duplicate_dictionary(context.get("refs_audit", {}))
 	}
 
 

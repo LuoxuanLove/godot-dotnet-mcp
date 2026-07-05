@@ -16,6 +16,23 @@ class FakeLocalization extends RefCounted:
 		"settings_update_check": "Check",
 		"settings_update_prepare": "Prepare",
 		"settings_update_apply": "应用",
+		"settings_update_refresh_list": "Refresh List",
+		"settings_update_one_click": "一键更新",
+		"settings_update_remote_url": "Remote URL:",
+		"settings_update_current_branch": "Current Branch:",
+		"settings_update_current_version": "Current Version:",
+		"settings_update_channel_stable": "Stable",
+		"settings_update_channel_development": "Development",
+		"settings_update_col_version": "Version ID",
+		"settings_update_col_message": "Update",
+		"settings_update_col_date": "Date",
+		"settings_update_col_current": "Current",
+		"settings_update_col_action": "Action",
+		"settings_update_current_marker": "Current",
+		"settings_update_switch": "Switch",
+		"settings_update_last_trigger": "Last trigger:",
+		"settings_update_last_refresh": "Last refresh:",
+		"settings_update_rate_limit_reset": "Rate limit resets:",
 		"settings_update_sync_loading": "Syncing",
 		"settings_update_sync_refreshing_editor": "Refreshing editor",
 		"settings_update_sync_success": "Synced",
@@ -68,6 +85,9 @@ class Recorder extends RefCounted:
 	var update_interaction_refresh_count := 0
 	var update_check_count := 0
 	var update_apply_count := 0
+	var update_switch_kind := ""
+	var update_switch_ref := ""
+	var update_switch_commit := ""
 
 	func on_port_changed(value: int) -> void:
 		port = value
@@ -93,6 +113,11 @@ class Recorder extends RefCounted:
 	func on_update_apply_requested() -> void:
 		update_apply_count += 1
 
+	func on_update_switch_requested(kind: String, target_ref: String, target_commit: String) -> void:
+		update_switch_kind = kind
+		update_switch_ref = target_ref
+		update_switch_commit = target_commit
+
 
 func run_case(tree: SceneTree) -> Dictionary:
 	_instance = SettingsPanelScene.instantiate() as VBoxContainer
@@ -110,6 +135,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_instance.update_interaction_refresh_requested.connect(Callable(recorder, "on_update_interaction_refresh_requested"))
 	_instance.update_check_requested.connect(Callable(recorder, "on_update_check_requested"))
 	_instance.update_apply_requested.connect(Callable(recorder, "on_update_apply_requested"))
+	_instance.update_switch_requested.connect(Callable(recorder, "on_update_switch_requested"))
 
 	_instance.apply_model({
 		"localization": FakeLocalization.new(),
@@ -129,6 +155,15 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"update_refs_latest_release": "v1.2.3",
 		"update_refs_commits": {"v1.2.3": "fedcba987654"},
 		"update_refs_versions": {"v1.2.3": "1.2.3"},
+		"update_refs_release_rows": [
+			{"kind": "tag", "ref": "v1.2.3", "commit": "fedcba987654", "title": "Release 1.2.3", "date": "2026-07-05T12:00:00Z"},
+			{"kind": "tag", "ref": "v1.0.0", "commit": "111111111111", "title": "Release 1.0.0", "date": "2026-06-01T12:00:00Z"}
+		],
+		"update_refs_branch_commit_rows": {
+			"feature/settings": [
+				{"kind": "branch", "ref": "feature/settings", "commit": "222222222222", "title": "Settings update", "date": "2026-07-04T12:00:00Z"}
+			]
+		},
 		"update_compare_state": "success",
 		"update_compare_ahead_by": 2,
 		"update_compare_behind_by": 0,
@@ -145,23 +180,26 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var port_spin := _instance.get_node("Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/PortRow/PortSpin") as SpinBox
 	var log_option := _instance.get_node("Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/LogLevelRow/LogLevelOption") as OptionButton
 	var language_option := _instance.get_node("Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/LanguageRow/LanguageOption") as OptionButton
-	var source_option := _instance.get_node("Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateSourceRow/SourceOption") as OptionButton
+	var channel_tabs := _instance.find_child("UpdateChannelTabs", true, false) as TabBar
 	var custom_branch_row := _instance.get_node("Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CustomBranchRow") as HBoxContainer
 	var custom_branch := _instance.get_node("Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CustomBranchRow/CustomBranchValue") as OptionButton
-	if _instance.find_child("ReleaseTagRow", true, false) != null or _instance.find_child("ReleaseTagValue", true, false) != null or _instance.find_child("CustomBranchValue", true, false) is LineEdit:
-		return _failure("Settings tab should not render removed release/tag controls or manual LineEdit controls for update refs.")
+	var version_tree := _instance.find_child("VersionTree", true, false) as Tree
+	if _instance.find_child("SourceOption", true, false) != null or _instance.find_child("ReleaseTagRow", true, false) != null or _instance.find_child("ReleaseTagValue", true, false) != null or _instance.find_child("CustomBranchValue", true, false) is LineEdit:
+		return _failure("Settings tab should not render removed source/release controls or manual LineEdit controls for update refs.")
 	if port_spin == null or int(port_spin.value) != 4102:
 		return _failure("Settings tab should render the persisted port value.")
 	if log_option == null or log_option.get_item_count() != 4 or str(log_option.get_item_metadata(log_option.selected)) != "error":
 		return _failure("Settings tab should render and select the current log level.")
 	if language_option == null or language_option.get_item_count() != 2 or str(language_option.get_item_metadata(language_option.selected)) != "zh_CN":
 		return _failure("Settings tab should render and select the current language.")
-	if source_option == null or source_option.get_item_count() != 3 or str(source_option.get_item_metadata(source_option.selected)) != "latest_release" or str(source_option.get_item_metadata(0)) != "latest_stable" or str(source_option.get_item_metadata(1)) != "latest_release" or str(source_option.get_item_metadata(2)) != "custom_branch":
-		return _failure("Settings tab should render latest stable, latest release, then custom branch sources without adding Config-tab UI.")
+	if channel_tabs == null or channel_tabs.get_tab_count() != 2 or channel_tabs.current_tab != 0 or channel_tabs.get_tab_title(0) != "Stable" or channel_tabs.get_tab_title(1) != "Development":
+		return _failure("Settings tab should render Stable / Development update channel tabs in the existing Settings tab.")
 	if custom_branch == null or custom_branch.get_item_count() < 2 or str(custom_branch.get_item_metadata(0)) != "dev" or str(custom_branch.get_item_metadata(custom_branch.selected)) != "dev":
 		return _failure("Settings tab should render discovered custom branch options with dev pinned first.")
 	if custom_branch_row.visible:
-		return _failure("Settings tab should hide manual target selectors for latest release source.")
+		return _failure("Settings tab should hide the branch selector while the Stable channel is active.")
+	if version_tree == null or not version_tree.visible or version_tree.get_root() == null or version_tree.get_root().get_first_child() == null:
+		return _failure("Settings tab should render the version management table for discovered stable releases.")
 	if recorder.update_source != "" or recorder.update_custom_branch != "" or recorder.update_interaction_refresh_count != 0 or recorder.update_check_count != 0:
 		return _failure("Settings tab should not emit update setting changes while applying a model.")
 
@@ -172,19 +210,19 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should normalize stale automatic discovery status copy from cached localization.")
 	if _find_label_containing(labels, "点击检查更新") == null:
 		return _failure("Settings tab should display the manual update refresh description copy.")
-	if _find_label_containing(labels, "Current version: 1.0.1") != null or _find_label_containing(labels, "Plugin Path: res://addons/godot_dotnet_mcp") != null or _find_label_containing(labels, "Commit: abcdef123456") != null:
-		return _failure("Settings tab should not display removed current version, plugin path, or commit summary rows.")
+	if _find_label_containing(labels, "Current Version:") == null or _find_label_containing(labels, "1.0.1 (abcdef1)") == null or _find_label_containing(labels, "Remote URL:") == null:
+		return _failure("Settings tab should display the professional update summary above the version table.")
 	if _find_label_containing(labels, "Synced v1.2.3.") == null or _find_label_containing(labels, "Current plugin 1.0.1 [abcdef1] -> selected target 1.2.3 [fedcba9]") == null or _find_label_containing(labels, "current ahead 0 / target ahead 2") == null:
 		return _failure("Settings tab should display sync success together with explicit current-to-target update hashes and commit difference direction.")
 	var check_button := _instance.find_child("CheckButton", true, false) as Button
-	if check_button == null or not check_button.visible or check_button.disabled or check_button.text != "Check":
-		return _failure("Settings update Check should be visible and enabled so refs refresh only when the user clicks it.")
+	if check_button == null or not check_button.visible or check_button.disabled or check_button.text != "Refresh List":
+		return _failure("Settings update Refresh List should be visible and enabled so refs refresh only when the user clicks it.")
 	var prepare_button := _instance.find_child("PrepareButton", true, false) as Button
 	var apply_button := _instance.find_child("ApplyButton", true, false) as Button
 	if prepare_button == null or prepare_button.visible or not prepare_button.disabled:
 		return _failure("Settings update Prepare should remain hidden and disabled.")
-	if apply_button == null or apply_button.disabled or apply_button.text != "同步":
-		return _failure("Settings update Sync button should be enabled for the resolved latest release target.")
+	if apply_button == null or apply_button.disabled or apply_button.text != "一键更新":
+		return _failure("Settings update One-click Update button should be enabled for the resolved latest release target.")
 
 	port_spin.value = 4200
 	log_option.select(0)
@@ -193,24 +231,25 @@ func run_case(tree: SceneTree) -> Dictionary:
 	language_option.emit_signal("item_selected", 0)
 	if recorder.port != 4200 or recorder.log_level != "debug" or recorder.language != "en":
 		return _failure("Settings tab should emit the existing persistence signals for port, log level, and language.")
-	source_option.emit_signal("pressed")
 	custom_branch.emit_signal("pressed")
 	if recorder.update_interaction_refresh_count != 0 or recorder.update_source != "" or recorder.update_custom_branch != "":
 		return _failure("Settings tab should not request update refresh when selectors are opened.")
-	source_option.select(0)
-	source_option.emit_signal("item_selected", 0)
+	channel_tabs.current_tab = 0
+	channel_tabs.emit_signal("tab_changed", 0)
 	if custom_branch_row.visible:
 		return _failure("Settings tab should hide editable target rows after changing update source to latest stable.")
-	source_option.select(2)
-	source_option.emit_signal("item_selected", 2)
+	channel_tabs.current_tab = 1
+	channel_tabs.emit_signal("tab_changed", 1)
 	if not custom_branch_row.visible:
-		return _failure("Settings tab should immediately show the branch selector after changing update source to custom branch.")
+		return _failure("Settings tab should immediately show the branch selector after changing to the Development channel.")
 	custom_branch.select(1)
 	custom_branch.emit_signal("item_selected", 1)
+	var first_row := version_tree.get_root().get_first_child()
+	version_tree.emit_signal("button_clicked", first_row, 4, 1, MOUSE_BUTTON_LEFT)
 	check_button.emit_signal("pressed")
 	apply_button.emit_signal("pressed")
-	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/settings" or recorder.update_interaction_refresh_count != 0 or recorder.update_check_count != 1 or recorder.update_apply_count != 1:
-		return _failure("Settings tab should emit Check only from the explicit update refresh button.")
+	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/settings" or recorder.update_interaction_refresh_count != 0 or recorder.update_check_count != 1 or recorder.update_apply_count != 1 or recorder.update_switch_kind.is_empty() or recorder.update_switch_ref.is_empty():
+		return _failure("Settings tab should emit Check only from the explicit update refresh button and Switch only from table rows.")
 
 	var branch_values: Array[String] = ["dev"]
 	for index in range(24):
@@ -233,7 +272,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	await tree.process_frame
 	if custom_branch.get_item_count() != branch_values.size() or str(custom_branch.get_item_metadata(custom_branch.selected)) != "feature/long-selector-23":
 		return _failure("Settings tab should preserve every discovered branch option while selecting the persisted branch.")
-	if custom_branch.get_popup().max_size.y != 348 or source_option.get_popup().max_size.y != 348:
+	if custom_branch.get_popup().max_size.y != 348:
 		return _failure("Settings tab update selectors should cap popup height instead of letting long ref lists cover the editor.")
 
 	return {"name": "settings_tab_rendering_contracts", "success": true, "error": ""}

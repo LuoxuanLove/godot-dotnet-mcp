@@ -4,6 +4,7 @@ extends RefCounted
 const UPDATE_REFS_BRANCHES_URL := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/branches?per_page=100&page=1"
 const UPDATE_REFS_RELEASES_URL := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/releases?per_page=100&page=1"
 const UPDATE_REFS_TAGS_URL := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/tags?per_page=100&page=1"
+const UPDATE_REFS_BRANCH_COMMITS_URL_TEMPLATE := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/commits?sha=%s&per_page=50&page=1"
 const UPDATE_COMPARE_URL_TEMPLATE := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/compare/%s...%s"
 const UPDATE_BRANCH_REF_URL_TEMPLATE := "https://api.github.com/repos/LuoxuanLove/godot-dotnet-mcp/branches/%s"
 const UPDATE_TARGET_PLUGIN_CFG_BRANCH_URL_TEMPLATE := "https://raw.githubusercontent.com/LuoxuanLove/godot-dotnet-mcp/refs/heads/%s/addons/godot_dotnet_mcp/plugin.cfg"
@@ -36,6 +37,10 @@ func get_refs_request_urls() -> Dictionary:
 
 func get_compare_url_template() -> String:
 	return UPDATE_COMPARE_URL_TEMPLATE
+
+
+func get_branch_commits_url_template() -> String:
+	return UPDATE_REFS_BRANCH_COMMITS_URL_TEMPLATE
 
 
 func get_branch_ref_url_template() -> String:

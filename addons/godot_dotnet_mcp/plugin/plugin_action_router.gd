@@ -30,6 +30,7 @@ func build_dock_signal_bindings() -> Array[Dictionary]:
 		{"signal": "update_interaction_refresh_requested", "callable": Callable(self, "update_interaction_refresh_requested")},
 		{"signal": "update_check_requested", "callable": Callable(self, "update_check_requested")},
 		{"signal": "update_apply_requested", "callable": Callable(self, "update_apply_requested")},
+		{"signal": "update_switch_requested", "callable": Callable(self, "update_switch_requested")},
 		{"signal": "start_requested", "callable": Callable(self, "start_requested")},
 		{"signal": "restart_requested", "callable": Callable(self, "restart_requested")},
 		{"signal": "stop_requested", "callable": Callable(self, "stop_requested")},
@@ -90,6 +91,10 @@ func update_check_requested() -> void:
 
 func update_apply_requested() -> void:
 	_call_plugin_method("_on_update_sync_requested")
+
+
+func update_switch_requested(kind: String, target_ref: String, target_commit: String) -> void:
+	_call_plugin_method("_on_update_switch_requested", [kind, target_ref, target_commit])
 
 
 func start_requested() -> void:

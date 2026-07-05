@@ -53,6 +53,80 @@ func append_commits(pending: Dictionary, items: Array, name_key: String) -> Dict
 	return next_pending
 
 
+func append_release_rows(pending: Dictionary, items: Array) -> Dictionary:
+	var next_pending := pending.duplicate(true)
+	var rows: Array = duplicate_rows(next_pending.get("release_rows", []))
+	for item in items:
+		if not (item is Dictionary):
+			continue
+		var item_dict := item as Dictionary
+		var tag := str(item_dict.get("tag_name", "")).strip_edges()
+		if tag.is_empty():
+			continue
+		rows.append({
+			"kind": "tag",
+			"ref": tag,
+			"commit": extract_commit(item_dict),
+			"title": _first_line(str(item_dict.get("name", tag))).strip_edges(),
+			"date": str(item_dict.get("published_at", item_dict.get("created_at", ""))).strip_edges(),
+			"stable": not bool(item_dict.get("prerelease", false))
+		})
+	next_pending["release_rows"] = rows
+	return next_pending
+
+
+func append_tag_rows(pending: Dictionary, items: Array) -> Dictionary:
+	var next_pending := pending.duplicate(true)
+	var rows: Array = duplicate_rows(next_pending.get("tag_rows", []))
+	for item in items:
+		if not (item is Dictionary):
+			continue
+		var item_dict := item as Dictionary
+		var tag := str(item_dict.get("name", "")).strip_edges()
+		if tag.is_empty():
+			continue
+		rows.append({
+			"kind": "tag",
+			"ref": tag,
+			"commit": extract_commit(item_dict),
+			"title": "tag",
+			"date": "",
+			"stable": true
+		})
+	next_pending["tag_rows"] = rows
+	return next_pending
+
+
+func append_branch_commit_rows(pending: Dictionary, branch: String, items: Array) -> Dictionary:
+	var next_pending := pending.duplicate(true)
+	var branch_rows := duplicate_branch_commit_rows(next_pending.get("branch_commit_rows", {}))
+	var rows: Array = []
+	for item in items:
+		if not (item is Dictionary):
+			continue
+		var item_dict := item as Dictionary
+		var commit_value = item_dict.get("commit", {})
+		var commit_dict := {}
+		if commit_value is Dictionary:
+			commit_dict = commit_value as Dictionary
+		var author_value = commit_dict.get("author", {})
+		var author_dict := {}
+		if author_value is Dictionary:
+			author_dict = author_value as Dictionary
+		var message := _first_line(str(commit_dict.get("message", ""))).strip_edges()
+		rows.append({
+			"kind": "branch",
+			"ref": branch,
+			"commit": str(item_dict.get("sha", "")).strip_edges(),
+			"title": message if not message.is_empty() else "commit",
+			"date": str(author_dict.get("date", "")).strip_edges(),
+			"stable": false
+		})
+	branch_rows[branch] = rows
+	next_pending["branch_commit_rows"] = branch_rows
+	return next_pending
+
+
 func collect_names(items: Array, key: String) -> Array[String]:
 	var names: Array[String] = []
 	for item in items:
@@ -99,6 +173,25 @@ func duplicate_commits(raw_commits) -> Dictionary:
 	return commits
 
 
+func duplicate_rows(raw_rows) -> Array:
+	var rows: Array = []
+	if not (raw_rows is Array):
+		return rows
+	for row in raw_rows:
+		if row is Dictionary:
+			rows.append((row as Dictionary).duplicate(true))
+	return rows
+
+
+func duplicate_branch_commit_rows(raw_rows) -> Dictionary:
+	var rows: Dictionary = {}
+	if not (raw_rows is Dictionary):
+		return rows
+	for key in (raw_rows as Dictionary).keys():
+		rows[str(key)] = duplicate_rows((raw_rows as Dictionary).get(key, []))
+	return rows
+
+
 func build_final_snapshot(pending: Dictionary) -> Dictionary:
 	var releases := to_string_array(pending.get("releases", []))
 	var stable_releases := to_string_array(pending.get("stable_releases", []))
@@ -114,8 +207,36 @@ func build_final_snapshot(pending: Dictionary) -> Dictionary:
 		"latest_release": releases[0] if not releases.is_empty() else "",
 		"latest_stable_release": stable_releases[0] if not stable_releases.is_empty() else "",
 		"release_source": "releases_and_tags",
+		"release_rows": build_release_table_rows(pending),
+		"branch_commit_rows": duplicate_branch_commit_rows(pending.get("branch_commit_rows", {})),
 		"errors": to_string_array(pending.get("errors", []))
 	}
+
+
+func build_release_table_rows(pending: Dictionary) -> Array:
+	var commits := duplicate_commits(pending.get("commits", {}))
+	var rows := duplicate_rows(pending.get("release_rows", []))
+	var seen: Array[String] = []
+	var result: Array = []
+	for row in rows:
+		if not (row is Dictionary):
+			continue
+		var row_dict: Dictionary = (row as Dictionary).duplicate(true)
+		var ref := str(row_dict.get("ref", "")).strip_edges()
+		if ref.is_empty() or seen.has(ref):
+			continue
+		row_dict["commit"] = str(commits.get(ref, row_dict.get("commit", ""))).strip_edges()
+		result.append(row_dict)
+		seen.append(ref)
+	for tag_row in duplicate_rows(pending.get("tag_rows", [])):
+		var tag_ref := str(tag_row.get("ref", "")).strip_edges()
+		if tag_ref.is_empty() or seen.has(tag_ref):
+			continue
+		var normalized_tag_row: Dictionary = (tag_row as Dictionary).duplicate(true)
+		normalized_tag_row["commit"] = str(commits.get(tag_ref, normalized_tag_row.get("commit", ""))).strip_edges()
+		result.append(normalized_tag_row)
+		seen.append(tag_ref)
+	return result
 
 
 func record_active_request(
@@ -194,7 +315,7 @@ func build_pending_status(pending: Dictionary, now_msec: int) -> Dictionary:
 
 func get_waiting_kinds(pending: Dictionary) -> Array[String]:
 	var waiting: Array[String] = []
-	for kind in ["branches", "releases", "tags"]:
+	for kind in ["branches", "releases", "tags", "branch_commits"]:
 		if not is_kind_done(pending, kind):
 			waiting.append(kind)
 	return waiting
@@ -208,6 +329,8 @@ func is_kind_done(pending: Dictionary, kind: String) -> bool:
 			return bool(pending.get("release_done", false))
 		"tags":
 			return bool(pending.get("tag_done", false))
+		"branch_commits":
+			return bool(pending.get("branch_commits_done", false))
 		_:
 			return false
 
@@ -223,3 +346,8 @@ func append_unique_ref(values: Array[String], value: String) -> void:
 	if normalized.is_empty() or values.has(normalized):
 		return
 	values.append(normalized)
+
+
+func _first_line(text: String) -> String:
+	var lines := text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+	return str(lines[0]) if not lines.is_empty() else text

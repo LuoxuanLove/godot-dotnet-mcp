@@ -40,6 +40,23 @@ class FakeLocalization extends RefCounted:
 		"settings_update_check": "Check",
 		"settings_update_prepare": "Prepare",
 		"settings_update_apply": "Sync",
+		"settings_update_refresh_list": "Refresh List",
+		"settings_update_one_click": "One-click Update",
+		"settings_update_remote_url": "Remote URL:",
+		"settings_update_current_branch": "Current Branch:",
+		"settings_update_current_version": "Current Version:",
+		"settings_update_channel_stable": "Stable",
+		"settings_update_channel_development": "Development",
+		"settings_update_col_version": "Version ID",
+		"settings_update_col_message": "Update",
+		"settings_update_col_date": "Date",
+		"settings_update_col_current": "Current",
+		"settings_update_col_action": "Action",
+		"settings_update_current_marker": "Current",
+		"settings_update_switch": "Switch",
+		"settings_update_last_trigger": "Last trigger:",
+		"settings_update_last_refresh": "Last refresh:",
+		"settings_update_rate_limit_reset": "Rate limit resets:",
 		"settings_update_sync_loading": "Syncing",
 		"settings_update_sync_refreshing_editor": "Refreshing editor",
 		"settings_update_sync_success": "Synced",
@@ -88,6 +105,9 @@ class Recorder extends RefCounted:
 	var update_interaction_refresh_count := 0
 	var update_check_count := 0
 	var update_apply_count := 0
+	var update_switch_kind := ""
+	var update_switch_ref := ""
+	var update_switch_commit := ""
 
 	func on_port_changed(value: int) -> void:
 		port = value
@@ -106,6 +126,11 @@ class Recorder extends RefCounted:
 
 	func on_update_apply_requested() -> void:
 		update_apply_count += 1
+
+	func on_update_switch_requested(kind: String, target_ref: String, target_commit: String) -> void:
+		update_switch_kind = kind
+		update_switch_ref = target_ref
+		update_switch_commit = target_commit
 
 
 func run_case(tree: SceneTree) -> Dictionary:
@@ -152,6 +177,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_instance.update_interaction_refresh_requested.connect(Callable(recorder, "on_update_interaction_refresh_requested"))
 	_instance.update_check_requested.connect(Callable(recorder, "on_update_check_requested"))
 	_instance.update_apply_requested.connect(Callable(recorder, "on_update_apply_requested"))
+	_instance.update_switch_requested.connect(Callable(recorder, "on_update_switch_requested"))
 	_instance.apply_model({
 		"localization": FakeLocalization.new(),
 		"editor_scale": 1.0,
@@ -166,6 +192,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"update_refs_state": "success",
 		"update_refs_commits": {"dev": "1234567890abcdef"},
 		"update_refs_versions": {"dev": "1.4.0"},
+		"update_refs_branch_commit_rows": {
+			"dev": [
+				{"kind": "branch", "ref": "dev", "commit": "1234567890abcdef", "title": "Dock update", "date": "2026-07-04T12:00:00Z"},
+				{"kind": "branch", "ref": "dev", "commit": "fedcba9876543210", "title": "Older dock update", "date": "2026-07-03T12:00:00Z"}
+			]
+		},
 		"update_compare_state": "success",
 		"update_compare_ahead_by": 1,
 		"update_compare_behind_by": 0,
@@ -188,40 +220,42 @@ func run_case(tree: SceneTree) -> Dictionary:
 	port_spin.value = 3200
 	if recorder.port != 3200:
 		return _failure("Settings tab port changes should route through the existing Dock port_changed signal.")
-	var source_option := tab_container.get_tab_control(5).find_child("SourceOption", true, false) as OptionButton
+	var channel_tabs := tab_container.get_tab_control(5).find_child("UpdateChannelTabs", true, false) as TabBar
 	var custom_branch_row := tab_container.get_tab_control(5).find_child("CustomBranchRow", true, false) as HBoxContainer
 	var custom_branch_value := tab_container.get_tab_control(5).find_child("CustomBranchValue", true, false) as OptionButton
+	var version_tree := tab_container.get_tab_control(5).find_child("VersionTree", true, false) as Tree
 	var check_button := tab_container.get_tab_control(5).find_child("CheckButton", true, false) as Button
 	var prepare_button := tab_container.get_tab_control(5).find_child("PrepareButton", true, false) as Button
 	var apply_button := tab_container.get_tab_control(5).find_child("ApplyButton", true, false) as Button
-	if source_option == null or custom_branch_value == null or check_button == null or prepare_button == null or apply_button == null:
-		return _failure("Settings tab update source controls should exist in the Settings tab.")
-	if source_option.get_item_count() != 3 or str(source_option.get_item_metadata(0)) != "latest_stable" or str(source_option.get_item_metadata(1)) != "latest_release" or str(source_option.get_item_metadata(2)) != "custom_branch":
-		return _failure("Settings tab should expose latest stable, latest release, and custom branch source choices in order.")
-	if _has_option_value(source_option, "release_tag") or _has_option_value(source_option, "latest_dev"):
-		return _failure("Settings tab should not expose selectable release/tag or latest dev sources.")
+	if channel_tabs == null or custom_branch_value == null or version_tree == null or check_button == null or prepare_button == null or apply_button == null:
+		return _failure("Settings tab update controls should exist in the Settings tab.")
+	if channel_tabs.get_tab_count() != 2 or channel_tabs.current_tab != 1 or channel_tabs.get_tab_title(0) != "Stable" or channel_tabs.get_tab_title(1) != "Development":
+		return _failure("Settings tab should expose Stable and Development update channels in order.")
+	if tab_container.get_tab_control(5).find_child("SourceOption", true, false) != null:
+		return _failure("Settings tab should not expose the removed update source selector.")
 	if custom_branch_value.get_item_count() < 2 or str(custom_branch_value.get_item_metadata(0)) != "dev" or str(custom_branch_value.get_item_metadata(custom_branch_value.selected)) != "dev":
 		return _failure("Settings tab should keep dev first in the custom branch selector after Dock projection.")
 	if custom_branch_row == null or not custom_branch_row.visible or tab_container.get_tab_control(5).find_child("ReleaseTagRow", true, false) != null:
 		return _failure("Settings tab should show only the branch target row for custom branch update sources.")
 	if tab_container.get_tab_control(5).find_child("ReleaseTagValue", true, false) != null or tab_container.get_tab_control(5).find_child("CustomBranchValue", true, false) is LineEdit:
 		return _failure("Settings tab update refs should not use manual LineEdit controls.")
-	if not check_button.visible or check_button.disabled or check_button.text != "Check":
-		return _failure("Settings tab Check should be visible and enabled because refs refresh is manual.")
+	if not version_tree.visible or version_tree.get_root() == null or version_tree.get_root().get_first_child() == null:
+		return _failure("Settings tab should show branch commit rows in the Development channel.")
+	if not check_button.visible or check_button.disabled or check_button.text != "Refresh List":
+		return _failure("Settings tab Refresh List should be visible and enabled because refs refresh is manual.")
 	if prepare_button.visible or not prepare_button.disabled or not prepare_button.text.is_empty():
 		return _failure("Settings tab Prepare should remain hidden, disabled, and label-free after Dock projection.")
-	if apply_button.text != "Sync":
-		return _failure("Settings tab Sync should preserve non-stale non-Chinese labels after Dock projection.")
+	if apply_button.text != "One-click Update":
+		return _failure("Settings tab should render the one-click update action after Dock projection.")
 	if apply_button.disabled:
 		return _failure("Settings tab Sync should be enabled for selected branch targets.")
 	var labels := tab_container.get_tab_control(5).find_children("*", "Label", true, false)
 	if _find_label_containing(labels, "Select an update mode") != null:
 		return _failure("Settings tab should normalize stale automatic discovery status copy after Dock projection.")
-	if _find_label_containing(labels, "Current version: 1.0.1") != null or _find_label_containing(labels, "Plugin Path:") != null or _find_label_containing(labels, "Commit: abcdef123456") != null:
-		return _failure("Settings tab should not display removed current version, plugin path, or commit summary rows after Dock projection.")
+	if _find_label_containing(labels, "Current Version:") == null or _find_label_containing(labels, "1.0.1 (abcdef1)") == null or _find_label_containing(labels, "Remote URL:") == null:
+		return _failure("Settings tab should display the update management summary after Dock projection.")
 	if _find_label_containing(labels, "Synced dev.") == null or _find_label_containing(labels, "Current plugin 1.0.1 [abcdef1] -> selected target 1.4.0 [1234567]") == null or _find_label_containing(labels, "selected target dev") != null or _find_label_containing(labels, "current ahead 0 / target ahead 1") == null:
 		return _failure("Settings tab should display sync success together with explicit current-to-target update hashes and commit difference direction.")
-	source_option.emit_signal("pressed")
 	custom_branch_value.emit_signal("pressed")
 	if recorder.update_interaction_refresh_count != 0 or recorder.update_source != "" or recorder.update_custom_branch != "":
 		return _failure("MCP Dock should not request update refresh when Settings selectors are opened.")
@@ -243,30 +277,38 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"log_levels": ["debug", "info"],
 		"update_refs_branches": ["dev", "feature/dock"],
 		"update_refs_releases": ["v1.0.0", "v2.0.0"],
+		"update_refs_state": "success",
+		"update_refs_commits": {"dev": "1234567890abcdef", "feature/dock": "fedcba9876543210"},
+		"update_refs_branch_commit_rows": {
+			"dev": [
+				{"kind": "branch", "ref": "dev", "commit": "1234567890abcdef", "title": "Dock update", "date": "2026-07-04T12:00:00Z"}
+			],
+			"feature/dock": [
+				{"kind": "branch", "ref": "feature/dock", "commit": "fedcba9876543210", "title": "Feature dock update", "date": "2026-07-05T12:00:00Z"}
+			]
+		},
 		"plugin_version": "1.0.1",
 		"plugin_freshness": {}
 	})
 	await tree.process_frame
-	if not check_button.visible or check_button.disabled or check_button.text != "Check" or prepare_button.visible or not prepare_button.disabled or not prepare_button.text.is_empty() or apply_button.text != "Sync":
+	if not check_button.visible or check_button.disabled or check_button.text != "Refresh List" or prepare_button.visible or not prepare_button.disabled or not prepare_button.text.is_empty() or apply_button.text != "One-click Update":
 		return _failure("MCP Dock should preserve visible manual Check while normalizing stale hidden update controls.")
-	source_option.select(0)
-	source_option.emit_signal("item_selected", 0)
+	channel_tabs.current_tab = 0
+	channel_tabs.emit_signal("tab_changed", 0)
 	if custom_branch_row.visible:
-		return _failure("Settings tab should hide editable target rows immediately when latest stable mode is selected.")
-	source_option.select(1)
-	source_option.emit_signal("item_selected", 1)
-	if custom_branch_row.visible:
-		return _failure("Settings tab should hide editable target rows immediately when latest release mode is selected.")
-	source_option.select(2)
-	source_option.emit_signal("item_selected", 2)
+		return _failure("Settings tab should hide editable target rows immediately when the Stable channel is selected.")
+	channel_tabs.current_tab = 1
+	channel_tabs.emit_signal("tab_changed", 1)
 	if not custom_branch_row.visible:
-		return _failure("Settings tab should restore branch row visibility immediately when custom branch mode is selected.")
+		return _failure("Settings tab should restore branch row visibility immediately when the Development channel is selected.")
 	custom_branch_value.select(1)
 	custom_branch_value.emit_signal("item_selected", 1)
+	var first_row := version_tree.get_root().get_first_child()
+	version_tree.emit_signal("button_clicked", first_row, 4, 1, MOUSE_BUTTON_LEFT)
 	check_button.emit_signal("pressed")
 	apply_button.emit_signal("pressed")
-	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/dock" or recorder.update_interaction_refresh_count != 0 or recorder.update_check_count != 1 or recorder.update_apply_count != 1:
-		return _failure("Settings tab Check should route through MCP Dock only when the explicit button is pressed.")
+	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/dock" or recorder.update_interaction_refresh_count != 0 or recorder.update_check_count != 1 or recorder.update_apply_count != 1 or recorder.update_switch_kind.is_empty() or recorder.update_switch_ref.is_empty():
+		return _failure("Settings tab Check should route through MCP Dock only when the explicit button is pressed, while Switch routes from table rows.")
 
 	return {"name": "mcp_dock_settings_tab_contracts", "success": true, "error": ""}
 
