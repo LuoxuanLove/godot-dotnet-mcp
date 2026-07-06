@@ -1,0 +1,36 @@
+addons/godot_dotnet_mcp/localization/locale_es.gd
+  s_9214b0fc2ec5df::t_6ac9b75a534c67 452-468
+addons/godot_dotnet_mcp/localization/locale_de.gd
+  s_9214b0fc2ec5df::t_6ac9b75a534c67 452-468
+  s_9214b0fc2ec5df::t_f19ddc99359f74 488-490
+addons/godot_dotnet_mcp/localization/locale_fr.gd
+  s_9214b0fc2ec5df::t_6ac9b75a534c67 452-454,456-458,460,462-468
+  s_9214b0fc2ec5df::t_a4c827181cb18d 488-490
+addons/godot_dotnet_mcp/localization/locale_ja.gd
+  s_9214b0fc2ec5df::t_a4c827181cb18d 453-469,489-491
+addons/godot_dotnet_mcp/localization/locale_pt.gd
+  s_9214b0fc2ec5df::t_6ac9b75a534c67 452-468
+  s_9214b0fc2ec5df::t_a4c827181cb18d 488-490
+addons/godot_dotnet_mcp/plugin/presenters/dock_presenter.gd
+  s_9214b0fc2ec5df::t_7409cf9834fd90 140-148
+addons/godot_dotnet_mcp/localization/locale_ru.gd
+  s_9214b0fc2ec5df::t_6ac9b75a534c67 452-468
+addons/godot_dotnet_mcp/localization/locale_ko.gd
+  s_9214b0fc2ec5df::t_a4c827181cb18d 619-635
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "40917df599b6edf69408a2f52406be5ae142a073",
+  "prompts": {},
+  "sessions": {
+    "s_9214b0fc2ec5df": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2c90-ab55-79a0-b70b-51d684f83e96",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
