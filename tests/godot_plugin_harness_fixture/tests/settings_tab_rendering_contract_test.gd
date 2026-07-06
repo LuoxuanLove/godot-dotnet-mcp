@@ -247,6 +247,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 	custom_branch.emit_signal("item_selected", 1)
 	var first_row := version_tree.get_root().get_first_child()
 	version_tree.emit_signal("button_clicked", first_row, 4, 1, MOUSE_BUTTON_LEFT)
+	if not recorder.update_switch_ref.is_empty():
+		return _failure("Settings tab should defer table row switch requests until after Tree mouse selection events complete.")
+	await tree.process_frame
 	check_button.emit_signal("pressed")
 	apply_button.emit_signal("pressed")
 	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/settings" or recorder.update_interaction_refresh_count != 0 or recorder.update_check_count != 1 or recorder.update_apply_count != 1 or recorder.update_switch_kind.is_empty() or recorder.update_switch_ref.is_empty():
@@ -277,6 +280,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	await tree.process_frame
 	var disabled_row := version_tree.get_root().get_first_child()
 	version_tree.emit_signal("button_clicked", disabled_row, 4, 1, MOUSE_BUTTON_LEFT)
+	await tree.process_frame
 	if recorder.update_switch_ref != previous_switch_ref:
 		return _failure("Settings tab should ignore disabled version rows instead of emitting an empty manual switch target.")
 

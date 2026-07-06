@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Limited GitHub update-list refreshes to plugin startup, the explicit Refresh List button, and explicit MCP refresh tools while exposing refresh audit and rate-limit details in Settings.
+- Deferred Settings version-table Switch actions until after Tree mouse-selection events complete, preventing Godot from rejecting row rebuilds and flooding the Output panel with null item errors.
 
 ## [2.0.0] - 2026-07-04
 
