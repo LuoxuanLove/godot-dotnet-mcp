@@ -1,0 +1,62 @@
+addons/godot_dotnet_mcp/localization/locale_ko.gd
+  s_9214b0fc2ec5df::t_6f58dbfed66bc1 637,676-685
+addons/godot_dotnet_mcp/localization/locale_fr.gd
+  s_9214b0fc2ec5df::t_d4eb00f1e1004f 470,509-518
+addons/godot_dotnet_mcp/localization/locale_en.gd
+  s_9214b0fc2ec5df::t_16c1dbb3a9540f 689,731-734
+addons/godot_dotnet_mcp/localization/locale_ru.gd
+  s_9214b0fc2ec5df::t_6f58dbfed66bc1 470,509-518
+addons/godot_dotnet_mcp/localization/locale_zh_tw.gd
+  s_9214b0fc2ec5df::t_16c1dbb3a9540f 651,693-696
+addons/godot_dotnet_mcp/localization/locale_zh_cn.gd
+  s_9214b0fc2ec5df::t_16c1dbb3a9540f 689,731-734
+addons/godot_dotnet_mcp/localization/locale_es.gd
+  s_9214b0fc2ec5df::t_d4eb00f1e1004f 470,509-518
+tests/godot_plugin_harness_fixture/tests/home_tab_localization_contract_test.gd
+  s_9214b0fc2ec5df::t_b253cd755f3dba 161,181-184
+addons/godot_dotnet_mcp/ui/settings_panel.tscn
+  s_9214b0fc2ec5df::t_3b664b94892fcf 154-155
+addons/godot_dotnet_mcp/localization/locale_pt.gd
+  s_9214b0fc2ec5df::t_d4eb00f1e1004f 470,509-518
+addons/godot_dotnet_mcp/localization/locale_de.gd
+  s_9214b0fc2ec5df::t_d4eb00f1e1004f 470,509-518
+addons/godot_dotnet_mcp/plugin.gd
+  s_9214b0fc2ec5df::t_a85b8e17b8a608 101,249,252,255-256,258,262-267,2175,2189,2210-2212,2214-2216,2482-2510
+  s_9214b0fc2ec5df::t_04f24f28759886 1782,1792-1793
+  s_9214b0fc2ec5df::t_2bb27280f7166a 268-269
+  s_9214b0fc2ec5df::t_5e4f80d106ca57 2213
+tests/godot_plugin_harness_fixture/tests/settings_tab_rendering_contract_test.gd
+  s_9214b0fc2ec5df::t_c6fcff12aa642c 282
+  s_9214b0fc2ec5df::t_c747aa21e1912e 40,256-281
+  s_9214b0fc2ec5df::t_ad767d2f061392 255
+addons/godot_dotnet_mcp/plugin/runtime/plugin_update_refs_discovery_service.gd
+  s_9214b0fc2ec5df::t_c6d16fcd546c22 69
+addons/godot_dotnet_mcp/localization/locale_ja.gd
+  s_9214b0fc2ec5df::t_6f58dbfed66bc1 471,510-519
+addons/godot_dotnet_mcp/ui/settings_tab_model_projection.gd
+  s_9214b0fc2ec5df::t_1f48232a370007 167
+tests/godot_plugin_harness_fixture/tests/plugin_update_settings_persistence_contract_test.gd
+  s_9214b0fc2ec5df::t_73f3805c972c42 495,578
+  s_9214b0fc2ec5df::t_cc8c75327500df 492,494,497,562-577,579-581
+tests/godot_plugin_harness_fixture/tests/plugin_update_refs_discovery_service_contract_test.gd
+  s_9214b0fc2ec5df::t_8ed790445b10ee 54-55,58,68-69,79-80
+  s_9214b0fc2ec5df::t_07dc621fe0c794 59
+addons/godot_dotnet_mcp/ui/settings_tab.gd
+  s_9214b0fc2ec5df::t_01aa6ea06ee719 421-424
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "90c382b02c07bc270bbd9cef4d3efa37ae02e771",
+  "prompts": {},
+  "sessions": {
+    "s_9214b0fc2ec5df": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2c90-ab55-79a0-b70b-51d684f83e96",
+        "model": "gpt-5.5"
+      },
+      "human_author": null
+    }
+  }
+}
