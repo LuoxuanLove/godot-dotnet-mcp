@@ -48,6 +48,7 @@ const RUNTIME_BRIDGE_AUTOLOAD_NAME := "MCPRuntimeBridge"
 const RUNTIME_BRIDGE_AUTOLOAD_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_bridge.gd"
 const UPDATE_REQUEST_MAINTENANCE_TICK_INTERVAL_SEC := 1.0
 const UPDATE_REFS_STALE_REQUEST_GRACE_SEC := 2.0
+const STARTUP_UPDATE_REFS_RETRY_DELAY_SEC := 0.5
 
 var _state = null
 var _settings_store = null
@@ -263,7 +264,10 @@ func _reschedule_startup_update_refs_refresh() -> bool:
 	_startup_update_refs_refresh_attempts += 1
 	if _startup_update_refs_refresh_attempts > 8:
 		return false
-	call_deferred("_request_startup_update_refs_refresh")
+	var tree := get_tree()
+	if tree == null:
+		return false
+	tree.create_timer(STARTUP_UPDATE_REFS_RETRY_DELAY_SEC).timeout.connect(Callable(self, "_request_startup_update_refs_refresh"))
 	return true
 
 
