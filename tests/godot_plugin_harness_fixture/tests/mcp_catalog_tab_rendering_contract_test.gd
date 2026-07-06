@@ -114,9 +114,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Resources tab should expose a Tree plus detail/preview pane.")
 	if prompts_tab.find_child("CatalogTree", true, false) == null or prompts_tab.find_child("PreviewText", true, false) == null:
 		return _failure("Prompts tab should expose a Tree plus detail/preview pane.")
-	if resources_tab.find_child("CatalogViewButton", true, false) != null or resources_tab.find_child("DiagnosticsViewButton", true, false) != null:
+	if _has_view_mode_controls(resources_tab):
 		return _failure("Resources tab should expose one tree interface without Catalog/Diagnostics view buttons.")
-	if prompts_tab.find_child("CatalogViewButton", true, false) != null or prompts_tab.find_child("DiagnosticsViewButton", true, false) != null:
+	if _has_view_mode_controls(prompts_tab):
 		return _failure("Prompts tab should expose one tree interface without Workflows/Diagnostics view buttons.")
 	if (_tree(resources_tab) as Tree).columns != 1 or (_tree(prompts_tab) as Tree).columns != 1:
 		return _failure("Resources and Prompts tabs should use one visible tree column matching the Tools tree layout.")
@@ -479,6 +479,13 @@ func _has_group_item(root: Node, group_id: String) -> bool:
 
 func _has_entry_item(root: Node, kind: String, id: String) -> bool:
 	return _find_entry_item(root, kind, id) != null
+
+
+func _has_view_mode_controls(root: Node) -> bool:
+	for name in ["ViewModeRow", "CatalogViewButton", "WorkflowsViewButton", "DiagnosticsViewButton"]:
+		if root.find_child(name, true, false) != null:
+			return true
+	return false
 
 
 func _find_group_item(root: Node, group_id: String) -> TreeItem:
