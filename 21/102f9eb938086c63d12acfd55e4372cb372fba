@@ -1,0 +1,33 @@
+docs/ko/변경-로그.md
+  s_9214b0fc2ec5df::t_736218096a9109 12
+addons/godot_dotnet_mcp/ui/mcp_catalog_tab.gd
+  s_9214b0fc2ec5df::t_dd38248892edbc 949,958
+  s_9214b0fc2ec5df::t_518e65c9abb284 250-270,300-308,310-312
+  s_9214b0fc2ec5df::t_4767a1f8ab1345 9-10
+  s_9214b0fc2ec5df::t_f3df3a7debf0cc 139,552-613
+  s_9214b0fc2ec5df::t_a00e490c092a8c 513,679,685-689
+docs/ja/変更履歴.md
+  s_9214b0fc2ec5df::t_736218096a9109 12
+tests/godot_plugin_harness_fixture/tests/mcp_catalog_tab_rendering_contract_test.gd
+  s_9214b0fc2ec5df::t_1ed29cc68ccb91 117-122,198-200
+docs/en/CHANGELOG.md
+  s_9214b0fc2ec5df::t_736218096a9109 12
+docs/zh-CN/变更日志.md
+  s_9214b0fc2ec5df::t_736218096a9109 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "21102f9eb938086c63d12acfd55e4372cb372fba",
+  "prompts": {},
+  "sessions": {
+    "s_9214b0fc2ec5df": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2c90-ab55-79a0-b70b-51d684f83e96",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
