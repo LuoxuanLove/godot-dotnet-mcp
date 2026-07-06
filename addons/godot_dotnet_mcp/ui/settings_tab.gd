@@ -68,6 +68,8 @@ var _current_layout_key := -1
 var _layout_update_queued := false
 var _fallback_switch_icon: Texture2D = null
 var _projection_service := SettingsTabModelProjectionServiceScript.new()
+var _version_switch_queued := false
+var _pending_version_switch_row: Dictionary = {}
 
 
 func _ready() -> void:
@@ -290,20 +292,30 @@ func _apply_version_rows(rows_value, empty_text: String, localization) -> void:
 	_version_tree.set_column_expand(4, false)
 	_version_tree.set_column_custom_minimum_width(4, 96)
 	var root := _version_tree.create_item()
+	if root == null:
+		_version_tree.visible = false
+		_version_empty_label.visible = true
+		_version_empty_label.text = empty_text
+		_version_tree_syncing = false
+		return
 	var row_count := 0
 	if rows_value is Array:
 		for raw_row in rows_value as Array:
 			if raw_row is Dictionary:
-				_add_version_tree_row(root, raw_row as Dictionary, localization)
-				row_count += 1
+				if _add_version_tree_row(root, raw_row as Dictionary, localization):
+					row_count += 1
 	_version_tree.visible = row_count > 0
 	_version_empty_label.visible = row_count == 0
 	_version_empty_label.text = empty_text
 	_version_tree_syncing = false
 
 
-func _add_version_tree_row(root: TreeItem, row: Dictionary, localization) -> void:
+func _add_version_tree_row(root: TreeItem, row: Dictionary, localization) -> bool:
+	if root == null:
+		return false
 	var item := _version_tree.create_item(root)
+	if item == null:
+		return false
 	item.set_text(0, str(row.get("id", "")))
 	item.set_text(1, str(row.get("title", "")))
 	item.set_text(2, str(row.get("date", "")))
@@ -313,6 +325,7 @@ func _add_version_tree_row(root: TreeItem, row: Dictionary, localization) -> voi
 		var switch_text := _localized(localization, "settings_update_switch", "Switch")
 		item.set_text(4, switch_text)
 		item.add_button(4, _get_switch_icon(), UPDATE_SWITCH_BUTTON_ID, false, switch_text)
+	return true
 
 
 func _apply_update_source_rows(source: String) -> void:
@@ -402,27 +415,47 @@ func _on_apply_button_pressed() -> void:
 func _on_version_tree_button_clicked(item: TreeItem, _column: int, id: int, _mouse_button_index: int) -> void:
 	if _version_tree_syncing or id != UPDATE_SWITCH_BUTTON_ID:
 		return
-	_emit_version_switch(item)
+	_queue_version_switch(item)
 
 
 func _on_version_tree_cell_selected() -> void:
 	if _version_tree_syncing or _version_tree.get_selected_column() != 4:
 		return
-	_emit_version_switch(_version_tree.get_selected())
+	_queue_version_switch(_version_tree.get_selected())
 
 
-func _emit_version_switch(item: TreeItem) -> void:
-	if item == null:
+func _queue_version_switch(item: TreeItem) -> void:
+	var row := _get_version_switch_row(item)
+	if row.is_empty():
 		return
-	var metadata = item.get_metadata(0)
-	if not (metadata is Dictionary):
+	_pending_version_switch_row = row
+	if _version_switch_queued:
 		return
-	var row := metadata as Dictionary
-	if not bool(row.get("switch_enabled", true)):
-		return
-	if str(row.get("ref", "")).strip_edges().is_empty():
+	_version_switch_queued = true
+	call_deferred("_emit_queued_version_switch")
+
+
+func _emit_queued_version_switch() -> void:
+	_version_switch_queued = false
+	var row := _pending_version_switch_row.duplicate(true)
+	_pending_version_switch_row.clear()
+	if row.is_empty():
 		return
 	update_switch_requested.emit(str(row.get("kind", "branch")), str(row.get("ref", "")), str(row.get("commit", "")))
+
+
+func _get_version_switch_row(item: TreeItem) -> Dictionary:
+	if item == null:
+		return {}
+	var metadata = item.get_metadata(0)
+	if not (metadata is Dictionary):
+		return {}
+	var row := metadata as Dictionary
+	if not bool(row.get("switch_enabled", true)):
+		return {}
+	if str(row.get("ref", "")).strip_edges().is_empty():
+		return {}
+	return row.duplicate(true)
 
 
 func _get_switch_icon() -> Texture2D:
