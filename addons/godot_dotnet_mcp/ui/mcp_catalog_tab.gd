@@ -5,17 +5,12 @@ signal copy_requested(text: String, source: String)
 signal preview_requested(kind: String, id: String, arguments: Dictionary)
 
 const TREE_TEXT_COLUMN := 0
-const TREE_META_COLUMN := 1
 const TREE_TEXT_MIN_WIDTH := 180.0
-const TREE_TEXT_MAX_WIDTH := 340.0
-const TREE_META_MIN_WIDTH := 80.0
-const TREE_META_MAX_WIDTH := 150.0
-const TREE_HORIZONTAL_CHROME_WIDTH := 48.0
+const TREE_TEXT_MAX_WIDTH := 520.0
+const TREE_HORIZONTAL_CHROME_WIDTH := 32.0
 const MAX_PROTOCOL_ICON_SRC_LENGTH := 8192
 const MAX_PROTOCOL_ICON_BASE64_LENGTH := 6144
 const MAX_ICON_TEXTURE_CACHE_ENTRIES := 64
-const VIEW_CATALOG := "catalog"
-const VIEW_DIAGNOSTICS := "diagnostics"
 const KIND_RESOURCE := "resource"
 const KIND_TEMPLATE := "template"
 const KIND_PROMPT := "prompt"
@@ -23,12 +18,7 @@ const KIND_PROMPT := "prompt"
 @onready var _header_card: PanelContainer = %HeaderCard
 @onready var _header_margin: MarginContainer = %HeaderMargin
 @onready var _header_content: VBoxContainer = %HeaderContent
-@onready var _header_title: Label = %HeaderTitle
-@onready var _header_description: Label = %HeaderDescription
 @onready var _header_counts: Label = %HeaderCounts
-@onready var _view_mode_row: HBoxContainer = %ViewModeRow
-@onready var _catalog_view_button: Button = %CatalogViewButton
-@onready var _diagnostics_view_button: Button = %DiagnosticsViewButton
 @onready var _content_split: VSplitContainer = %ContentSplit
 @onready var _search_edit: LineEdit = %CatalogSearchEdit
 @onready var _catalog_tree_panel: PanelContainer = %CatalogTreePanel
@@ -50,12 +40,10 @@ var _current_signature := ""
 var _current_model: Dictionary = {}
 var _localization = null
 var _catalog_mode := "resources"
-var _active_view := VIEW_CATALOG
 var _argument_values: Dictionary = {}
 var _template_argument_values: Dictionary = {}
 var _icon_texture_cache: Dictionary = {}
 var _icon_texture_cache_order: Array[String] = []
-var _view_buttons: Dictionary = {}
 var _selected_kind := ""
 var _selected_id := ""
 var _selected_entry: Dictionary = {}
@@ -65,12 +53,6 @@ var _last_preview: Dictionary = {}
 
 func _ready() -> void:
 	auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
-	_view_buttons = {
-		VIEW_CATALOG: _catalog_view_button,
-		VIEW_DIAGNOSTICS: _diagnostics_view_button
-	}
-	_catalog_view_button.pressed.connect(_on_view_button_pressed.bind(VIEW_CATALOG))
-	_diagnostics_view_button.pressed.connect(_on_view_button_pressed.bind(VIEW_DIAGNOSTICS))
 	_search_edit.text_changed.connect(_on_search_text_changed)
 	_catalog_tree.item_selected.connect(_on_tree_item_selected)
 	_catalog_tree.set_allow_reselect(true)
@@ -96,12 +78,6 @@ func set_catalog_mode(mode: String) -> void:
 	_current_signature = ""
 
 
-func set_catalog_view(view: String) -> void:
-	_active_view = view if view in [VIEW_CATALOG, VIEW_DIAGNOSTICS] else VIEW_CATALOG
-	_sync_view_buttons()
-	_current_signature = ""
-
-
 func apply_model(model: Dictionary) -> void:
 	_localization = model.get("localization")
 	_current_model = model
@@ -124,44 +100,18 @@ func _apply_localized_copy(model: Dictionary) -> void:
 		return
 	var counts: Dictionary = model.get("mcp_catalog_counts", {})
 	if _catalog_mode == "prompts":
-		_header_title.text = _localization.get_text("mcp_prompts_title")
-		_header_description.text = _localization.get_text("mcp_prompts_description")
 		_header_counts.text = _localization.get_text("mcp_prompts_counts") % int(counts.get("prompts", 0))
-		_catalog_view_button.text = _localization.get_text("mcp_catalog_view_workflows")
 		_search_edit.placeholder_text = _localization.get_text("mcp_catalog_search_prompts")
 	else:
-		_header_title.text = _localization.get_text("mcp_resources_title")
-		_header_description.text = _localization.get_text("mcp_resources_description")
 		_header_counts.text = _localization.get_text("mcp_resources_counts") % [
 			int(counts.get("resources", 0)),
 			int(counts.get("resource_templates", 0))
 		]
-		_catalog_view_button.text = _localization.get_text("mcp_catalog_view_catalog")
 		_search_edit.placeholder_text = _localization.get_text("mcp_catalog_search_resources")
-	_diagnostics_view_button.text = _localization.get_text("mcp_catalog_view_diagnostics")
 	_copy_id_button.text = _localization.get_text("mcp_catalog_copy_id")
 	_preview_button.text = _localization.get_text("mcp_catalog_preview")
 	_clear_arguments_button.text = _localization.get_text("mcp_catalog_clear_arguments")
 	_copy_preview_button.text = _localization.get_text("mcp_catalog_copy_preview")
-	_refresh_view_button_tooltips()
-	_sync_view_buttons()
-
-
-func _sync_view_buttons() -> void:
-	for view in _view_buttons.keys():
-		var button := _view_buttons.get(view) as Button
-		if button != null:
-			button.button_pressed = str(view) == _active_view
-
-
-func _on_view_button_pressed(view: String) -> void:
-	if _active_view == view:
-		_sync_view_buttons()
-		return
-	set_catalog_view(view)
-	if not _current_model.is_empty():
-		_render_tree(_current_model)
-		_sync_detail_panel()
 
 
 func _on_search_text_changed(_value: String) -> void:
@@ -175,7 +125,6 @@ func _render_tree(model: Dictionary) -> void:
 	_tree_syncing = true
 	_catalog_tree.clear()
 	_catalog_tree.set_column_clip_content(TREE_TEXT_COLUMN, true)
-	_catalog_tree.set_column_clip_content(TREE_META_COLUMN, true)
 	var root := _catalog_tree.create_item()
 	var entries_rendered := 0
 	for group in _active_groups(model):
@@ -187,7 +136,7 @@ func _render_tree(model: Dictionary) -> void:
 				continue
 			var entry := _entry_from_presentation_node(raw_child as Dictionary)
 			var kind := _entry_kind_from_presentation_node(raw_child as Dictionary)
-			if entry.is_empty() or not _entry_visible_for_search(entry, kind):
+			if entry.is_empty() or not _presentation_entry_visible_for_search(raw_child as Dictionary, entry, kind):
 				continue
 			visible_children.append({
 				"node": raw_child,
@@ -272,14 +221,11 @@ func _configure_group_item(item: TreeItem, group: Dictionary, visible_count: int
 	var label := _group_label(group)
 	item.set_text(TREE_TEXT_COLUMN, "%s    %d" % [label, visible_count])
 	item.set_selectable(TREE_TEXT_COLUMN, false)
-	item.set_selectable(TREE_META_COLUMN, false)
 	item.set_metadata(TREE_TEXT_COLUMN, {
 		"kind": "group",
 		"id": str(group.get("id", "")),
 		"group": group.duplicate(true)
 	})
-	item.set_custom_color(TREE_META_COLUMN, _get_meta_text_color())
-	item.set_text(TREE_META_COLUMN, str(group.get("id", "")))
 	item.collapsed = false if not _get_search_query().is_empty() else false
 	item.set_tooltip_text(TREE_TEXT_COLUMN, label)
 
@@ -288,11 +234,8 @@ func _create_entry_item(parent: TreeItem, entry: Dictionary, entry_kind: String,
 	var item := _catalog_tree.create_item(parent)
 	var id := _entry_id(entry, entry_kind)
 	var title := _entry_title(entry, entry_kind)
-	var meta := _entry_tree_meta(entry, entry_kind)
 	item.set_text(TREE_TEXT_COLUMN, title)
-	item.set_text(TREE_META_COLUMN, meta)
 	item.set_tooltip_text(TREE_TEXT_COLUMN, _entry_tooltip(entry, entry_kind))
-	item.set_tooltip_text(TREE_META_COLUMN, id)
 	item.set_metadata(TREE_TEXT_COLUMN, {
 		"kind": entry_kind,
 		"id": id,
@@ -302,13 +245,29 @@ func _create_entry_item(parent: TreeItem, entry: Dictionary, entry_kind: String,
 	var icon_texture := _texture_from_icon_src(_entry_icon_src(entry))
 	if icon_texture != null:
 		item.set_icon(TREE_TEXT_COLUMN, icon_texture)
-	item.set_custom_color(TREE_META_COLUMN, _get_meta_text_color())
-	if _active_view == VIEW_DIAGNOSTICS:
-		item.set_custom_color(TREE_TEXT_COLUMN, _get_description_text_color())
-	if entry_kind == KIND_TEMPLATE:
-		item.set_custom_color(TREE_META_COLUMN, _get_hint_text_color())
 	if _selected_kind == entry_kind and _selected_id == id:
 		item.select(TREE_TEXT_COLUMN)
+	for raw_child in _safe_array(node.get("children", [])):
+		if raw_child is Dictionary:
+			_create_info_node_item(item, raw_child as Dictionary)
+	return item
+
+
+func _create_info_node_item(parent: TreeItem, node: Dictionary) -> TreeItem:
+	var item := _catalog_tree.create_item(parent)
+	var label := _presentation_node_label(node)
+	item.set_text(TREE_TEXT_COLUMN, label)
+	item.set_selectable(TREE_TEXT_COLUMN, false)
+	item.set_metadata(TREE_TEXT_COLUMN, {
+		"kind": str(node.get("kind", "info")),
+		"id": str(node.get("id", "")),
+		"node": node.duplicate(true)
+	})
+	item.set_custom_color(TREE_TEXT_COLUMN, _get_hint_text_color())
+	item.set_tooltip_text(TREE_TEXT_COLUMN, _presentation_node_tooltip(node))
+	for raw_child in _safe_array(node.get("children", [])):
+		if raw_child is Dictionary:
+			_create_info_node_item(item, raw_child as Dictionary)
 	return item
 
 
@@ -338,15 +297,19 @@ func _find_first_entry_item() -> TreeItem:
 	var root := _catalog_tree.get_root()
 	if root == null:
 		return null
-	var child := root.get_first_child()
+	return _find_first_entry_item_recursive(root)
+
+
+func _find_first_entry_item_recursive(item: TreeItem) -> TreeItem:
+	if item == null:
+		return null
+	if _is_entry_item(item):
+		return item
+	var child := item.get_first_child()
 	while child != null:
-		if _is_entry_item(child):
-			return child
-		var nested := child.get_first_child()
-		while nested != null:
-			if _is_entry_item(nested):
-				return nested
-			nested = nested.get_next()
+		var found := _find_first_entry_item_recursive(child)
+		if found != null:
+			return found
 		child = child.get_next()
 	return null
 
@@ -517,11 +480,6 @@ func _build_detail_text(preview: Dictionary) -> String:
 		lines.append(description)
 	lines.append("")
 	lines.append(_entry_meta(_selected_entry, _selected_kind))
-	if _active_view == VIEW_DIAGNOSTICS:
-		lines.append("")
-		lines.append(_text("mcp_catalog_diagnostics_section"))
-		for line in _diagnostics_lines(_selected_entry, _selected_kind):
-			lines.append(line)
 	if _selected_kind == KIND_TEMPLATE:
 		var resolved_uri := _resolved_template_uri()
 		lines.append("")
@@ -552,7 +510,7 @@ func _filter_detail_lines(lines: Array[String]) -> String:
 	return "\n".join(filtered)
 
 
-func _diagnostics_lines(entry: Dictionary, entry_kind: String) -> Array[String]:
+func _protocol_metadata_lines(entry: Dictionary, entry_kind: String) -> Array[String]:
 	var lines: Array[String] = []
 	lines.append("%s: %s" % [_text("mcp_catalog_kind"), _diagnostic_kind(entry, entry_kind)])
 	lines.append("%s: %s" % [_text("mcp_catalog_source"), str(entry.get("_presentation_source", ""))])
@@ -589,6 +547,68 @@ func _entry_visible_for_search(entry: Dictionary, entry_kind: String) -> bool:
 		if str(text).to_lower().contains(query):
 			return true
 	return false
+
+
+func _presentation_entry_visible_for_search(node: Dictionary, entry: Dictionary, entry_kind: String) -> bool:
+	if _entry_visible_for_search(entry, entry_kind):
+		return true
+	var query := _get_search_query()
+	if query.is_empty():
+		return true
+	return _presentation_node_visible_for_search(node, query)
+
+
+func _presentation_node_visible_for_search(node: Dictionary, query: String) -> bool:
+	if query.is_empty():
+		return true
+	if _presentation_node_matches_search(node, query):
+		return true
+	for child in _safe_array(node.get("children", [])):
+		if child is Dictionary and _presentation_node_visible_for_search(child as Dictionary, query):
+			return true
+	return false
+
+
+func _presentation_node_matches_search(node: Dictionary, query: String) -> bool:
+	var searchable: Array[String] = [
+		_presentation_node_label(node),
+		str(node.get("id", "")),
+		str(node.get("kind", "")),
+		str(node.get("source", "")),
+		str(node.get("visibility", "")),
+		str(node.get("callability", ""))
+	]
+	var metadata = node.get("metadata", {})
+	if metadata is Dictionary:
+		for key in (metadata as Dictionary).keys():
+			searchable.append(str(key))
+			searchable.append(str((metadata as Dictionary).get(key, "")))
+	for text in searchable:
+		if str(text).to_lower().contains(query):
+			return true
+	return false
+
+
+func _presentation_node_label(node: Dictionary) -> String:
+	var label := str(node.get("label", "")).strip_edges()
+	if not label.is_empty():
+		return label
+	var metadata = node.get("metadata", {})
+	if metadata is Dictionary:
+		var name := str((metadata as Dictionary).get("name", "")).strip_edges()
+		if not name.is_empty():
+			return name
+	return str(node.get("id", ""))
+
+
+func _presentation_node_tooltip(node: Dictionary) -> String:
+	var parts: Array[String] = [_presentation_node_label(node), str(node.get("id", ""))]
+	var metadata = node.get("metadata", {})
+	if metadata is Dictionary:
+		var description := str((metadata as Dictionary).get("description", "")).strip_edges()
+		if not description.is_empty():
+			parts.append(description)
+	return "\n".join(parts)
 
 
 func _get_search_query() -> String:
@@ -647,17 +667,6 @@ func _entry_title(entry: Dictionary, entry_kind: String) -> String:
 	return str(entry.get("title", entry.get("name", fallback)))
 
 
-func _entry_tree_meta(entry: Dictionary, entry_kind: String) -> String:
-	if _active_view == VIEW_DIAGNOSTICS:
-		return _diagnostic_kind(entry, entry_kind)
-	if entry_kind == KIND_PROMPT:
-		return "%s %d" % [_text("mcp_catalog_arguments"), _safe_array(entry.get("arguments", [])).size()]
-	if entry_kind == KIND_TEMPLATE:
-		return _text("mcp_catalog_resource_templates")
-	var mime := str(entry.get("mimeType", "")).strip_edges()
-	return mime if not mime.is_empty() else str(entry.get("resource_kind", entry_kind))
-
-
 func _entry_tooltip(entry: Dictionary, entry_kind: String) -> String:
 	var parts: Array[String] = [_entry_title(entry, entry_kind), _entry_id(entry, entry_kind)]
 	var description := str(entry.get("description", "")).strip_edges()
@@ -667,27 +676,17 @@ func _entry_tooltip(entry: Dictionary, entry_kind: String) -> String:
 
 
 func _entry_meta(entry: Dictionary, entry_kind: String) -> String:
-	if _active_view == VIEW_DIAGNOSTICS:
-		return " | ".join(_diagnostics_lines(entry, entry_kind))
+	var lines := _protocol_metadata_lines(entry, entry_kind)
 	if entry_kind == KIND_PROMPT:
 		var args: Array[String] = []
 		for arg in entry.get("arguments", []):
 			if arg is Dictionary:
 				args.append(str((arg as Dictionary).get("name", "")))
-		if args.is_empty():
-			return "%s: %s" % [_text("mcp_catalog_kind"), str(entry.get("prompt_kind", "prompt"))]
-		return "%s: %s | %s: %s" % [
-			_text("mcp_catalog_kind"),
-			str(entry.get("prompt_kind", "prompt")),
-			_text("mcp_catalog_arguments"),
-			", ".join(args)
-		]
-	return "%s: %s | %s: %s" % [
-		_text("mcp_catalog_kind"),
-		str(entry.get("resource_kind", entry_kind)),
-		_text("mcp_catalog_mime_type"),
-		str(entry.get("mimeType", ""))
-	]
+		if not args.is_empty():
+			lines.append("%s: %s" % [_text("mcp_catalog_arguments"), ", ".join(args)])
+	else:
+		lines.append("%s: %s" % [_text("mcp_catalog_mime_type"), str(entry.get("mimeType", ""))])
+	return " | ".join(lines)
 
 
 func _diagnostic_kind(entry: Dictionary, entry_kind: String) -> String:
@@ -876,7 +875,6 @@ func _build_signature(model: Dictionary) -> String:
 	return "\n".join([
 		"language=%s" % _signature_scalar(str(model.get("current_language", ""))),
 		"mode=%s" % _signature_scalar(_catalog_mode),
-		"view=%s" % _signature_scalar(_active_view),
 		"search=%s" % _signature_scalar(_get_search_query()),
 		"selected=%s" % _signature_scalar("%s:%s" % [_selected_kind, _selected_id]),
 		"resources=%s" % _signature_value(model.get("mcp_resources", [])),
@@ -935,9 +933,6 @@ func _apply_responsive_layout() -> void:
 	_header_margin.add_theme_constant_override("margin_top", int(round(10 * scale)))
 	_header_margin.add_theme_constant_override("margin_bottom", int(round(10 * scale)))
 	_header_content.add_theme_constant_override("separation", int(round((6.0 if narrow else 8.0) * scale)))
-	_view_mode_row.add_theme_constant_override("separation", int(round((4.0 if narrow else 6.0) * scale)))
-	_configure_view_mode_button(_catalog_view_button, VIEW_CATALOG, 86.0 if narrow else 110.0, scale)
-	_configure_view_mode_button(_diagnostics_view_button, VIEW_DIAGNOSTICS, 86.0 if narrow else 116.0, scale)
 	_argument_inputs.add_theme_constant_override("separation", int(round(4 * scale)))
 	_action_row.add_theme_constant_override("separation", int(round(6 * scale)))
 	_preview_margin.add_theme_constant_override("margin_left", int(round(10 * scale)))
@@ -951,28 +946,8 @@ func _configure_tree_columns(scale: float) -> void:
 	if _catalog_tree == null:
 		return
 	var available_width := max(size.x - TREE_HORIZONTAL_CHROME_WIDTH * scale, 240.0 * scale)
-	var meta_width := clamp(available_width * 0.28, TREE_META_MIN_WIDTH * scale, TREE_META_MAX_WIDTH * scale)
-	var text_width := clamp(available_width - meta_width, TREE_TEXT_MIN_WIDTH * scale, TREE_TEXT_MAX_WIDTH * scale)
+	var text_width := clamp(available_width, TREE_TEXT_MIN_WIDTH * scale, TREE_TEXT_MAX_WIDTH * scale)
 	_catalog_tree.set_column_custom_minimum_width(TREE_TEXT_COLUMN, int(round(text_width)))
-	_catalog_tree.set_column_custom_minimum_width(TREE_META_COLUMN, int(round(meta_width)))
-
-
-func _configure_view_mode_button(button: Button, view: String, min_width: float, scale: float) -> void:
-	if button == null:
-		return
-	button.custom_minimum_size.x = min_width * scale
-	button.tooltip_text = button.text if not button.text.strip_edges().is_empty() else view
-
-
-func _refresh_view_button_tooltips() -> void:
-	_configure_view_button_tooltip(_catalog_view_button, VIEW_CATALOG)
-	_configure_view_button_tooltip(_diagnostics_view_button, VIEW_DIAGNOSTICS)
-
-
-func _configure_view_button_tooltip(button: Button, view: String) -> void:
-	if button == null:
-		return
-	button.tooltip_text = button.text if not button.text.strip_edges().is_empty() else view
 
 
 func _apply_visual_style(_scale_value: float) -> void:
@@ -980,11 +955,10 @@ func _apply_visual_style(_scale_value: float) -> void:
 	for panel in [_header_card, _catalog_tree_panel, _preview_panel]:
 		if panel != null:
 			panel.add_theme_stylebox_override("panel", _make_framed_panel_style())
-	for label in [_header_title, _preview_title]:
+	for label in [_preview_title]:
 		if label != null:
 			label.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
 			label.remove_theme_font_size_override("font_size")
-	_header_description.add_theme_color_override("font_color", _get_description_text_color())
 	_header_counts.add_theme_color_override("font_color", _get_meta_text_color())
 	_preview_text.add_theme_color_override("font_color", _get_description_text_color())
 	end_bulk_theme_override()

@@ -33,16 +33,12 @@ class FakeLocalization extends RefCounted:
 		"mcp_catalog_preview_error": "Preview failed: %s",
 		"mcp_catalog_copy_preview": "Copy Preview",
 		"mcp_catalog_argument_placeholder": "Enter argument value",
-		"mcp_catalog_view_catalog": "Catalog",
-		"mcp_catalog_view_workflows": "Workflows",
-		"mcp_catalog_view_diagnostics": "Diagnostics",
 		"mcp_catalog_search_resources": "Search resources, templates, URIs, MIME types...",
 		"mcp_catalog_search_prompts": "Search prompts, workflows, arguments...",
 		"mcp_catalog_clear_arguments": "Clear",
 		"mcp_catalog_select_entry": "Select an entry",
 		"mcp_catalog_select_entry_hint": "Select a resource, template, or prompt to inspect protocol metadata and generate previews.",
 		"mcp_catalog_template_argument_placeholder": "Value for {%s}",
-		"mcp_catalog_diagnostics_section": "Diagnostics",
 		"mcp_catalog_resolved_uri": "Resolved URI",
 		"mcp_catalog_template_missing_arguments": "Template arguments required.",
 		"mcp_catalog_icon_status": "Icon",
@@ -118,8 +114,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Resources tab should expose a Tree plus detail/preview pane.")
 	if prompts_tab.find_child("CatalogTree", true, false) == null or prompts_tab.find_child("PreviewText", true, false) == null:
 		return _failure("Prompts tab should expose a Tree plus detail/preview pane.")
-	if not _button_pressed(resources_tab, "CatalogViewButton") or _button_pressed(resources_tab, "DiagnosticsViewButton"):
-		return _failure("MCP catalog tabs should default to the Catalog view.")
+	if _has_view_mode_controls(resources_tab):
+		return _failure("Resources tab should expose one tree interface without Catalog/Diagnostics view buttons.")
+	if _has_view_mode_controls(prompts_tab):
+		return _failure("Prompts tab should expose one tree interface without Workflows/Diagnostics view buttons.")
+	if (_tree(resources_tab) as Tree).columns != 1 or (_tree(prompts_tab) as Tree).columns != 1:
+		return _failure("Resources and Prompts tabs should use one visible tree column matching the Tools tree layout.")
 	if _line_edit(resources_tab, "CatalogSearchEdit").placeholder_text != "Search resources, templates, URIs, MIME types...":
 		return _failure("Resources tab should expose a localized resource search placeholder.")
 	if _line_edit(prompts_tab, "CatalogSearchEdit").placeholder_text != "Search prompts, workflows, arguments...":
@@ -193,14 +193,11 @@ func run_case(tree: SceneTree) -> Dictionary:
 	search.text = ""
 	search.emit_signal("text_changed", search.text)
 	await tree.process_frame
-	var diagnostics_button := _button(resources_tab, "DiagnosticsViewButton")
-	diagnostics_button.emit_signal("pressed")
-	await tree.process_frame
 	_select_entry(resources_tab, "resource", "godot-dotnet-mcp://state/editor")
 	await tree.process_frame
-	var diagnostics_text := _text_edit_text(resources_tab, "PreviewText")
-	if not diagnostics_text.contains("Source: resources/list") or not diagnostics_text.contains("Visibility: public") or not diagnostics_text.contains("Icon: rejected"):
-		return _failure("Resources Diagnostics view should expose source, visibility, and decoded icon status metadata.")
+	var metadata_text := _text_edit_text(resources_tab, "PreviewText")
+	if not metadata_text.contains("Source: resources/list") or not metadata_text.contains("Visibility: public") or not metadata_text.contains("Icon: rejected"):
+		return _failure("Resources detail pane should expose source, visibility, and decoded icon status metadata without a separate Diagnostics view.")
 
 	var model_with_preview := model.duplicate(true)
 	model_with_preview["mcp_catalog_preview"] = {
@@ -482,6 +479,13 @@ func _has_group_item(root: Node, group_id: String) -> bool:
 
 func _has_entry_item(root: Node, kind: String, id: String) -> bool:
 	return _find_entry_item(root, kind, id) != null
+
+
+func _has_view_mode_controls(root: Node) -> bool:
+	for name in ["ViewModeRow", "CatalogViewButton", "WorkflowsViewButton", "DiagnosticsViewButton"]:
+		if root.find_child(name, true, false) != null:
+			return true
+	return false
 
 
 func _find_group_item(root: Node, group_id: String) -> TreeItem:
