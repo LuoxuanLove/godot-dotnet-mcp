@@ -1,0 +1,20 @@
+tests/godot_plugin_harness_fixture/tests/mcp_catalog_tab_rendering_contract_test.gd
+  s_9214b0fc2ec5df::t_c57d8254e22271 117,119,484-488
+  s_9214b0fc2ec5df::t_2a6791b00b7a66 489-490
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c8aea2434f018067fc9b29047480553a3b4788a0",
+  "prompts": {},
+  "sessions": {
+    "s_9214b0fc2ec5df": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2c90-ab55-79a0-b70b-51d684f83e96",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
