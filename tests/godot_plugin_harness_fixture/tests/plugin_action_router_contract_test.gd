@@ -17,6 +17,7 @@ class FakeDock extends Control:
 	signal update_interaction_refresh_requested
 	signal update_check_requested
 	signal update_apply_requested
+	signal update_switch_requested(kind: String, target_ref: String, target_commit: String)
 	signal full_reload_requested
 	signal copy_requested(text: String, source: String)
 	signal mcp_catalog_preview_requested(kind: String, id: String, arguments: Dictionary)
@@ -37,6 +38,7 @@ class FakePlugin extends RefCounted:
 	var update_interaction_refresh_count := 0
 	var update_check_count := 0
 	var update_apply_count := 0
+	var update_switches: Array[Dictionary] = []
 	var full_reload_count := 0
 	var copy_events: Array[Dictionary] = []
 	var preview_events: Array[Dictionary] = []
@@ -62,6 +64,9 @@ class FakePlugin extends RefCounted:
 
 	func _on_update_sync_requested() -> void:
 		update_apply_count += 1
+
+	func _on_update_switch_requested(kind: String, target_ref: String, target_commit: String) -> void:
+		update_switches.append({"kind": kind, "ref": target_ref, "commit": target_commit})
 
 	func _on_full_reload_requested() -> void:
 		full_reload_count += 1
@@ -126,10 +131,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	_router.configure(_plugin, "RuntimeBridge", "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_bridge.gd")
 
 	var bindings = _coordinator.build_dock_signal_bindings(_router)
-	if bindings.size() != 31:
+	if bindings.size() != 32:
 		return _failure("PluginActionRouter should expose the full dock binding set.")
 	var binding_map := _map_bindings_by_signal(bindings)
-	for signal_name in ["current_tab_changed", "update_source_changed", "update_custom_branch_changed", "update_interaction_refresh_requested", "update_check_requested", "update_apply_requested", "full_reload_requested", "copy_requested", "mcp_catalog_preview_requested", "config_write_requested"]:
+	for signal_name in ["current_tab_changed", "update_source_changed", "update_custom_branch_changed", "update_interaction_refresh_requested", "update_check_requested", "update_apply_requested", "update_switch_requested", "full_reload_requested", "copy_requested", "mcp_catalog_preview_requested", "config_write_requested"]:
 		var binding: Dictionary = binding_map.get(signal_name, {})
 		var callable: Callable = binding.get("callable", Callable())
 		if not callable.is_valid():
@@ -143,6 +148,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		binding_map["update_interaction_refresh_requested"],
 		binding_map["update_check_requested"],
 		binding_map["update_apply_requested"],
+		binding_map["update_switch_requested"],
 		binding_map["full_reload_requested"],
 		binding_map["copy_requested"],
 		binding_map["mcp_catalog_preview_requested"]
@@ -172,6 +178,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	_dock.emit_signal("update_interaction_refresh_requested")
 	_dock.emit_signal("update_check_requested")
 	_dock.emit_signal("update_apply_requested")
+	_dock.emit_signal("update_switch_requested", "tag", "v2.0.0", "target-sha")
 	_dock.emit_signal("full_reload_requested")
 	_dock.emit_signal("copy_requested", "copy text", "clipboard")
 	_dock.emit_signal("mcp_catalog_preview_requested", "prompt", "godot.project_orientation", {"goal": "inspect"})
@@ -184,6 +191,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("PluginActionRouter should route update Settings interaction refresh requests to plugin handlers.")
 	if _plugin.update_check_count != 1 or _plugin.update_apply_count != 1:
 		return _failure("PluginActionRouter should route update discovery and sync requests to plugin handlers.")
+	if _plugin.update_switches.size() != 1 or str(_plugin.update_switches[0].get("kind", "")) != "tag" or str(_plugin.update_switches[0].get("ref", "")) != "v2.0.0" or str(_plugin.update_switches[0].get("commit", "")) != "target-sha":
+		return _failure("PluginActionRouter should route update table Switch requests to plugin handlers.")
 	if _plugin.full_reload_count != 1:
 		return _failure("PluginActionRouter should route full_reload_requested to the plugin UI reload handler.")
 	if _plugin.copy_events.size() != 1 or str(_plugin.copy_events[0].get("text", "")) != "copy text":

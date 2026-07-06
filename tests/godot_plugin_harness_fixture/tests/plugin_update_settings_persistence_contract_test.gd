@@ -18,6 +18,8 @@ func _mark_update_target_verified(probe, target_ref: String, target_commit: Stri
 	probe._state.update_compare_refresh_state = "idle"
 	probe._state.update_compare_target_ref = target_ref
 	probe._state.update_compare_target_commit = target_commit
+	probe._state.update_compare_ahead_by = 1
+	probe._state.update_compare_behind_by = 0
 	probe._state.update_compare_last_checked_unix = int(Time.get_unix_time_from_system())
 	probe._state.update_selection_refresh_pending = false
 	probe._state.update_selection_refresh_pending_ref = ""
@@ -27,7 +29,7 @@ class FocusRestoreProbePlugin extends PluginScript:
 	var discovery_request_count := 0
 	var request_parent := Node.new()
 
-	func _ensure_update_refs_discovery_requested(_force_refresh: bool = false) -> bool:
+	func _ensure_update_refs_discovery_requested(_force_refresh: bool = false, _trigger_source: String = "tool") -> bool:
 		discovery_request_count += 1
 		return true
 
@@ -36,7 +38,7 @@ class FocusRestoreProbePlugin extends PluginScript:
 
 
 class LoadingDiscoveryProbePlugin extends FocusRestoreProbePlugin:
-	func _ensure_update_refs_discovery_requested(_force_refresh: bool = false) -> bool:
+	func _ensure_update_refs_discovery_requested(_force_refresh: bool = false, _trigger_source: String = "tool") -> bool:
 		discovery_request_count += 1
 		_state.update_refs_state = "loading"
 		return true
@@ -51,7 +53,7 @@ class RefreshProbePlugin extends PluginScript:
 	func _get_update_request_parent() -> Node:
 		return request_parent
 
-	func _on_update_check_requested(background_refresh: bool = false) -> void:
+	func _on_update_check_requested(background_refresh: bool = false, _trigger_source: String = "manual") -> void:
 		discovery_request_count += 1
 		discovery_background_flags.append(background_refresh)
 		_update_refs_request_serial += 1
@@ -81,7 +83,7 @@ class RequestParentProbePlugin extends PluginScript:
 	var update_check_count := 0
 	var update_check_background_flags: Array[bool] = []
 
-	func _on_update_check_requested(background_refresh: bool = false) -> void:
+	func _on_update_check_requested(background_refresh: bool = false, _trigger_source: String = "manual") -> void:
 		update_check_count += 1
 		update_check_background_flags.append(background_refresh)
 
@@ -160,7 +162,7 @@ class PendingSyncProbePlugin extends SyncStartProbePlugin:
 	var refs_refresh_requests: Array[bool] = []
 	var dock_refresh_count := 0
 
-	func _on_update_check_requested(background_refresh: bool = false) -> void:
+	func _on_update_check_requested(background_refresh: bool = false, _trigger_source: String = "manual") -> void:
 		refs_refresh_requests.append(background_refresh)
 		_update_refs_request_serial += 1
 		if background_refresh:
@@ -203,7 +205,7 @@ class PendingSyncProbePlugin extends SyncStartProbePlugin:
 class ToolPreparedSyncProbePlugin extends PendingSyncProbePlugin:
 	var discovery_request_count := 0
 
-	func _on_update_check_requested(background_refresh: bool = false) -> void:
+	func _on_update_check_requested(background_refresh: bool = false, _trigger_source: String = "manual") -> void:
 		discovery_request_count += 1
 		_update_refs_request_serial += 1
 		_update_refs_discovery_loaded = false
@@ -213,12 +215,17 @@ class ToolPreparedSyncProbePlugin extends PendingSyncProbePlugin:
 			"branch_done": false,
 			"release_done": false,
 			"tag_done": false,
+			"branch_commits_done": false,
+			"branch_commits_branch": "dev",
 			"errors": [],
 			"branches": [],
 			"releases": [],
 			"stable_releases": [],
 			"tags": [],
-			"commits": {}
+			"commits": {},
+			"release_rows": [],
+			"tag_rows": [],
+			"branch_commit_rows": {}
 		}
 		_state.update_refs_state = "loading"
 		_state.update_refs_status = "Loading update refs."
@@ -300,10 +307,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	switch_probe._state.settings["update_source"] = "latest_stable"
 	switch_probe._state.settings["update_custom_branch"] = "fix/old"
 	switch_probe._on_update_source_changed("custom_branch")
-	if str(switch_probe._state.settings.get("update_source", "")) != "custom_branch" or str(switch_probe._state.settings.get("update_custom_branch", "")) != "dev":
+	if str(switch_probe._state.settings.get("update_source", "")) != "custom_branch" or str(switch_probe._state.settings.get("update_custom_branch", "")) != "fix/old":
 		switch_probe.free()
-		return _failure("plugin.gd should reset the selected custom branch to dev whenever custom branch mode is selected.")
+		return _failure("plugin.gd should preserve the selected custom branch when custom branch mode is selected.")
 	switch_probe.free()
+	var empty_branch_probe := PluginScript.new()
+	empty_branch_probe._state.settings["update_source"] = "latest_stable"
+	empty_branch_probe._state.settings["update_custom_branch"] = ""
+	empty_branch_probe._on_update_source_changed("custom_branch")
+	if str(empty_branch_probe._state.settings.get("update_source", "")) != "custom_branch" or str(empty_branch_probe._state.settings.get("update_custom_branch", "")) != "dev":
+		empty_branch_probe.free()
+		return _failure("plugin.gd should default an empty custom branch selection to dev.")
+	empty_branch_probe.free()
 	if saved_settings.has("update_ref_branches") or saved_settings.has("update_ref_releases") or saved_settings.has("update_refs_state"):
 		return _failure("plugin.gd should not persist transient discovered update refs in settings.")
 
@@ -474,13 +489,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	branch_without_refs_probe._state.update_refs_state = "idle"
 	branch_without_refs_probe._update_refs_discovery_loaded = false
 	var branch_without_refs_result: Dictionary = branch_without_refs_probe.start_plugin_update_sync_from_tools()
-	if not bool(branch_without_refs_result.get("accepted", false)) or branch_without_refs_probe.archive_requests.size() != 1 or branch_without_refs_probe._update_sync_after_refs_discovery_pending or str(branch_without_refs_probe._state.update_sync_state) != "loading":
+	if bool(branch_without_refs_result.get("accepted", false)) or bool(branch_without_refs_result.get("loading", true)) or branch_without_refs_probe.archive_requests.size() != 0 or branch_without_refs_probe._update_sync_after_refs_discovery_pending or str(branch_without_refs_probe._state.update_sync_state) != "error":
 		branch_without_refs_probe.free()
-		return _failure("plugin.gd should continue custom-branch sync without hidden refs discovery when refs have not been manually loaded.")
-	var branch_without_refs_target: Dictionary = (branch_without_refs_probe.archive_requests[0] as Dictionary).get("target", {})
-	if str(branch_without_refs_target.get("kind", "")) != "branch" or str(branch_without_refs_target.get("ref", "")) != "feature/no-refs" or not str(branch_without_refs_target.get("commit", "")).is_empty():
+		return _failure("plugin.gd tool update sync should require a manually refreshed refs cache before one-click branch sync.")
+	if str(branch_without_refs_result.get("message", "")).strip_edges().is_empty() or str(branch_without_refs_result.get("message", "")) != str(branch_without_refs_probe._state.update_sync_error):
 		branch_without_refs_probe.free()
-		return _failure("plugin.gd should let branch sync resolve commit metadata during archive sync when refs are not loaded.")
+		return _failure("plugin.gd tool update sync should explain that the version list must be refreshed before one-click sync.")
 	branch_without_refs_probe.free()
 	var prepared_sync_probe := ToolPreparedSyncProbePlugin.new()
 	prepared_sync_probe._state.settings["update_source"] = "latest_stable"
@@ -491,20 +505,24 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	prepared_sync_probe._update_refs_pending["branch_done"] = true
 	prepared_sync_probe._update_refs_pending["release_done"] = true
 	prepared_sync_probe._update_refs_pending["tag_done"] = true
+	prepared_sync_probe._update_refs_pending["branch_commits_done"] = true
 	prepared_sync_probe._update_refs_pending["releases"] = ["v2.0.0"]
 	prepared_sync_probe._update_refs_pending["stable_releases"] = ["v2.0.0"]
 	prepared_sync_probe._update_refs_pending["tags"] = ["v2.0.0"]
 	prepared_sync_probe._update_refs_pending["commits"] = {"v2.0.0": "tag-sha"}
 	prepared_sync_probe._finalize_update_refs_discovery_if_ready(prepared_sync_probe._update_refs_request_serial)
-	if prepared_sync_probe.archive_requests.size() != 0 or prepared_sync_probe.compare_requests.size() != 1 or prepared_sync_probe._update_sync_after_refs_discovery_pending:
+	if prepared_sync_probe.archive_requests.size() != 0 or prepared_sync_probe.compare_requests.size() != 0 or prepared_sync_probe._update_sync_after_refs_discovery_pending:
 		prepared_sync_probe.free()
-		return _failure("plugin.gd explicit update ref discovery should verify the discovered release target without queuing sync.")
+		return _failure("plugin.gd explicit update ref discovery should refresh cached refs without hidden compare or queued sync.")
+	var prepared_start_result: Dictionary = prepared_sync_probe.start_plugin_update_sync_from_tools()
+	if not bool(prepared_start_result.get("accepted", false)) or not bool(prepared_start_result.get("loading", false)) or prepared_sync_probe.archive_requests.size() != 0 or prepared_sync_probe.compare_requests.size() != 1 or not prepared_sync_probe._update_sync_after_refs_discovery_pending:
+		prepared_sync_probe.free()
+		return _failure("plugin.gd tool update sync should verify cached release refs before starting archive sync.")
 	var prepared_compare_body := JSON.stringify({"ahead_by": 1, "behind_by": 0}).to_utf8_buffer()
 	prepared_sync_probe._on_update_compare_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), prepared_compare_body, "current-sync-sha", "tag-sha", prepared_sync_probe._update_compare_request_serial)
-	var prepared_start_result: Dictionary = prepared_sync_probe.start_plugin_update_sync_from_tools()
 	if prepared_sync_probe.archive_requests.size() != 1:
 		prepared_sync_probe.free()
-		return _failure("plugin.gd tool update sync should start after manual release refs and compare are verified.")
+		return _failure("plugin.gd tool update sync should start after release refs and compare are verified.")
 	var prepared_target: Dictionary = (prepared_sync_probe.archive_requests[0] as Dictionary).get("target", {})
 	if str(prepared_target.get("kind", "")) != "tag" or str(prepared_target.get("ref", "")) != "v2.0.0" or str(prepared_target.get("commit", "")) != "tag-sha":
 		prepared_sync_probe.free()
@@ -541,6 +559,26 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("plugin.gd should route Dock and tool update sync through the same resolved target.")
 	dock_sync_probe.free()
 	tool_sync_probe.free()
+	var guarded_scenarios := [
+		{"label": "already latest", "ahead": 0, "behind": 0, "message": "latest"},
+		{"label": "rollback", "ahead": 0, "behind": 1, "message": "roll back"},
+		{"label": "divergent", "ahead": 1, "behind": 1, "message": "divergent"}
+	]
+	for scenario in guarded_scenarios:
+		var guard_probe := SyncStartProbePlugin.new()
+		guard_probe._state.settings["update_source"] = "custom_branch"
+		guard_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
+		_mark_update_target_verified(guard_probe, "refactor/v2.0.0")
+		guard_probe._state.update_compare_ahead_by = int(scenario.get("ahead", 0))
+		guard_probe._state.update_compare_behind_by = int(scenario.get("behind", 0))
+		var guard_result: Dictionary = guard_probe.start_plugin_update_sync_from_tools()
+		if bool(guard_result.get("accepted", false)) or bool(guard_result.get("loading", true)) or guard_probe.archive_requests.size() != 0 or str(guard_probe._state.update_sync_state) != "error":
+			guard_probe.free()
+			return _failure("plugin.gd tool update sync should block one-click %s targets before archive sync." % str(scenario.get("label", "")))
+		if str(guard_result.get("message", "")).strip_edges().is_empty() or str(guard_result.get("message", "")) != str(guard_probe._state.update_sync_error):
+			guard_probe.free()
+			return _failure("plugin.gd tool update sync should explain the blocked one-click %s target." % str(scenario.get("label", "")))
+		guard_probe.free()
 
 	var stale_selection_probe := PendingSyncProbePlugin.new()
 	stale_selection_probe._state.settings["update_source"] = "custom_branch"
@@ -603,6 +641,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	refs_error_probe._state.update_compare_last_checked_unix = int(Time.get_unix_time_from_system())
 	refs_error_probe._state.update_compare_target_ref = "feature/refs-error"
 	refs_error_probe._state.update_compare_target_commit = "target-sha"
+	refs_error_probe._state.update_compare_ahead_by = 1
+	refs_error_probe._state.update_compare_behind_by = 0
 	refs_error_probe._on_update_sync_requested()
 	if refs_error_probe.archive_requests.size() != 1 or refs_error_probe._update_sync_after_refs_discovery_pending or not refs_error_probe.refs_refresh_requests.is_empty() or str(refs_error_probe._state.update_refs_refresh_state) != "error":
 		refs_error_probe.free()
@@ -633,12 +673,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"branch_done": true,
 		"release_done": true,
 		"tag_done": true,
+		"branch_commits_done": true,
+		"branch_commits_branch": "feature/pending-refs",
 		"errors": [],
 		"branches": ["feature/pending-refs"],
 		"releases": [],
 		"stable_releases": [],
 		"tags": [],
-		"commits": {"feature/pending-refs": "new-sha"}
+		"commits": {"feature/pending-refs": "new-sha"},
+		"release_rows": [],
+		"tag_rows": [],
+		"branch_commit_rows": {}
 	}
 	pending_refs_probe._finalize_update_refs_discovery_if_ready(41)
 	if pending_refs_probe.compare_requests.size() != 1 or pending_refs_probe.archive_requests.size() != 0 or not pending_refs_probe._update_sync_after_refs_discovery_pending:
@@ -889,12 +934,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"branch_done": true,
 		"release_done": true,
 		"tag_done": true,
+		"branch_commits_done": true,
+		"branch_commits_branch": "refactor/v2.0.0",
 		"errors": [],
 		"branches": ["refactor/v2.0.0"],
 		"releases": [],
 		"stable_releases": [],
 		"tags": [],
-		"commits": {"refactor/v2.0.0": "target-sha"}
+		"commits": {"refactor/v2.0.0": "target-sha"},
+		"release_rows": [],
+		"tag_rows": [],
+		"branch_commit_rows": {}
 	}
 	refs_completion_compare_probe._finalize_update_refs_discovery_if_ready(1)
 	if not refs_completion_compare_probe.compare_requests.is_empty() or refs_completion_compare_probe._update_compare_request_serial != 5 or refs_completion_compare_probe._state.update_compare_state != "loading":
@@ -908,7 +958,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	foreground_refs_probe._state.update_refs_refresh_serial = 1
 	foreground_refs_probe._update_refs_background_serials[1] = true
 	foreground_refs_probe._on_update_check_requested(false)
-	if foreground_refs_probe._state.update_refs_refresh_state != "idle" or foreground_refs_probe._state.update_refs_refresh_serial != foreground_refs_probe._update_refs_request_serial or not foreground_refs_probe._update_refs_background_serials.is_empty() or foreground_refs_probe.refs_requests.size() != 3:
+	if foreground_refs_probe._state.update_refs_refresh_state != "idle" or foreground_refs_probe._state.update_refs_refresh_serial != foreground_refs_probe._update_refs_request_serial or not foreground_refs_probe._update_refs_background_serials.is_empty() or foreground_refs_probe.refs_requests.size() != 4:
 		foreground_refs_probe.free()
 		return _failure("plugin.gd should clear stale background refs refresh state when a foreground refs discovery supersedes it.")
 	foreground_refs_probe.free()
@@ -927,12 +977,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"branch_done": true,
 		"release_done": true,
 		"tag_done": true,
+		"branch_commits_done": true,
+		"branch_commits_branch": "dev",
 		"errors": ["network unavailable"],
 		"branches": empty_string_array,
 		"releases": empty_string_array,
 		"stable_releases": empty_string_array,
 		"tags": empty_string_array,
-		"commits": {}
+		"commits": {},
+		"release_rows": [],
+		"tag_rows": [],
+		"branch_commit_rows": {}
 	}
 	background_failure_probe._finalize_update_refs_discovery_if_ready(1)
 	if background_failure_probe._state.update_refs_state != "success" or background_failure_probe._state.update_ref_branches != old_branches or str(background_failure_probe._state.update_ref_commits.get("old/branch", "")) != "old-sha" or background_failure_probe._state.update_refs_refresh_state != "error" or background_failure_probe._state.update_refs_last_checked_unix != 100:
@@ -952,12 +1007,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"branch_done": true,
 		"release_done": true,
 		"tag_done": true,
+		"branch_commits_done": true,
+		"branch_commits_branch": "refactor/v2.0.0",
 		"errors": [],
 		"branches": target_branches,
 		"releases": empty_string_array,
 		"stable_releases": empty_string_array,
 		"tags": empty_string_array,
-		"commits": {"refactor/v2.0.0": "target-sha"}
+		"commits": {"refactor/v2.0.0": "target-sha"},
+		"release_rows": [],
+		"tag_rows": [],
+		"branch_commit_rows": {}
 	}
 	background_success_probe._finalize_update_refs_discovery_if_ready(1)
 	if background_success_probe._state.update_refs_state != "success" or background_success_probe._state.update_refs_refresh_state != "success" or background_success_probe._state.update_ref_branches != target_branches or str(background_success_probe._state.update_ref_commits.get("refactor/v2.0.0", "")) != "target-sha" or not background_success_probe._update_refs_discovery_loaded:

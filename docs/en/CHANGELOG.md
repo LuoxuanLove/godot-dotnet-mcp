@@ -6,7 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Changed
+
+- Reworked the Settings update area into an integrated version manager with stable/development channels, cached release/tag and branch commit tables, row-level Switch actions, and one-click update guards that refuse rollback or divergent targets unless the user switches manually.
+
+### Fixed
+
+- Limited GitHub update-list refreshes to plugin startup, the explicit Refresh List button, and explicit MCP refresh tools while exposing refresh audit and rate-limit details in Settings.
 
 ## [2.0.0] - 2026-07-04
 

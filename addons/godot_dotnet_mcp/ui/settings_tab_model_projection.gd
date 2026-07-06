@@ -7,6 +7,7 @@ const DEFAULT_LOG_LEVEL := "info"
 const DEFAULT_LANGUAGE := "en"
 const DEFAULT_UPDATE_SOURCE := "latest_stable"
 const DEFAULT_UPDATE_BRANCH := "dev"
+const UPDATE_REPO_URL := "https://github.com/LuoxuanLove/godot-dotnet-mcp"
 
 
 func project(model: Dictionary) -> Dictionary:
@@ -28,9 +29,17 @@ func project(model: Dictionary) -> Dictionary:
 		},
 		"updates": {
 			"source": str(update_settings.get("source", DEFAULT_UPDATE_SOURCE)),
+			"active_channel": _resolve_update_channel(update_settings),
 			"custom_branch": str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH)),
 			"release_tag": str(update_settings.get("release_tag", "")),
 			"show_branch_row": str(update_settings.get("source", DEFAULT_UPDATE_SOURCE)) == "custom_branch",
+			"remote_url": UPDATE_REPO_URL,
+			"current_branch": _resolve_current_branch(model, update_settings),
+			"current_version": _resolve_current_version(model, freshness, localization),
+			"current_commit": _read_freshness_value(freshness, ["sync", "source_git_commit"]),
+			"version_rows": _build_version_rows(model, update_settings, localization),
+			"empty_text": _build_update_table_empty_text(model, update_settings, localization),
+			"audit_text": _build_update_audit_text(model, localization),
 			"status_text": _build_update_status_text(model, update_settings, localization),
 			"progress": _project_update_sync_progress(model),
 			"progress_visible": str(model.get("update_sync_state", "idle")) == "loading",
@@ -40,6 +49,10 @@ func project(model: Dictionary) -> Dictionary:
 			"actions_enabled": _is_update_sync_enabled(model, update_settings)
 		}
 	}
+
+
+func _resolve_update_channel(update_settings: Dictionary) -> String:
+	return "development" if str(update_settings.get("source", DEFAULT_UPDATE_SOURCE)) == "custom_branch" else "stable"
 
 
 func _project_update_settings(settings: Dictionary) -> Dictionary:
@@ -93,6 +106,117 @@ func _project_ref_options(values: Array[String], current_value: String, localiza
 			text = _get_localized_text(localization, empty_key, "No discovered refs yet")
 		options.append({"text": text, "value": value, "selected": value == current_value})
 	return options
+
+
+func _resolve_current_branch(model: Dictionary, update_settings: Dictionary) -> String:
+	var freshness: Dictionary = model.get("plugin_freshness", {})
+	var sync_ref := _read_freshness_value(freshness, ["sync", "source_ref"])
+	if not sync_ref.is_empty():
+		return sync_ref
+	return str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH))
+
+
+func _build_version_rows(model: Dictionary, update_settings: Dictionary, localization) -> Array:
+	if _resolve_update_channel(update_settings) == "development":
+		return _build_development_rows(model, update_settings, localization)
+	return _build_stable_rows(model, localization)
+
+
+func _build_stable_rows(model: Dictionary, localization) -> Array:
+	var current_commit := _read_freshness_value(model.get("plugin_freshness", {}), ["sync", "source_git_commit"])
+	var current_ref := _read_freshness_value(model.get("plugin_freshness", {}), ["sync", "source_ref"])
+	var rows: Array = []
+	var source_rows = model.get("update_refs_release_rows", [])
+	if source_rows is Array and not (source_rows as Array).is_empty():
+		for raw_row in source_rows as Array:
+			if raw_row is Dictionary:
+				rows.append(_build_version_row(raw_row as Dictionary, current_ref, current_commit, localization))
+		return rows
+	var commits: Dictionary = model.get("update_refs_commits", {})
+	for release_ref in _normalize_string_array(model.get("update_refs_releases", [])):
+		rows.append(_build_version_row({
+			"kind": "tag",
+			"ref": release_ref,
+			"commit": str(commits.get(release_ref, "")),
+			"title": release_ref,
+			"date": ""
+		}, current_ref, current_commit, localization))
+	return rows
+
+
+func _build_development_rows(model: Dictionary, update_settings: Dictionary, localization) -> Array:
+	var branch := str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH)).strip_edges()
+	var current_commit := _read_freshness_value(model.get("plugin_freshness", {}), ["sync", "source_git_commit"])
+	var current_ref := _read_freshness_value(model.get("plugin_freshness", {}), ["sync", "source_ref"])
+	var branch_rows: Dictionary = model.get("update_refs_branch_commit_rows", {})
+	var source_rows = branch_rows.get(branch, []) if branch_rows is Dictionary else []
+	var rows: Array = []
+	if source_rows is Array:
+		for raw_row in source_rows as Array:
+			if raw_row is Dictionary:
+				rows.append(_build_version_row(raw_row as Dictionary, current_ref, current_commit, localization))
+	if not rows.is_empty():
+		return rows
+	var commits: Dictionary = model.get("update_refs_commits", {})
+	var branch_commit := str(commits.get(branch, "")).strip_edges()
+	if not branch_commit.is_empty():
+		rows.append(_build_version_row({
+			"kind": "branch",
+			"ref": branch,
+			"commit": branch_commit,
+			"title": _get_localized_text(localization, "settings_update_branch_head", "branch head"),
+			"date": ""
+		}, current_ref, current_commit, localization))
+	return rows
+
+
+func _build_version_row(raw_row: Dictionary, current_ref: String, current_commit: String, localization) -> Dictionary:
+	var target_ref := str(raw_row.get("ref", "")).strip_edges()
+	var target_commit := str(raw_row.get("commit", "")).strip_edges()
+	var kind := str(raw_row.get("kind", "branch")).strip_edges()
+	var display_id := _short_commit(target_commit, localization) if kind == "branch" and not target_commit.is_empty() else target_ref
+	var is_current := (not target_commit.is_empty() and target_commit == current_commit) or (target_commit.is_empty() and not target_ref.is_empty() and target_ref == current_ref)
+	return {
+		"kind": kind,
+		"ref": target_ref,
+		"commit": target_commit,
+		"id": display_id,
+		"title": str(raw_row.get("title", target_ref)).strip_edges(),
+		"date": _format_update_row_date(str(raw_row.get("date", "")).strip_edges()),
+		"current": is_current,
+		"switch_enabled": not target_ref.is_empty()
+	}
+
+
+func _format_update_row_date(date_text: String) -> String:
+	if date_text.is_empty():
+		return ""
+	return date_text.replace("T", " ").replace("Z", "")
+
+
+func _build_update_table_empty_text(model: Dictionary, update_settings: Dictionary, localization) -> String:
+	if str(model.get("update_refs_state", "idle")) == "loading":
+		return _get_localized_text(localization, "settings_update_refs_loading", "Loading update refs.")
+	if _resolve_update_channel(update_settings) == "development":
+		return _get_localized_text(localization, "settings_update_branch_unavailable", "Click Refresh List to load commits for the selected branch.")
+	return _get_localized_text(localization, "settings_update_release_unavailable", "Click Refresh List to load stable releases and tags.")
+
+
+func _build_update_audit_text(model: Dictionary, localization) -> String:
+	var trigger := str(model.get("update_refs_last_trigger", "")).strip_edges()
+	var checked_unix := int(model.get("update_refs_last_checked_unix", 0))
+	var status := int(model.get("update_refs_last_http_status", 0))
+	var reset_unix := int(model.get("update_refs_rate_limit_reset_unix", 0))
+	var parts: Array[String] = []
+	if not trigger.is_empty():
+		parts.append("%s %s" % [_get_localized_text(localization, "settings_update_last_trigger", "Last trigger:"), trigger])
+	if checked_unix > 0:
+		parts.append("%s %s" % [_get_localized_text(localization, "settings_update_last_refresh", "Last refresh:"), Time.get_datetime_string_from_unix_time(checked_unix, true)])
+	if status > 0:
+		parts.append("HTTP %d" % status)
+	if reset_unix > 0 and str(model.get("update_refs_rate_limit_remaining", "")) == "0":
+		parts.append("%s %s" % [_get_localized_text(localization, "settings_update_rate_limit_reset", "Rate limit resets:"), Time.get_datetime_string_from_unix_time(reset_unix, true)])
+	return "  |  ".join(parts)
 
 
 func _build_update_status_text(model: Dictionary, update_settings: Dictionary, localization) -> String:
