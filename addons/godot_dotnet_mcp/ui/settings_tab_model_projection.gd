@@ -164,7 +164,7 @@ func _build_development_rows(model: Dictionary, update_settings: Dictionary, loc
 			"kind": "branch",
 			"ref": branch,
 			"commit": branch_commit,
-			"title": "branch head",
+			"title": _get_localized_text(localization, "settings_update_branch_head", "branch head"),
 			"date": ""
 		}, current_ref, current_commit, localization))
 	return rows

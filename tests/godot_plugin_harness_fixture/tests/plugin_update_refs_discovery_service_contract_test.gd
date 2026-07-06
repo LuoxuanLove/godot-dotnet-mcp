@@ -51,11 +51,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	]))
 	pending = service.append_names(pending, "tags", ["v1.3.0", "v2.0.0"])
 	pending = service.append_tag_rows(pending, [
-		{"name": "v1.3.0", "commit": {"sha": "tag-sha"}}
+		{"name": "v1.3.0", "commit": {"sha": "tag-sha"}},
+		{"name": "v2.0.0", "commit": {"sha": "tag-v2-sha"}}
 	])
 	pending = service.append_commits(pending, [
-		{"tag_name": "v2.0.0", "target_commitish": "release-sha"}
-	], "tag_name")
+		{"name": "v2.0.0", "commit": {"sha": "tag-v2-sha"}}
+	], "name")
 	pending = service.append_branch_commit_rows(pending, "refactor/v2.0.0", [
 		{"sha": "branch-history-sha", "commit": {"message": "History commit\nbody", "author": {"date": "2026-07-03T12:00:00Z"}}}
 	])
@@ -64,8 +65,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if snapshot.get("branches", []) != ["dev", "refactor/v2.0.0"]:
 		return _failure("PluginUpdateRefsDiscoveryService should keep unique branch order.", snapshot)
 	var commits: Dictionary = snapshot.get("commits", {})
-	if str(commits.get("dev", "")) != "dev-sha" or str(commits.get("v2.0.0", "")) != "release-sha":
-		return _failure("PluginUpdateRefsDiscoveryService should collect branch and release commits.", snapshot)
+	if str(commits.get("dev", "")) != "dev-sha" or str(commits.get("v2.0.0", "")) != "tag-v2-sha":
+		return _failure("PluginUpdateRefsDiscoveryService should collect branch commits and tag SHAs.", snapshot)
 	if snapshot.get("releases", []) != ["v2.0.0", "v2.1.0-preview", "v1.3.0"]:
 		return _failure("PluginUpdateRefsDiscoveryService should combine releases and tags without duplicates.", snapshot)
 	if str(snapshot.get("latest_stable_release", "")) != "v2.0.0" or str(snapshot.get("latest_release", "")) != "v2.0.0":
@@ -75,6 +76,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var release_rows: Array = snapshot.get("release_rows", [])
 	if release_rows.size() != 3 or str((release_rows[0] as Dictionary).get("title", "")) != "Release 2.0.0" or str((release_rows[2] as Dictionary).get("ref", "")) != "v1.3.0":
 		return _failure("PluginUpdateRefsDiscoveryService should build version-management release/tag rows.", snapshot)
+	if str((release_rows[0] as Dictionary).get("commit", "")) != "tag-v2-sha":
+		return _failure("PluginUpdateRefsDiscoveryService should derive release row commits from the tags response.", snapshot)
 	var branch_commit_rows: Dictionary = snapshot.get("branch_commit_rows", {})
 	var branch_rows: Array = branch_commit_rows.get("refactor/v2.0.0", [])
 	if branch_rows.size() != 1 or str((branch_rows[0] as Dictionary).get("title", "")) != "History commit":

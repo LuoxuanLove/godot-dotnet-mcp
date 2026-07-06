@@ -98,6 +98,7 @@ var _update_refs_discovery_loaded := false
 var _update_refs_discovery_retry_pending := false
 var _update_refs_background_serials := {}
 var _startup_update_refs_refresh_requested := false
+var _startup_update_refs_refresh_attempts := 0
 var _update_sync_after_refs_discovery_pending := false
 var _update_sync_pending_target_ref := ""
 var _update_sync_pending_target_kind := ""
@@ -244,15 +245,26 @@ func _defer_saved_update_source_discovery_request() -> void:
 func _request_startup_update_refs_refresh() -> void:
 	if _startup_update_refs_refresh_requested:
 		return
-	_startup_update_refs_refresh_requested = true
 	if _state == null:
+		_reschedule_startup_update_refs_refresh()
 		return
 	if str(_state.update_refs_state) == "loading" or str(_state.update_sync_state) == "loading":
+		_reschedule_startup_update_refs_refresh()
 		return
 	if _get_update_request_parent() == null:
-		_record_update_refs_audit("startup", "skipped", 0, "No active update refs request host.", {})
+		if not _reschedule_startup_update_refs_refresh():
+			_record_update_refs_audit("startup", "skipped", 0, "No active update refs request host.", {})
 		return
+	_startup_update_refs_refresh_requested = true
 	_on_update_check_requested(false, "startup")
+
+
+func _reschedule_startup_update_refs_refresh() -> bool:
+	_startup_update_refs_refresh_attempts += 1
+	if _startup_update_refs_refresh_attempts > 8:
+		return false
+	call_deferred("_request_startup_update_refs_refresh")
+	return true
 
 
 func _stop_user_tool_watch_service() -> void:
@@ -1693,7 +1705,6 @@ func _on_update_refs_request_completed(result: int, response_code: int, headers:
 		"releases":
 			_append_update_refs_pending_names("releases", _extract_update_ref_names(items, "tag_name"))
 			_append_update_refs_pending_names("stable_releases", _extract_update_stable_release_names(items))
-			_append_update_refs_pending_commits(items, "tag_name")
 			_append_update_refs_pending_release_rows(items)
 			if _request_next_update_refs_page_if_available(kind, headers, serial):
 				return
@@ -1768,7 +1779,7 @@ func _handle_update_refs_http_failure(kind: String, result: int, response_code: 
 
 
 func _handle_update_refs_parse_failure(kind: String, error: String, serial: int) -> void:
-	var message := "%s response parse failed: %s" % [kind.capitalize(), error]
+	var message := _get_update_localized_text("settings_update_parse_failure", "%s response parse failed: %s") % [kind.capitalize(), error]
 	_record_update_refs_audit(str(_state.update_refs_last_trigger), kind, int(_state.update_refs_last_http_status), message, {})
 	_mark_update_refs_request_failed(kind, message, serial)
 
@@ -1778,8 +1789,8 @@ func _format_update_http_failure(kind: String, result: int, response_code: int, 
 	if response_code == 403 and str(rate_limit.get("remaining", "")).strip_edges() == "0":
 		var reset_unix := int(rate_limit.get("reset_unix", 0))
 		var reset_text := Time.get_datetime_string_from_unix_time(reset_unix, true) if reset_unix > 0 else "unknown"
-		return "%s request failed: GitHub API rate limit reached; resets at %s UTC." % [kind.capitalize(), reset_text]
-	return "%s request failed with result %s and HTTP %s" % [kind.capitalize(), result, response_code]
+		return _get_update_localized_text("settings_update_rate_limit_failure", "%s request failed: GitHub API rate limit reached; resets at %s UTC.") % [kind.capitalize(), reset_text]
+	return _get_update_localized_text("settings_update_http_failure", "%s request failed with result %s and HTTP %s") % [kind.capitalize(), result, response_code]
 
 
 func _record_update_refs_http_status(kind: String, result: int, response_code: int, headers: PackedStringArray, message: String) -> void:
@@ -2161,7 +2172,7 @@ func _continue_pending_update_sync_after_refs_discovery() -> bool:
 
 func _get_one_click_cached_target_guard_message(target: Dictionary) -> String:
 	if _state == null:
-		return "Update target could not be verified."
+		return _get_update_localized_text("settings_update_verify_unavailable", "Update target could not be verified.")
 	if str(_state.update_refs_state) != "success" or not _update_refs_discovery_loaded:
 		return _get_update_localized_text("settings_update_refresh_required", "Refresh the version list before using one-click update.")
 	var target_kind := str(target.get("kind", "branch"))
@@ -2175,7 +2186,7 @@ func _get_one_click_cached_target_guard_message(target: Dictionary) -> String:
 
 func _get_one_click_update_guard_message() -> String:
 	if _state == null:
-		return "Update target could not be verified."
+		return _get_update_localized_text("settings_update_verify_unavailable", "Update target could not be verified.")
 	if str(_state.update_compare_state) != "success":
 		return _get_update_localized_text("settings_update_compare_required", "Update target could not be verified; use Switch for an explicit manual change.")
 	var target_ahead := int(_state.update_compare_ahead_by)
@@ -2194,6 +2205,13 @@ func _get_update_localized_text(key: String, fallback: String) -> String:
 	if text.is_empty() or text == key:
 		return fallback
 	return text
+
+
+func _set_update_sync_guard_error(message: String) -> void:
+	if _state == null:
+		return
+	_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_sync_failure(message))
+	_refresh_dock()
 
 
 func _refresh_update_compare_for_current_target(background_refresh: bool = false) -> bool:
@@ -2461,6 +2479,35 @@ func start_plugin_update_sync_from_tools() -> Dictionary:
 			"data": unavailable_data,
 			"message": "Plugin update sync request host is unavailable"
 		})
+	var cached_guard_message := _get_one_click_cached_target_guard_message(target)
+	if not cached_guard_message.is_empty():
+		_set_update_sync_guard_error(cached_guard_message)
+		var cached_guard_data := _build_plugin_update_status_snapshot()
+		cached_guard_data["accepted"] = false
+		cached_guard_data["action_status"] = str(_state.update_sync_state)
+		return _build_plugin_update_tool_response({
+			"success": true,
+			"accepted": false,
+			"loading": false,
+			"status": str(_state.update_sync_state),
+			"data": cached_guard_data,
+			"message": cached_guard_message
+		})
+	if _is_update_sync_target_verified(target, true):
+		var update_guard_message := _get_one_click_update_guard_message()
+		if not update_guard_message.is_empty():
+			_set_update_sync_guard_error(update_guard_message)
+			var update_guard_data := _build_plugin_update_status_snapshot()
+			update_guard_data["accepted"] = false
+			update_guard_data["action_status"] = str(_state.update_sync_state)
+			return _build_plugin_update_tool_response({
+				"success": true,
+				"accepted": false,
+				"loading": false,
+				"status": str(_state.update_sync_state),
+				"data": update_guard_data,
+				"message": update_guard_message
+			})
 	if _should_queue_update_sync_for_verification(target):
 		_prepare_pending_update_sync(target)
 		_ensure_pending_update_sync_verification()

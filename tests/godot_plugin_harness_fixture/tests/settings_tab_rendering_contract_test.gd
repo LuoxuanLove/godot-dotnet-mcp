@@ -37,6 +37,7 @@ class FakeLocalization extends RefCounted:
 		"settings_update_sync_refreshing_editor": "Refreshing editor",
 		"settings_update_sync_success": "Synced",
 		"settings_update_sync_error": "Sync failed",
+		"settings_update_branch_head": "branch head",
 		"settings_update_source_latest_dev": "Latest dev",
 		"settings_update_source_custom_branch": "Custom branch",
 		"settings_update_source_latest_stable": "Latest stable release",
@@ -250,6 +251,34 @@ func run_case(tree: SceneTree) -> Dictionary:
 	apply_button.emit_signal("pressed")
 	if recorder.update_source != "custom_branch" or recorder.update_custom_branch != "feature/settings" or recorder.update_interaction_refresh_count != 0 or recorder.update_check_count != 1 or recorder.update_apply_count != 1 or recorder.update_switch_kind.is_empty() or recorder.update_switch_ref.is_empty():
 		return _failure("Settings tab should emit Check only from the explicit update refresh button and Switch only from table rows.")
+
+	var previous_switch_ref: String = str(recorder.update_switch_ref)
+	_instance.apply_model({
+		"localization": FakeLocalization.new(),
+		"editor_scale": 1.0,
+		"settings": {
+			"port": 4102,
+			"update_source": "custom_branch",
+			"update_custom_branch": "dev"
+		},
+		"current_log_level": "error",
+		"current_language": "zh_CN",
+		"log_levels": ["debug", "info", "warning", "error"],
+		"update_refs_branches": ["dev"],
+		"update_refs_state": "success",
+		"update_refs_branch_commit_rows": {
+			"dev": [
+				{"kind": "branch", "ref": "", "commit": "333333333333", "title": "Missing target ref", "date": "2026-07-06T12:00:00Z"}
+			]
+		},
+		"plugin_version": "1.0.1",
+		"plugin_freshness": {}
+	})
+	await tree.process_frame
+	var disabled_row := version_tree.get_root().get_first_child()
+	version_tree.emit_signal("button_clicked", disabled_row, 4, 1, MOUSE_BUTTON_LEFT)
+	if recorder.update_switch_ref != previous_switch_ref:
+		return _failure("Settings tab should ignore disabled version rows instead of emitting an empty manual switch target.")
 
 	var branch_values: Array[String] = ["dev"]
 	for index in range(24):

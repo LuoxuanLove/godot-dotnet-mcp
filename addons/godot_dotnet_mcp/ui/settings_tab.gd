@@ -418,6 +418,10 @@ func _emit_version_switch(item: TreeItem) -> void:
 	if not (metadata is Dictionary):
 		return
 	var row := metadata as Dictionary
+	if not bool(row.get("switch_enabled", true)):
+		return
+	if str(row.get("ref", "")).strip_edges().is_empty():
+		return
 	update_switch_requested.emit(str(row.get("kind", "branch")), str(row.get("ref", "")), str(row.get("commit", "")))
 
 

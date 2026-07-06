@@ -489,13 +489,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	branch_without_refs_probe._state.update_refs_state = "idle"
 	branch_without_refs_probe._update_refs_discovery_loaded = false
 	var branch_without_refs_result: Dictionary = branch_without_refs_probe.start_plugin_update_sync_from_tools()
-	if not bool(branch_without_refs_result.get("accepted", false)) or branch_without_refs_probe.archive_requests.size() != 1 or branch_without_refs_probe._update_sync_after_refs_discovery_pending or str(branch_without_refs_probe._state.update_sync_state) != "loading":
+	if bool(branch_without_refs_result.get("accepted", false)) or bool(branch_without_refs_result.get("loading", true)) or branch_without_refs_probe.archive_requests.size() != 0 or branch_without_refs_probe._update_sync_after_refs_discovery_pending or str(branch_without_refs_probe._state.update_sync_state) != "error":
 		branch_without_refs_probe.free()
-		return _failure("plugin.gd should continue custom-branch sync without hidden refs discovery when refs have not been manually loaded.")
-	var branch_without_refs_target: Dictionary = (branch_without_refs_probe.archive_requests[0] as Dictionary).get("target", {})
-	if str(branch_without_refs_target.get("kind", "")) != "branch" or str(branch_without_refs_target.get("ref", "")) != "feature/no-refs" or not str(branch_without_refs_target.get("commit", "")).is_empty():
+		return _failure("plugin.gd tool update sync should require a manually refreshed refs cache before one-click branch sync.")
+	if str(branch_without_refs_result.get("message", "")).strip_edges().is_empty() or str(branch_without_refs_result.get("message", "")) != str(branch_without_refs_probe._state.update_sync_error):
 		branch_without_refs_probe.free()
-		return _failure("plugin.gd should let branch sync resolve commit metadata during archive sync when refs are not loaded.")
+		return _failure("plugin.gd tool update sync should explain that the version list must be refreshed before one-click sync.")
 	branch_without_refs_probe.free()
 	var prepared_sync_probe := ToolPreparedSyncProbePlugin.new()
 	prepared_sync_probe._state.settings["update_source"] = "latest_stable"
@@ -560,6 +559,26 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("plugin.gd should route Dock and tool update sync through the same resolved target.")
 	dock_sync_probe.free()
 	tool_sync_probe.free()
+	var guarded_scenarios := [
+		{"label": "already latest", "ahead": 0, "behind": 0, "message": "latest"},
+		{"label": "rollback", "ahead": 0, "behind": 1, "message": "roll back"},
+		{"label": "divergent", "ahead": 1, "behind": 1, "message": "divergent"}
+	]
+	for scenario in guarded_scenarios:
+		var guard_probe := SyncStartProbePlugin.new()
+		guard_probe._state.settings["update_source"] = "custom_branch"
+		guard_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
+		_mark_update_target_verified(guard_probe, "refactor/v2.0.0")
+		guard_probe._state.update_compare_ahead_by = int(scenario.get("ahead", 0))
+		guard_probe._state.update_compare_behind_by = int(scenario.get("behind", 0))
+		var guard_result: Dictionary = guard_probe.start_plugin_update_sync_from_tools()
+		if bool(guard_result.get("accepted", false)) or bool(guard_result.get("loading", true)) or guard_probe.archive_requests.size() != 0 or str(guard_probe._state.update_sync_state) != "error":
+			guard_probe.free()
+			return _failure("plugin.gd tool update sync should block one-click %s targets before archive sync." % str(scenario.get("label", "")))
+		if str(guard_result.get("message", "")).strip_edges().is_empty() or str(guard_result.get("message", "")) != str(guard_probe._state.update_sync_error):
+			guard_probe.free()
+			return _failure("plugin.gd tool update sync should explain the blocked one-click %s target." % str(scenario.get("label", "")))
+		guard_probe.free()
 
 	var stale_selection_probe := PendingSyncProbePlugin.new()
 	stale_selection_probe._state.settings["update_source"] = "custom_branch"

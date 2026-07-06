@@ -151,8 +151,8 @@ theme_override_constants/separation = 8
 unique_name_in_owner = true
 size_flags_horizontal = 3
 tab_count = 2
-tab_0/title = "Stable"
-tab_1/title = "Development"
+tab_0/title = ""
+tab_1/title = ""
 
 [node name="CheckButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateToolbar"]
 unique_name_in_owner = true

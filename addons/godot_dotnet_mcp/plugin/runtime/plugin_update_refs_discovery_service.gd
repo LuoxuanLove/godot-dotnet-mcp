@@ -66,7 +66,7 @@ func append_release_rows(pending: Dictionary, items: Array) -> Dictionary:
 		rows.append({
 			"kind": "tag",
 			"ref": tag,
-			"commit": extract_commit(item_dict),
+			"commit": "",
 			"title": _first_line(str(item_dict.get("name", tag))).strip_edges(),
 			"date": str(item_dict.get("published_at", item_dict.get("created_at", ""))).strip_edges(),
 			"stable": not bool(item_dict.get("prerelease", false))
