@@ -4,6 +4,11 @@ extends RefCounted
 
 const McpCatalogTabScene = preload("res://addons/godot_dotnet_mcp/ui/mcp_catalog_tab.tscn")
 
+const CTX_COPY_ENGLISH_ID := 1
+const CTX_PREVIEW := 2
+const CTX_CLEAR_ARGUMENTS := 3
+const CTX_COPY_PREVIEW := 4
+
 var _instances: Array = []
 
 
@@ -20,6 +25,10 @@ class FakeLocalization extends RefCounted:
 		"mcp_catalog_prompts": "Prompts",
 		"mcp_catalog_empty": "No protocol entries available.",
 		"mcp_catalog_copy_id": "Copy ID",
+		"tool_ctx_copy_localized_name": "Copy Localized Name",
+		"tool_ctx_copy_english_id": "Copy English ID",
+		"btn_expand_all": "Expand All",
+		"btn_collapse_all": "Collapse All",
 		"mcp_catalog_kind": "Kind",
 		"mcp_catalog_mime_type": "MIME",
 		"mcp_catalog_source": "Source",
@@ -118,6 +127,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Resources tab should expose one tree interface without Catalog/Diagnostics view buttons.")
 	if _has_view_mode_controls(prompts_tab):
 		return _failure("Prompts tab should expose one tree interface without Workflows/Diagnostics view buttons.")
+	if _has_standalone_action_buttons(resources_tab) or _has_standalone_action_buttons(prompts_tab):
+		return _failure("Resources and Prompts tabs should not render separate Copy/Preview action buttons; row actions should live in the Tree context menu.")
 	if (_tree(resources_tab) as Tree).columns != 1 or (_tree(prompts_tab) as Tree).columns != 1:
 		return _failure("Resources and Prompts tabs should use one visible tree column matching the Tools tree layout.")
 	if _line_edit(resources_tab, "CatalogSearchEdit").placeholder_text != "Search resources, templates, URIs, MIME types...":
@@ -142,29 +153,33 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Selecting a resource tree row should update the detail panel title.")
 	if not _text_edit_text(resources_tab, "PreviewText").contains("godot-dotnet-mcp://guides/index"):
 		return _failure("Resource detail panel should include the selected protocol URI.")
-	_button(resources_tab, "CopyIdButton").emit_signal("pressed")
+	if not _invoke_context_action(resources_tab, "resource", "godot-dotnet-mcp://guides/index", CTX_COPY_ENGLISH_ID):
+		return _failure("Resource rows should expose Copy ID through the Tree context menu.")
 	if recorder.copied_text != "godot-dotnet-mcp://guides/index" or recorder.copied_source != "Guide Index":
-		return _failure("Copy ID should emit the selected resource URI and display title.")
-	_button(resources_tab, "PreviewButton").emit_signal("pressed")
+		return _failure("Context-menu Copy ID should emit the selected resource URI and display title.")
+	if not _invoke_context_action(resources_tab, "resource", "godot-dotnet-mcp://guides/index", CTX_PREVIEW):
+		return _failure("Resource rows should expose Preview through the Tree context menu.")
 	if recorder.preview_kind != "resource" or recorder.preview_id != "godot-dotnet-mcp://guides/index":
-		return _failure("Resource preview should emit the selected resource kind and URI.")
+		return _failure("Context-menu Preview should emit the selected resource kind and URI.")
 
 	_select_entry(resources_tab, "template", "godot-dotnet-mcp://scene/{path}")
 	await tree.process_frame
 	var path_input := resources_tab.find_child("ArgumentInput_path", true, false) as LineEdit
 	if path_input == null:
 		return _failure("Resource template detail panel should expose input controls for URI placeholders.")
-	_button(resources_tab, "PreviewButton").emit_signal("pressed")
+	if not _invoke_context_action(resources_tab, "template", "godot-dotnet-mcp://scene/{path}", CTX_PREVIEW):
+		return _failure("Template rows should expose Preview through the Tree context menu.")
 	if recorder.preview_kind != "template" or recorder.preview_id != "godot-dotnet-mcp://scene/{path}" or not recorder.preview_arguments.is_empty():
-		return _failure("Template preview without arguments should still emit a template preview request for readable error feedback.")
+		return _failure("Context-menu template preview without arguments should still emit a preview request for readable error feedback.")
 	path_input.text = "tests/headless_suite_entry.tscn"
 	path_input.emit_signal("text_changed", path_input.text)
 	await tree.process_frame
 	if not _text_edit_text(resources_tab, "PreviewText").contains("godot-dotnet-mcp://scene/tests/headless_suite_entry.tscn"):
 		return _failure("Template detail panel should show the resolved URI after placeholder input.")
-	_button(resources_tab, "PreviewButton").emit_signal("pressed")
+	if not _invoke_context_action(resources_tab, "template", "godot-dotnet-mcp://scene/{path}", CTX_PREVIEW):
+		return _failure("Template rows should expose Preview through the Tree context menu after argument edits.")
 	if recorder.preview_kind != "template" or str(recorder.preview_arguments.get("path", "")) != "tests/headless_suite_entry.tscn":
-		return _failure("Template preview should emit placeholder argument values.")
+		return _failure("Context-menu template preview should emit placeholder argument values.")
 
 	_select_entry(prompts_tab, "prompt", "godot.project_orientation")
 	await tree.process_frame
@@ -173,13 +188,15 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Prompt detail panel should expose prompt argument inputs.")
 	goal_input.text = "understand project"
 	goal_input.emit_signal("text_changed", goal_input.text)
-	_button(prompts_tab, "PreviewButton").emit_signal("pressed")
+	if not _invoke_context_action(prompts_tab, "prompt", "godot.project_orientation", CTX_PREVIEW):
+		return _failure("Prompt rows should expose Preview through the Tree context menu.")
 	if recorder.preview_kind != "prompt" or recorder.preview_id != "godot.project_orientation" or str(recorder.preview_arguments.get("goal", "")) != "understand project":
-		return _failure("Prompt preview should emit current prompt argument values.")
-	_button(prompts_tab, "ClearArgumentsButton").emit_signal("pressed")
+		return _failure("Context-menu prompt preview should emit current prompt argument values.")
+	if not _invoke_context_action(prompts_tab, "prompt", "godot.project_orientation", CTX_CLEAR_ARGUMENTS):
+		return _failure("Prompt rows should expose argument clearing through the Tree context menu.")
 	await tree.process_frame
 	if str((prompts_tab.find_child("ArgumentInput_goal", true, false) as LineEdit).text) != "":
-		return _failure("Clear should reset prompt argument input values.")
+		return _failure("Context-menu Clear should reset prompt argument input values.")
 
 	var search := _line_edit(prompts_tab, "CatalogSearchEdit")
 	search.text = "runtime"
@@ -198,6 +215,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var metadata_text := _text_edit_text(resources_tab, "PreviewText")
 	if not metadata_text.contains("Source: resources/list") or not metadata_text.contains("Visibility: public") or not metadata_text.contains("Icon: rejected"):
 		return _failure("Resources detail pane should expose source, visibility, and decoded icon status metadata without a separate Diagnostics view.")
+	if metadata_text.contains("data:text/plain;base64") or metadata_text.contains("icons"):
+		return _failure("Resources detail pane should summarize metadata without dumping icon base64 payloads.")
 
 	var model_with_preview := model.duplicate(true)
 	model_with_preview["mcp_catalog_preview"] = {
@@ -213,9 +232,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	await tree.process_frame
 	if not _text_edit_text(prompts_tab, "PreviewText").contains("Validate runtime behavior"):
 		return _failure("Prompt detail panel should render matching preview results from the Dock model.")
-	_button(prompts_tab, "CopyPreviewButton").emit_signal("pressed")
+	if not _invoke_context_action(prompts_tab, "prompt", "godot.runtime_validation", CTX_COPY_PREVIEW):
+		return _failure("Prompt rows should expose Copy Preview through the Tree context menu.")
 	if not recorder.copied_text.contains("Validate runtime behavior"):
-		return _failure("Copy Preview should emit the rendered prompt preview text.")
+		return _failure("Context-menu Copy Preview should emit the rendered prompt preview text.")
 
 	var resources_cache_error := _assert_icon_texture_cache_is_bounded(resources_tab, "Resources")
 	if not resources_cache_error.is_empty():
@@ -451,15 +471,6 @@ func _label_text(root: Node, name: String) -> String:
 	return "" if label == null else label.text
 
 
-func _button(root: Node, name: String) -> Button:
-	return root.find_child(name, true, false) as Button
-
-
-func _button_pressed(root: Node, name: String) -> bool:
-	var button := _button(root, name)
-	return button != null and button.button_pressed
-
-
 func _line_edit(root: Node, name: String) -> LineEdit:
 	return root.find_child(name, true, false) as LineEdit
 
@@ -483,6 +494,13 @@ func _has_entry_item(root: Node, kind: String, id: String) -> bool:
 
 func _has_view_mode_controls(root: Node) -> bool:
 	for name in ["ViewModeRow", "CatalogViewButton", "WorkflowsViewButton", "DiagnosticsViewButton"]:
+		if root.find_child(name, true, false) != null:
+			return true
+	return false
+
+
+func _has_standalone_action_buttons(root: Node) -> bool:
+	for name in ["ActionRow", "CopyIdButton", "PreviewButton", "ClearArgumentsButton", "CopyPreviewButton"]:
 		if root.find_child(name, true, false) != null:
 			return true
 	return false
@@ -525,6 +543,22 @@ func _select_entry(root: Node, kind: String, id: String) -> void:
 	root.call("_on_tree_item_selected")
 
 
+func _invoke_context_action(root: Node, kind: String, id: String, action_id: int) -> bool:
+	var item := _find_entry_item(root, kind, id)
+	if item == null:
+		return false
+	root.call("_show_tree_context_menu", item, Vector2(1.0, 1.0))
+	root.call("_on_context_menu_id_pressed", action_id)
+	_hide_context_popup(root)
+	return true
+
+
+func _hide_context_popup(root: Node) -> void:
+	for child in root.get_children():
+		if child is PopupMenu:
+			(child as PopupMenu).hide()
+
+
 func _assert_icon_texture_cache_is_bounded(instance, label: String) -> String:
 	var cache_limit := 64
 	var prefix := "contract-%s-icon" % label.to_lower()
@@ -563,6 +597,12 @@ func _verify_catalog_tab_uses_workbench_signatures() -> String:
 			return "MCP catalog tab signatures should cover workbench protocol inputs with lightweight deterministic parts: %s" % required
 	if source.find("CatalogTree") == -1 or source.find("PreviewText") == -1:
 		return "MCP catalog tab should render a Tree workbench and detail preview pane."
+	for removed_name in ["ActionRow", "CopyIdButton", "PreviewButton", "ClearArgumentsButton", "CopyPreviewButton"]:
+		if source.find(removed_name) != -1:
+			return "MCP catalog tab should not keep standalone action button wiring: %s" % removed_name
+	for required_context in ["func _show_tree_context_menu", "func _on_context_menu_id_pressed", "mcp_catalog_copy_preview"]:
+		if source.find(required_context) == -1:
+			return "MCP catalog tab should expose resource/prompt actions through the Tree context menu: %s" % required_context
 	return ""
 
 

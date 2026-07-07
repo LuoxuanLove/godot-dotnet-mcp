@@ -35,8 +35,8 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-split_offsets = PackedInt32Array(-48)
-split_offset = -48
+split_offsets = PackedInt32Array(-45)
+split_offset = -45
 
 [node name="TopPane" type="VBoxContainer" parent="ContentSplit"]
 clip_contents = true
@@ -114,7 +114,7 @@ theme_override_constants/margin_bottom = 6
 [node name="PreviewPanel" type="PanelContainer" parent="ContentSplit/BottomPane/PreviewOuterMargin"]
 unique_name_in_owner = true
 clip_contents = true
-custom_minimum_size = Vector2(0, 168)
+custom_minimum_size = Vector2(0, 148)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -122,10 +122,10 @@ size_flags_vertical = 3
 [node name="PreviewMargin" type="MarginContainer" parent="ContentSplit/BottomPane/PreviewOuterMargin/PreviewPanel"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/margin_left = 10
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 10
-theme_override_constants/margin_bottom = 10
+theme_override_constants/margin_left = 0
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 0
+theme_override_constants/margin_bottom = 12
 
 [node name="PreviewContent" type="VBoxContainer" parent="ContentSplit/BottomPane/PreviewOuterMargin/PreviewPanel/PreviewMargin"]
 unique_name_in_owner = true
@@ -141,28 +141,6 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 4
-
-[node name="ActionRow" type="HBoxContainer" parent="ContentSplit/BottomPane/PreviewOuterMargin/PreviewPanel/PreviewMargin/PreviewContent"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 6
-
-[node name="CopyIdButton" type="Button" parent="ContentSplit/BottomPane/PreviewOuterMargin/PreviewPanel/PreviewMargin/PreviewContent/ActionRow"]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="PreviewButton" type="Button" parent="ContentSplit/BottomPane/PreviewOuterMargin/PreviewPanel/PreviewMargin/PreviewContent/ActionRow"]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="ClearArgumentsButton" type="Button" parent="ContentSplit/BottomPane/PreviewOuterMargin/PreviewPanel/PreviewMargin/PreviewContent/ActionRow"]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="CopyPreviewButton" type="Button" parent="ContentSplit/BottomPane/PreviewOuterMargin/PreviewPanel/PreviewMargin/PreviewContent/ActionRow"]
-unique_name_in_owner = true
-layout_mode = 2
 
 [node name="PreviewText" type="TextEdit" parent="ContentSplit/BottomPane/PreviewOuterMargin/PreviewPanel/PreviewMargin/PreviewContent"]
 unique_name_in_owner = true
