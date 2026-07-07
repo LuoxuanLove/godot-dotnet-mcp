@@ -1,0 +1,39 @@
+docs/ko/변경-로그.md
+  s_9214b0fc2ec5df::t_810582a9d27601 13
+docs/en/CHANGELOG.md
+  s_9214b0fc2ec5df::t_20e57b1767d800 13
+addons/godot_dotnet_mcp/ui/mcp_catalog_tab.tscn
+  s_9214b0fc2ec5df::t_f0ab3dd2085eab 39,117,125-128
+  s_9214b0fc2ec5df::t_7419a65221fdbd 38
+addons/godot_dotnet_mcp/ui/mcp_catalog_tab.gd
+  s_9214b0fc2ec5df::t_e94758429304ef 9-10,18-25,55-57
+  s_9214b0fc2ec5df::t_5779e3af8f0bc4 338-377,379-381,384-450,457-493
+  s_9214b0fc2ec5df::t_73a57270a73a28 64,72-74
+  s_9214b0fc2ec5df::t_1ad4328cdbbd69 378,382-383,451-456
+  s_9214b0fc2ec5df::t_6f6a274d6cd359 588,592,596
+  s_9214b0fc2ec5df::t_769e6b7d33b7dd 650-652,656-663,1060-1078,1082-1084,1091-1097,1101-1121,1124-1143,1147-1153
+docs/zh-CN/变更日志.md
+  s_9214b0fc2ec5df::t_37b69b29695e39 14
+tests/godot_plugin_harness_fixture/tests/mcp_catalog_tab_rendering_contract_test.gd
+  s_9214b0fc2ec5df::t_5945dd1856549c 130-131,156-157,159-161,163,170-171,173,179-180,182,191-192,194-196,199,218-219,235-236,238
+  s_9214b0fc2ec5df::t_18c64322ce15e6 7-11,28-31
+  s_9214b0fc2ec5df::t_fa37280936eacc 502-508,546-561,600-605
+docs/ja/変更履歴.md
+  s_9214b0fc2ec5df::t_7c6546ff6b2367 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "52f67bc880c3691d733cab9bb08a503687702dfe",
+  "prompts": {},
+  "sessions": {
+    "s_9214b0fc2ec5df": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f2c90-ab55-79a0-b70b-51d684f83e96",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
