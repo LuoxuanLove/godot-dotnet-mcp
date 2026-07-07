@@ -6,14 +6,22 @@ signal preview_requested(kind: String, id: String, arguments: Dictionary)
 
 const TREE_TEXT_COLUMN := 0
 const TREE_TEXT_MIN_WIDTH := 180.0
-const TREE_TEXT_MAX_WIDTH := 520.0
-const TREE_HORIZONTAL_CHROME_WIDTH := 32.0
+const TREE_TEXT_MAX_WIDTH := 300.0
+const TREE_HORIZONTAL_CHROME_WIDTH := 56.0
 const MAX_PROTOCOL_ICON_SRC_LENGTH := 8192
 const MAX_PROTOCOL_ICON_BASE64_LENGTH := 6144
 const MAX_ICON_TEXTURE_CACHE_ENTRIES := 64
 const KIND_RESOURCE := "resource"
 const KIND_TEMPLATE := "template"
 const KIND_PROMPT := "prompt"
+
+const _CTX_COPY_LOCALIZED_NAME := 0
+const _CTX_COPY_ENGLISH_ID := 1
+const _CTX_PREVIEW := 2
+const _CTX_CLEAR_ARGUMENTS := 3
+const _CTX_COPY_PREVIEW := 4
+const _CTX_EXPAND_ALL := 10
+const _CTX_COLLAPSE_ALL := 11
 
 @onready var _header_card: PanelContainer = %HeaderCard
 @onready var _header_margin: MarginContainer = %HeaderMargin
@@ -28,11 +36,6 @@ const KIND_PROMPT := "prompt"
 @onready var _preview_content: VBoxContainer = %PreviewContent
 @onready var _preview_title: Label = %PreviewTitle
 @onready var _argument_inputs: VBoxContainer = %ArgumentInputs
-@onready var _action_row: HBoxContainer = %ActionRow
-@onready var _copy_id_button: Button = %CopyIdButton
-@onready var _preview_button: Button = %PreviewButton
-@onready var _clear_arguments_button: Button = %ClearArgumentsButton
-@onready var _copy_preview_button: Button = %CopyPreviewButton
 @onready var _preview_text: TextEdit = %PreviewText
 
 var _current_scale := -1.0
@@ -49,12 +52,16 @@ var _selected_id := ""
 var _selected_entry: Dictionary = {}
 var _tree_syncing := false
 var _last_preview: Dictionary = {}
+var _context_menu: PopupMenu = null
+var _context_menu_metadata: Dictionary = {}
+var _context_menu_target: TreeItem = null
 
 
 func _ready() -> void:
 	auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	_search_edit.text_changed.connect(_on_search_text_changed)
 	_catalog_tree.item_selected.connect(_on_tree_item_selected)
+	_catalog_tree.gui_input.connect(_on_tree_gui_input)
 	_catalog_tree.set_allow_reselect(true)
 	_catalog_tree.theme_type_variation = "TreeSecondary"
 	_preview_text.editable = false
@@ -62,10 +69,9 @@ func _ready() -> void:
 	_preview_text.context_menu_enabled = true
 	_preview_text.set_line_wrapping_mode(TextEdit.LINE_WRAPPING_BOUNDARY)
 	_preview_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_copy_id_button.pressed.connect(_on_copy_id_pressed)
-	_preview_button.pressed.connect(_on_preview_pressed)
-	_clear_arguments_button.pressed.connect(_on_clear_arguments_pressed)
-	_copy_preview_button.pressed.connect(_on_copy_preview_pressed)
+	_context_menu = PopupMenu.new()
+	add_child(_context_menu)
+	_context_menu.id_pressed.connect(_on_context_menu_id_pressed)
 	resized.connect(_on_resized)
 	_show_empty_preview()
 
@@ -108,10 +114,6 @@ func _apply_localized_copy(model: Dictionary) -> void:
 			int(counts.get("resource_templates", 0))
 		]
 		_search_edit.placeholder_text = _localization.get_text("mcp_catalog_search_resources")
-	_copy_id_button.text = _localization.get_text("mcp_catalog_copy_id")
-	_preview_button.text = _localization.get_text("mcp_catalog_preview")
-	_clear_arguments_button.text = _localization.get_text("mcp_catalog_clear_arguments")
-	_copy_preview_button.text = _localization.get_text("mcp_catalog_copy_preview")
 
 
 func _on_search_text_changed(_value: String) -> void:
@@ -242,9 +244,6 @@ func _create_entry_item(parent: TreeItem, entry: Dictionary, entry_kind: String,
 		"entry": entry.duplicate(true),
 		"node": node.duplicate(true)
 	})
-	var icon_texture := _texture_from_icon_src(_entry_icon_src(entry))
-	if icon_texture != null:
-		item.set_icon(TREE_TEXT_COLUMN, icon_texture)
 	if _selected_kind == entry_kind and _selected_id == id:
 		item.select(TREE_TEXT_COLUMN)
 	for raw_child in _safe_array(node.get("children", [])):
@@ -336,25 +335,169 @@ func _apply_selection_from_item(item: TreeItem) -> void:
 	_selected_entry = (metadata.get("entry", {}) as Dictionary).duplicate(true)
 
 
+func _on_tree_gui_input(event: InputEvent) -> void:
+	if event is InputEventKey:
+		var key_event := event as InputEventKey
+		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_SPACE:
+			var selected := _catalog_tree.get_selected()
+			if selected != null and selected.get_child_count() > 0:
+				selected.collapsed = not selected.collapsed
+				get_viewport().set_input_as_handled()
+		return
+	if not (event is InputEventMouseButton):
+		return
+	var mouse_event := event as InputEventMouseButton
+	if not mouse_event.pressed:
+		return
+	if mouse_event.button_index == MOUSE_BUTTON_RIGHT:
+		var item := _catalog_tree.get_item_at_position(mouse_event.position)
+		if item != null:
+			_show_tree_context_menu(item, _get_tree_context_menu_screen_position(mouse_event.position))
+			get_viewport().set_input_as_handled()
+		return
+	if mouse_event.button_index != MOUSE_BUTTON_LEFT or not mouse_event.shift_pressed:
+		return
+	var item := _catalog_tree.get_item_at_position(mouse_event.position)
+	if item != null and item.get_child_count() > 0:
+		var want_collapsed := not item.collapsed
+		_tree_syncing = true
+		_set_subtree_collapsed(item, want_collapsed)
+		_tree_syncing = false
+		get_viewport().set_input_as_handled()
+
+
+func _show_tree_context_menu(item: TreeItem, screen_position: Vector2) -> Rect2i:
+	var metadata = item.get_metadata(TREE_TEXT_COLUMN)
+	if not (metadata is Dictionary):
+		return Rect2i()
+	var meta := metadata as Dictionary
+	_context_menu_metadata = meta
+	_context_menu_target = item
+	if _is_entry_item(item):
+		_apply_selection_from_item(item)
+		_catalog_tree.set_selected(item, TREE_TEXT_COLUMN)
+		_sync_detail_panel()
+	_context_menu.clear()
+	var has_children := item.get_child_count() > 0
+	_add_context_menu_item(_text("tool_ctx_copy_localized_name"), _CTX_COPY_LOCALIZED_NAME)
+	_add_context_menu_item(_text("tool_ctx_copy_english_id"), _CTX_COPY_ENGLISH_ID)
+	_context_menu.add_separator()
+	_add_context_menu_item(_text("btn_expand_all"), _CTX_EXPAND_ALL, not has_children)
+	_add_context_menu_item(_text("btn_collapse_all"), _CTX_COLLAPSE_ALL, not has_children)
+	if _is_entry_metadata(meta):
+		_context_menu.add_separator()
+		_add_context_menu_item(_text("mcp_catalog_preview"), _CTX_PREVIEW, str(meta.get("id", "")).is_empty())
+		_add_context_menu_item(_text("mcp_catalog_clear_arguments"), _CTX_CLEAR_ARGUMENTS, not _has_argument_controls_for_selection() or not _has_any_arguments_for_selection())
+		_add_context_menu_item(_text("mcp_catalog_copy_preview"), _CTX_COPY_PREVIEW, _preview_body_text(_current_preview_for_selection()).strip_edges().is_empty())
+	var popup_rect := _get_tree_context_menu_popup_rect(screen_position)
+	_context_menu.popup(popup_rect)
+	return popup_rect
+
+
+func _get_tree_context_menu_screen_position(local_position: Vector2) -> Vector2:
+	return _catalog_tree.get_screen_transform() * local_position
+
+
+func _get_tree_context_menu_popup_rect(screen_position: Vector2) -> Rect2i:
+	return Rect2i(int(screen_position.x), int(screen_position.y), 0, 0)
+
+
+func _on_context_menu_id_pressed(id: int) -> void:
+	match id:
+		_CTX_COPY_LOCALIZED_NAME:
+			copy_requested.emit(_get_context_menu_localized_name(), _get_context_menu_localized_name())
+		_CTX_COPY_ENGLISH_ID:
+			copy_requested.emit(_get_context_menu_english_id(), _get_context_menu_localized_name())
+		_CTX_PREVIEW:
+			_emit_preview_for_selection()
+		_CTX_CLEAR_ARGUMENTS:
+			_clear_arguments_for_selection()
+		_CTX_COPY_PREVIEW:
+			_copy_preview_for_selection()
+		_CTX_EXPAND_ALL:
+			if is_instance_valid(_context_menu_target):
+				_tree_syncing = true
+				_set_subtree_collapsed(_context_menu_target, false)
+				_tree_syncing = false
+		_CTX_COLLAPSE_ALL:
+			if is_instance_valid(_context_menu_target):
+				_tree_syncing = true
+				_set_subtree_collapsed(_context_menu_target, true)
+				_tree_syncing = false
+
+
+func _add_context_menu_item(label: String, id: int, disabled: bool = false) -> void:
+	var index := _context_menu.get_item_count()
+	_context_menu.add_item(label, id)
+	_context_menu.set_item_disabled(index, disabled)
+
+
+func _set_subtree_collapsed(item: TreeItem, collapsed: bool) -> void:
+	item.collapsed = collapsed
+	var child := item.get_first_child()
+	while child != null:
+		_set_subtree_collapsed(child, collapsed)
+		child = child.get_next()
+
+
+func _is_entry_metadata(metadata: Dictionary) -> bool:
+	return [KIND_RESOURCE, KIND_TEMPLATE, KIND_PROMPT].has(str(metadata.get("kind", "")))
+
+
+func _get_context_menu_localized_name() -> String:
+	var entry := _context_menu_entry()
+	if not entry.is_empty():
+		return _entry_title(entry, str(_context_menu_metadata.get("kind", "")))
+	var group = _context_menu_metadata.get("group", {})
+	if group is Dictionary:
+		return _group_label(group as Dictionary)
+	var node = _context_menu_metadata.get("node", {})
+	if node is Dictionary:
+		return _presentation_node_label(node as Dictionary)
+	return str(_context_menu_metadata.get("id", ""))
+
+
+func _get_context_menu_english_id() -> String:
+	return str(_context_menu_metadata.get("id", ""))
+
+
+func _context_menu_entry() -> Dictionary:
+	var entry = _context_menu_metadata.get("entry", {})
+	if entry is Dictionary:
+		return (entry as Dictionary).duplicate(true)
+	return {}
+
+
+func _has_argument_controls_for_selection() -> bool:
+	return _selected_kind == KIND_PROMPT or _selected_kind == KIND_TEMPLATE
+
+
+func _emit_preview_for_selection() -> void:
+	if _selected_id.is_empty():
+		return
+	preview_requested.emit(_selected_kind, _selected_id, _selection_argument_values())
+
+
+func _clear_arguments_for_selection() -> void:
+	_store_selection_argument_values({})
+	_sync_detail_panel()
+
+
+func _copy_preview_for_selection() -> void:
+	var preview := _current_preview_for_selection()
+	var text := _preview_body_text(preview)
+	if text.strip_edges().is_empty():
+		return
+	copy_requested.emit(text, "%s %s" % [_entry_title(_selected_entry, _selected_kind), _text("mcp_catalog_preview_title")])
+
+
 func _sync_detail_panel() -> void:
 	if _selected_entry.is_empty() or _selected_kind.is_empty():
 		_show_empty_preview()
 		return
 	_preview_title.text = _entry_title(_selected_entry, _selected_kind)
 	_rebuild_argument_inputs()
-	_copy_id_button.visible = true
-	_copy_id_button.disabled = _selected_id.is_empty()
-	_copy_id_button.tooltip_text = _selected_id
-	_preview_button.visible = true
-	_preview_button.disabled = false
-	_preview_button.tooltip_text = _selected_id
-	_clear_arguments_button.visible = _selected_kind == KIND_PROMPT or _selected_kind == KIND_TEMPLATE
-	_clear_arguments_button.disabled = not _has_any_arguments_for_selection()
-	_copy_preview_button.visible = true
 	var preview := _current_preview_for_selection()
-	var preview_text := _preview_body_text(preview)
-	_copy_preview_button.disabled = preview_text.strip_edges().is_empty()
-	_copy_preview_button.tooltip_text = _text("mcp_catalog_copy_preview")
 	_preview_text.text = _build_detail_text(preview)
 
 
@@ -363,14 +506,6 @@ func _show_empty_preview() -> void:
 		_preview_title.text = _text("mcp_catalog_select_entry")
 	if _argument_inputs != null:
 		_clear_children(_argument_inputs)
-	if _copy_id_button != null:
-		_copy_id_button.visible = false
-	if _preview_button != null:
-		_preview_button.visible = false
-	if _clear_arguments_button != null:
-		_clear_arguments_button.visible = false
-	if _copy_preview_button != null:
-		_copy_preview_button.visible = false
 	if _preview_text != null:
 		_preview_text.text = _text("mcp_catalog_select_entry_hint")
 
@@ -435,8 +570,6 @@ func _add_argument_row(argument_name: String, description: String, required: boo
 
 
 func _refresh_argument_dependent_detail() -> void:
-	_clear_arguments_button.disabled = not _has_any_arguments_for_selection()
-	_copy_preview_button.disabled = true
 	_preview_text.text = _build_detail_text({})
 
 
@@ -452,22 +585,15 @@ func _on_copy_id_pressed() -> void:
 
 
 func _on_preview_pressed() -> void:
-	if _selected_id.is_empty():
-		return
-	preview_requested.emit(_selected_kind, _selected_id, _selection_argument_values())
+	_emit_preview_for_selection()
 
 
 func _on_clear_arguments_pressed() -> void:
-	_store_selection_argument_values({})
-	_sync_detail_panel()
+	_clear_arguments_for_selection()
 
 
 func _on_copy_preview_pressed() -> void:
-	var preview := _current_preview_for_selection()
-	var text := _preview_body_text(preview)
-	if text.strip_edges().is_empty():
-		return
-	copy_requested.emit(text, "%s %s" % [_entry_title(_selected_entry, _selected_kind), _text("mcp_catalog_preview_title")])
+	_copy_preview_for_selection()
 
 
 func _build_detail_text(preview: Dictionary) -> String:
@@ -521,8 +647,18 @@ func _protocol_metadata_lines(entry: Dictionary, entry_kind: String) -> Array[St
 	lines.append("%s: %s" % [_text("mcp_catalog_preview_status"), _entry_preview_status(entry_kind)])
 	var metadata = entry.get("_presentation_metadata", {})
 	if metadata is Dictionary and not (metadata as Dictionary).is_empty():
-		lines.append("%s: %s" % [_text("mcp_catalog_metadata"), JSON.stringify(metadata)])
+		var metadata_summary := _summarize_presentation_metadata(metadata as Dictionary)
+		if not metadata_summary.is_empty():
+			lines.append("%s: %s" % [_text("mcp_catalog_metadata"), metadata_summary])
 	return lines
+
+
+func _summarize_presentation_metadata(metadata: Dictionary) -> String:
+	var visible_metadata := metadata.duplicate(true)
+	visible_metadata.erase("icons")
+	if visible_metadata.is_empty():
+		return ""
+	return JSON.stringify(visible_metadata)
 
 
 func _entry_visible_for_search(entry: Dictionary, entry_kind: String) -> bool:
@@ -920,57 +1056,101 @@ func _signature_scalar(value: String) -> String:
 
 func _apply_editor_scale(scale: float) -> void:
 	_current_scale = scale
-	_apply_responsive_layout()
 	_apply_visual_style(scale)
+	_apply_spacing(scale)
+
+	_catalog_tree.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_catalog_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_catalog_tree.custom_minimum_size.y = 96.0 * scale
+	_catalog_tree.custom_minimum_size.x = 0.0
+	_catalog_tree.set_column_expand(TREE_TEXT_COLUMN, true)
+	_apply_responsive_layout()
+
+	_preview_panel.custom_minimum_size.y = 148.0 * scale
+	var desired_split := 560.0 * scale
+	if size.y > 0.0:
+		desired_split = max(420.0 * scale, size.y * 0.62)
+	_content_split.split_offset = int(round(desired_split))
+
+	_search_edit.custom_minimum_size.y = 0.0
+	_header_counts.remove_theme_font_size_override("font_size")
+	_preview_title.remove_theme_font_size_override("font_size")
+	_preview_text.remove_theme_font_size_override("font_size")
 
 
 func _apply_responsive_layout() -> void:
-	var scale := _scale()
-	var narrow := size.x > 0.0 and size.x < 380.0 * scale
-	add_theme_constant_override("separation", int(round((6.0 if narrow else 8.0) * scale)))
-	_header_margin.add_theme_constant_override("margin_left", int(round((10.0 if narrow else 14.0) * scale)))
-	_header_margin.add_theme_constant_override("margin_right", int(round((10.0 if narrow else 14.0) * scale)))
-	_header_margin.add_theme_constant_override("margin_top", int(round(10 * scale)))
-	_header_margin.add_theme_constant_override("margin_bottom", int(round(10 * scale)))
-	_header_content.add_theme_constant_override("separation", int(round((6.0 if narrow else 8.0) * scale)))
-	_argument_inputs.add_theme_constant_override("separation", int(round(4 * scale)))
-	_action_row.add_theme_constant_override("separation", int(round(6 * scale)))
-	_preview_margin.add_theme_constant_override("margin_left", int(round(10 * scale)))
-	_preview_margin.add_theme_constant_override("margin_right", int(round(10 * scale)))
-	_preview_margin.add_theme_constant_override("margin_top", int(round(8 * scale)))
-	_preview_margin.add_theme_constant_override("margin_bottom", int(round(10 * scale)))
+	if _catalog_tree == null:
+		return
+	var scale: float = _scale()
 	_configure_tree_columns(scale)
 
 
 func _configure_tree_columns(scale: float) -> void:
 	if _catalog_tree == null:
 		return
-	var available_width := max(size.x - TREE_HORIZONTAL_CHROME_WIDTH * scale, 240.0 * scale)
-	var text_width := clamp(available_width, TREE_TEXT_MIN_WIDTH * scale, TREE_TEXT_MAX_WIDTH * scale)
+	var available_width: float = size.x
+	if available_width <= 0.0:
+		var parent_control := get_parent() as Control
+		if parent_control != null:
+			available_width = parent_control.size.x
+	var tree_width: float = max(available_width - TREE_HORIZONTAL_CHROME_WIDTH * scale, TREE_TEXT_MIN_WIDTH * scale)
+	var text_width: float = min(max(tree_width, TREE_TEXT_MIN_WIDTH * scale), TREE_TEXT_MAX_WIDTH * scale)
 	_catalog_tree.set_column_custom_minimum_width(TREE_TEXT_COLUMN, int(round(text_width)))
+
+
+func _apply_spacing(scale: float) -> void:
+	add_theme_constant_override("separation", int(round(8 * scale)))
+	_set_margin_constants(_header_margin, 14, 10, 14, 10, scale)
+	_header_content.add_theme_constant_override("separation", int(round(8 * scale)))
+	_argument_inputs.add_theme_constant_override("separation", int(round(4 * scale)))
+	_set_margin_constants(_content_split.get_node_or_null("TopPane/SearchOuterMargin") as MarginContainer, 10, 8, 10, 6, scale)
+	_set_margin_constants(_content_split.get_node_or_null("TopPane/TreeOuterMargin") as MarginContainer, 10, 4, 10, 6, scale)
+	_set_margin_constants(_content_split.get_node_or_null("TopPane/TreeOuterMargin/CatalogTreePanel/CatalogTreeMargin") as MarginContainer, 0, 6, 0, 6, scale)
+	_set_margin_constants(_content_split.get_node_or_null("BottomPane/PreviewOuterMargin") as MarginContainer, 10, 2, 10, 6, scale)
+	_set_margin_constants(_preview_margin, 0, 2, 0, 12, scale)
+
+
+func _set_margin_constants(margin: MarginContainer, left: int, top: int, right: int, bottom: int, scale: float) -> void:
+	if margin == null:
+		return
+	margin.add_theme_constant_override("margin_left", int(round(left * scale)))
+	margin.add_theme_constant_override("margin_top", int(round(top * scale)))
+	margin.add_theme_constant_override("margin_right", int(round(right * scale)))
+	margin.add_theme_constant_override("margin_bottom", int(round(bottom * scale)))
 
 
 func _apply_visual_style(_scale_value: float) -> void:
 	begin_bulk_theme_override()
-	for panel in [_header_card, _catalog_tree_panel, _preview_panel]:
-		if panel != null:
-			panel.add_theme_stylebox_override("panel", _make_framed_panel_style())
-	for label in [_preview_title]:
-		if label != null:
-			label.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
-			label.remove_theme_font_size_override("font_size")
-	_header_counts.add_theme_color_override("font_color", _get_meta_text_color())
-	_preview_text.add_theme_color_override("font_color", _get_description_text_color())
+	_header_card.add_theme_stylebox_override("panel", _make_theme_style("panel", "PanelContainer", 0, 0))
+	_catalog_tree_panel.add_theme_stylebox_override("panel", _make_theme_style("panel", "Tree", 0, 0))
+	_preview_panel.add_theme_stylebox_override("panel", _make_theme_style("panel", "PanelContainer", 0, 0))
+	_search_edit.add_theme_stylebox_override("normal", _make_theme_style("normal", "LineEdit", 10, 6))
+	_search_edit.add_theme_stylebox_override("focus", _make_theme_style("focus", "LineEdit", 10, 6))
+	_header_counts.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
+	_header_counts.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_search_edit.add_theme_color_override("font_color", get_theme_color("font_color", "LineEdit"))
+	_search_edit.add_theme_color_override("font_placeholder_color", _get_meta_text_color())
+	_catalog_tree.add_theme_color_override("font_color", get_theme_color("font_color", "Tree"))
+	_catalog_tree.add_theme_color_override("font_selected_color", get_theme_color("font_selected_color", "Tree"))
+	_catalog_tree.add_theme_color_override("guide_color", _get_meta_text_color())
+	_catalog_tree.remove_theme_constant_override("v_separation")
+	_preview_title.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
+	_preview_text.add_theme_color_override("font_color", get_theme_color("font_color", "TextEdit"))
+	_preview_text.add_theme_color_override("font_readonly_color", get_theme_color("font_readonly_color", "TextEdit"))
+	_preview_text.add_theme_stylebox_override("normal", _make_theme_style("normal", "TextEdit", 8, 6))
+	_preview_text.add_theme_stylebox_override("focus", _make_theme_style("focus", "TextEdit", 8, 6))
+	_preview_text.add_theme_stylebox_override("read_only", _make_theme_style("read_only", "TextEdit", 8, 6))
+	_preview_text.remove_theme_constant_override("line_spacing")
 	end_bulk_theme_override()
 
 
-func _make_framed_panel_style() -> StyleBox:
-	var base_style := get_theme_stylebox("panel", "Tree")
-	var style := base_style.duplicate() as StyleBox if base_style != null else StyleBoxFlat.new()
-	if style is StyleBoxFlat:
-		var flat_style := style as StyleBoxFlat
-		flat_style.border_color = get_theme_color("separator_color", "Editor")
-		flat_style.set_border_width_all(1)
+func _make_theme_style(style_name: String, theme_type: String, horizontal_margin: int, vertical_margin: int) -> StyleBox:
+	var base_style := get_theme_stylebox(style_name, theme_type)
+	var style := base_style.duplicate() as StyleBox if base_style != null else StyleBoxEmpty.new()
+	style.content_margin_left = horizontal_margin
+	style.content_margin_right = horizontal_margin
+	style.content_margin_top = vertical_margin
+	style.content_margin_bottom = vertical_margin
 	return style
 
 
