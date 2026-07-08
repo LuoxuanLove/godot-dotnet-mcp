@@ -621,6 +621,8 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_current_version": "현재 버전:",
 	"settings_update_channel_stable": "안정판",
 	"settings_update_channel_development": "개발판",
+	"settings_update_channel_stable_selected": "안정판 선택됨",
+	"settings_update_channel_development_selected": "개발판 선택됨",
 	"settings_update_col_version": "버전 ID",
 	"settings_update_col_message": "업데이트 내용",
 	"settings_update_col_date": "날짜",

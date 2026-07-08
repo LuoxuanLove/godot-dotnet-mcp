@@ -673,6 +673,8 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_current_version": "当前版本：",
 	"settings_update_channel_stable": "稳定版",
 	"settings_update_channel_development": "开发版",
+	"settings_update_channel_stable_selected": "已选择稳定版",
+	"settings_update_channel_development_selected": "已选择开发版",
 	"settings_update_col_version": "版本 ID",
 	"settings_update_col_message": "更新内容",
 	"settings_update_col_date": "日期",

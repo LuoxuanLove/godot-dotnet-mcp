@@ -291,6 +291,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var settings_store = SettingsStoreScript.new()
 	if settings_store._normalize_update_source("latest_dev") != "custom_branch" or settings_store._normalize_update_source("branch") != "custom_branch":
 		return _failure("settings_store.gd should preserve legacy dev-tracking update sources as custom_branch.")
+	var normalized_cache: Dictionary = settings_store.normalize_update_refs_cache({
+		"branches": ["dev", "dev", ""],
+		"releases": ["v2.0.0", ""],
+		"latest_stable_release": "v2.0.0",
+		"latest_release": "v2.1.0-beta.1",
+		"commits": {"dev": "dev-sha", "": "ignored"},
+		"versions": {"v2.0.0": "2.0.0"},
+		"release_rows": [{"kind": "tag", "ref": "v2.0.0", "commit": "tag-sha", "title": "Release 2.0.0", "date": "2026-07-08T00:00:00Z", "stable": true}],
+		"branch_commit_rows": {"dev": [{"kind": "branch", "ref": "dev", "commit": "dev-sha", "title": "dev head", "date": "2026-07-08T00:00:00Z"}]}
+	})
+	if (normalized_cache.get("branches", []) as Array).size() != 1 or str((normalized_cache.get("commits", {}) as Dictionary).get("dev", "")) != "dev-sha" or (normalized_cache.get("release_rows", []) as Array).size() != 1:
+		return _failure("settings_store.gd should normalize persisted update refs cache into stable arrays, dictionaries, and table rows.")
 	_plugin = PluginScript.new()
 	if _plugin == null:
 		return _failure("plugin.gd should instantiate for update settings persistence contracts.")
@@ -321,6 +333,52 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	empty_branch_probe.free()
 	if saved_settings.has("update_ref_branches") or saved_settings.has("update_ref_releases") or saved_settings.has("update_refs_state"):
 		return _failure("plugin.gd should not persist transient discovered update refs in settings.")
+
+	settings_store.save_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH, normalized_cache)
+	var cache_restore_probe := PluginScript.new()
+	cache_restore_probe._load_state()
+	if cache_restore_probe._state.update_refs_state != "success" or not cache_restore_probe._update_refs_discovery_loaded or cache_restore_probe._state.update_ref_branches.size() != 1 or str(cache_restore_probe._state.update_ref_branches[0]) != "dev" or str(cache_restore_probe._state.update_ref_versions.get("v2.0.0", "")) != "2.0.0" or (cache_restore_probe._state.update_ref_release_rows as Array).is_empty():
+		cache_restore_probe.free()
+		return _failure("plugin.gd should restore the last successful update refs cache into Settings state during startup.")
+	cache_restore_probe.free()
+
+	var cache_startup_probe := RefreshProbePlugin.new()
+	cache_startup_probe._state.update_refs_state = "success"
+	cache_startup_probe._update_refs_discovery_loaded = true
+	cache_startup_probe._request_startup_update_refs_refresh()
+	if cache_startup_probe.discovery_request_count != 1 or cache_startup_probe.discovery_background_flags != [true]:
+		cache_startup_probe.free()
+		return _failure("plugin.gd should refresh cached startup refs in the background instead of clearing the visible version list.")
+	cache_startup_probe.free()
+
+	var cache_save_probe := PluginScript.new()
+	cache_save_probe._state.settings["update_source"] = "custom_branch"
+	cache_save_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
+	cache_save_probe._update_refs_request_serial = 99
+	cache_save_probe._update_refs_pending = {
+		"serial": 99,
+		"background": false,
+		"branch_done": true,
+		"release_done": true,
+		"tag_done": true,
+		"branch_commits_done": true,
+		"branch_commits_branch": "refactor/v2.0.0",
+		"errors": [],
+		"branches": ["refactor/v2.0.0"],
+		"releases": ["v2.0.0"],
+		"stable_releases": ["v2.0.0"],
+		"tags": [],
+		"commits": {"refactor/v2.0.0": "branch-sha", "v2.0.0": "tag-sha"},
+		"release_rows": [{"kind": "tag", "ref": "v2.0.0", "commit": "", "title": "Release 2.0.0", "date": "2026-07-08T00:00:00Z", "stable": true}],
+		"tag_rows": [],
+		"branch_commit_rows": {"refactor/v2.0.0": [{"kind": "branch", "ref": "refactor/v2.0.0", "commit": "branch-sha", "title": "Merge pull request", "date": "2026-07-08T00:00:00Z"}]}
+	}
+	cache_save_probe._finalize_update_refs_discovery_if_ready(99)
+	var saved_cache: Dictionary = settings_store.load_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH)
+	if str(saved_cache.get("latest_stable_release", "")) != "v2.0.0" or str((saved_cache.get("commits", {}) as Dictionary).get("refactor/v2.0.0", "")) != "branch-sha" or ((saved_cache.get("branch_commit_rows", {}) as Dictionary).get("refactor/v2.0.0", []) as Array).is_empty():
+		cache_save_probe.free()
+		return _failure("plugin.gd should persist refreshed update refs and commit table rows after successful discovery.")
+	cache_save_probe.free()
 
 	var target_probe := PluginScript.new()
 	target_probe._state.settings["update_custom_branch"] = "feature/target"
@@ -963,6 +1021,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("plugin.gd should clear stale background refs refresh state when a foreground refs discovery supersedes it.")
 	foreground_refs_probe.free()
 
+	var foreground_preserve_probe := ForegroundRefsProbePlugin.new()
+	foreground_preserve_probe._state.update_refs_state = "success"
+	foreground_preserve_probe._update_refs_discovery_loaded = true
+	var preserved_branches: Array[String] = ["cached/branch"]
+	var preserved_releases: Array[String] = ["v2.0.0"]
+	foreground_preserve_probe._state.update_ref_branches = preserved_branches
+	foreground_preserve_probe._state.update_ref_releases = preserved_releases
+	foreground_preserve_probe._state.update_ref_commits = {"cached/branch": "cached-sha"}
+	foreground_preserve_probe._state.update_ref_branch_commit_rows = {"cached/branch": [{"kind": "branch", "ref": "cached/branch", "commit": "cached-sha", "title": "Cached", "date": "2026-07-08T00:00:00Z"}]}
+	foreground_preserve_probe._on_update_check_requested(false)
+	if foreground_preserve_probe._state.update_refs_state != "loading" or foreground_preserve_probe._state.update_ref_branches != preserved_branches or foreground_preserve_probe._state.update_ref_releases != preserved_releases or str(foreground_preserve_probe._state.update_ref_commits.get("cached/branch", "")) != "cached-sha":
+		foreground_preserve_probe.free()
+		return _failure("plugin.gd foreground Refresh List should preserve the visible cached version list while the latest refs are loading.")
+	foreground_preserve_probe.free()
+
 	var background_failure_probe := PluginScript.new()
 	background_failure_probe._state.update_refs_state = "success"
 	var old_branches: Array[String] = ["old/branch"]
@@ -1271,6 +1344,9 @@ func _remove_saved_settings() -> void:
 	var settings_path := ProjectSettings.globalize_path(PluginRuntimeStateScript.SETTINGS_PATH)
 	if FileAccess.file_exists(PluginRuntimeStateScript.SETTINGS_PATH):
 		DirAccess.remove_absolute(settings_path)
+	var cache_path := ProjectSettings.globalize_path(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH)
+	if FileAccess.file_exists(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH):
+		DirAccess.remove_absolute(cache_path)
 
 
 func _run_shared_update_sync_entry_contract() -> Dictionary:

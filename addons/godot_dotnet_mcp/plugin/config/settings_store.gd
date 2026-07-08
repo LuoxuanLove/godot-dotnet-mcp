@@ -65,6 +65,60 @@ func save_plugin_settings(settings_path: String, settings: Dictionary) -> void:
 		push_warning("[MCP] Failed to persist plugin settings: %s" % str(write_result))
 
 
+func load_update_refs_cache(cache_path: String) -> Dictionary:
+	if not FileAccess.file_exists(cache_path):
+		return {}
+	var file := FileAccess.open(cache_path, FileAccess.READ)
+	if file == null:
+		return {}
+	var json := JSON.new()
+	var text := file.get_as_text()
+	file.close()
+	if json.parse(text) != OK:
+		return {}
+	var data = json.get_data()
+	if not (data is Dictionary):
+		return {}
+	return normalize_update_refs_cache(data as Dictionary)
+
+
+func save_update_refs_cache(cache_path: String, cache: Dictionary) -> void:
+	var normalized := normalize_update_refs_cache(cache)
+	if normalized.is_empty():
+		_remove_file_if_exists(cache_path)
+		return
+	var write_result := _write_json_file_atomically(cache_path, normalized)
+	if not bool(write_result.get("success", false)):
+		push_warning("[MCP] Failed to persist update refs cache: %s" % str(write_result))
+
+
+func normalize_update_refs_cache(cache: Dictionary) -> Dictionary:
+	var branches := _normalize_string_array(cache.get("branches", []))
+	var releases := _normalize_string_array(cache.get("releases", []))
+	var commits := _normalize_string_dictionary(cache.get("commits", {}))
+	var versions := _normalize_string_dictionary(cache.get("versions", {}))
+	var release_rows := _normalize_update_ref_rows(cache.get("release_rows", []))
+	var branch_commit_rows := _normalize_update_branch_commit_rows(cache.get("branch_commit_rows", {}))
+	if branches.is_empty() and releases.is_empty() and commits.is_empty() and release_rows.is_empty() and branch_commit_rows.is_empty():
+		return {}
+	return {
+		"format_version": 1,
+		"saved_unix": int(cache.get("saved_unix", 0)),
+		"last_checked_unix": int(cache.get("last_checked_unix", 0)),
+		"last_trigger": str(cache.get("last_trigger", "")).strip_edges(),
+		"last_http_status": int(cache.get("last_http_status", 0)),
+		"branches": branches,
+		"releases": releases,
+		"latest_stable_release": str(cache.get("latest_stable_release", "")).strip_edges(),
+		"latest_release": str(cache.get("latest_release", "")).strip_edges(),
+		"release_source": str(cache.get("release_source", "")).strip_edges(),
+		"commits": commits,
+		"versions": versions,
+		"release_rows": release_rows,
+		"branch_commit_rows": branch_commit_rows
+	}
+
+
 func load_custom_profiles(profile_dir: String) -> Dictionary:
 	var profiles: Dictionary = {}
 	var dir = DirAccess.open(profile_dir)
@@ -329,3 +383,72 @@ func _read_custom_profile_file(file_path: String) -> Dictionary:
 func _write_json_file_atomically(file_path: String, payload: Dictionary) -> Dictionary:
 	var text := JSON.stringify(payload, "\t")
 	return FileWriteTransaction.write_text_atomically(file_path, text)
+
+
+func _remove_file_if_exists(file_path: String) -> void:
+	if not FileAccess.file_exists(file_path):
+		return
+	var error := DirAccess.remove_absolute(ProjectSettings.globalize_path(file_path))
+	if error != OK:
+		push_warning("[MCP] Failed to remove stale update refs cache: %s" % error)
+
+
+func _normalize_string_array(raw_values) -> Array[String]:
+	var values: Array[String] = []
+	if not (raw_values is Array):
+		return values
+	for raw_value in raw_values:
+		var value := str(raw_value).strip_edges()
+		if value.is_empty() or values.has(value):
+			continue
+		values.append(value)
+	return values
+
+
+func _normalize_string_dictionary(raw_value) -> Dictionary:
+	var result := {}
+	if not (raw_value is Dictionary):
+		return result
+	for raw_key in (raw_value as Dictionary).keys():
+		var key := str(raw_key).strip_edges()
+		var value := str((raw_value as Dictionary).get(raw_key, "")).strip_edges()
+		if key.is_empty() or value.is_empty():
+			continue
+		result[key] = value
+	return result
+
+
+func _normalize_update_ref_rows(raw_rows) -> Array:
+	var rows: Array = []
+	if not (raw_rows is Array):
+		return rows
+	for raw_row in raw_rows as Array:
+		if not (raw_row is Dictionary):
+			continue
+		var row := raw_row as Dictionary
+		var target_ref := str(row.get("ref", "")).strip_edges()
+		if target_ref.is_empty():
+			continue
+		rows.append({
+			"kind": str(row.get("kind", "tag")).strip_edges(),
+			"ref": target_ref,
+			"commit": str(row.get("commit", "")).strip_edges(),
+			"title": str(row.get("title", target_ref)).strip_edges(),
+			"date": str(row.get("date", "")).strip_edges(),
+			"stable": bool(row.get("stable", false))
+		})
+	return rows
+
+
+func _normalize_update_branch_commit_rows(raw_rows) -> Dictionary:
+	var rows := {}
+	if not (raw_rows is Dictionary):
+		return rows
+	for raw_key in (raw_rows as Dictionary).keys():
+		var branch := str(raw_key).strip_edges()
+		if branch.is_empty():
+			continue
+		var branch_rows := _normalize_update_ref_rows((raw_rows as Dictionary).get(raw_key, []))
+		if not branch_rows.is_empty():
+			rows[branch] = branch_rows
+	return rows

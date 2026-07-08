@@ -454,6 +454,8 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_current_version": "Aktuelle Version:",
 	"settings_update_channel_stable": "Stabil",
 	"settings_update_channel_development": "Entwicklung",
+	"settings_update_channel_stable_selected": "Stabil ausgewählt",
+	"settings_update_channel_development_selected": "Entwicklung ausgewählt",
 	"settings_update_col_version": "Versions-ID",
 	"settings_update_col_message": "Änderung",
 	"settings_update_col_date": "Datum",

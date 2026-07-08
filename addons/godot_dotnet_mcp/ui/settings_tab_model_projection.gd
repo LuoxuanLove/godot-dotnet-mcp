@@ -184,7 +184,7 @@ func _build_version_row(raw_row: Dictionary, current_ref: String, current_commit
 		"title": str(raw_row.get("title", target_ref)).strip_edges(),
 		"date": _format_update_row_date(str(raw_row.get("date", "")).strip_edges()),
 		"current": is_current,
-		"switch_enabled": not target_ref.is_empty()
+		"switch_enabled": not target_ref.is_empty() and not is_current
 	}
 
 
