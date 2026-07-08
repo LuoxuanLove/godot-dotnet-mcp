@@ -6,6 +6,7 @@ const ToolProfileCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime
 const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 
 const SETTINGS_PATH := "user://godot_dotnet_mcp/settings.json"
+const UPDATE_REFS_CACHE_PATH := "user://godot_dotnet_mcp/update_refs_cache.json"
 const TOOL_PROFILE_DIR := ToolProfileCatalog.PROFILE_STORAGE_DIR
 
 const DEFAULT_SETTINGS: Dictionary = {

@@ -154,6 +154,11 @@ tab_count = 2
 tab_0/title = ""
 tab_1/title = ""
 
+[node name="UpdateChannelStatus" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateToolbar"]
+unique_name_in_owner = true
+vertical_alignment = 1
+text_overrun_behavior = 3
+
 [node name="CheckButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateToolbar"]
 unique_name_in_owner = true
 disabled = true

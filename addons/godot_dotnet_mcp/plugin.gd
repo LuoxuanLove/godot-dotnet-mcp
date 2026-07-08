@@ -257,7 +257,7 @@ func _request_startup_update_refs_refresh() -> void:
 			_record_update_refs_audit("startup", "skipped", 0, "No active update refs request host.", {})
 		return
 	_startup_update_refs_refresh_requested = true
-	_on_update_check_requested(false, "startup")
+	_on_update_check_requested(_update_refs_discovery_loaded, "startup")
 
 
 func _reschedule_startup_update_refs_refresh() -> bool:
@@ -439,6 +439,7 @@ func _load_state() -> void:
 	_state.current_config_platform = str(_state.settings.get("current_config_platform", _state.current_config_platform))
 	_state.needs_initial_tool_profile_apply = not bool(load_result["has_settings_file"])
 	_state.custom_tool_profiles = _settings_store.load_custom_profiles(PluginRuntimeStateScript.TOOL_PROFILE_DIR)
+	_restore_update_refs_cache()
 	_configure_client_install_detection_service()
 
 
@@ -448,6 +449,64 @@ func _save_settings() -> void:
 	if _settings_store == null:
 		_settings_store = SettingsStoreScript.new()
 	_settings_store.save_plugin_settings(PluginRuntimeStateScript.SETTINGS_PATH, _state.settings)
+
+
+func _restore_update_refs_cache() -> void:
+	if _state == null:
+		return
+	if _settings_store == null:
+		_settings_store = SettingsStoreScript.new()
+	var cache: Dictionary = _settings_store.load_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH)
+	if cache.is_empty():
+		return
+	_apply_update_refs_cache(cache)
+
+
+func _apply_update_refs_cache(cache: Dictionary) -> void:
+	_state.update_refs_state = "success"
+	_state.update_refs_status = ""
+	_state.update_refs_error = ""
+	_state.update_refs_refresh_state = "idle"
+	_state.update_refs_refresh_error = ""
+	_state.update_refs_last_checked_unix = int(cache.get("last_checked_unix", 0))
+	_state.update_refs_last_trigger = str(cache.get("last_trigger", "")).strip_edges()
+	_state.update_refs_last_http_status = int(cache.get("last_http_status", 0))
+	_state.update_ref_branches = _to_string_array(cache.get("branches", []))
+	_state.update_ref_releases = _to_string_array(cache.get("releases", []))
+	_state.update_ref_latest_stable_release = str(cache.get("latest_stable_release", "")).strip_edges()
+	_state.update_ref_latest_release = str(cache.get("latest_release", "")).strip_edges()
+	_state.update_refs_release_source = str(cache.get("release_source", "")).strip_edges()
+	_state.update_ref_commits = _duplicate_update_ref_commits(cache.get("commits", {}))
+	_state.update_ref_versions = _duplicate_update_ref_commits(cache.get("versions", {}))
+	_state.update_ref_release_rows = _duplicate_update_ref_rows(cache.get("release_rows", []))
+	_state.update_ref_branch_commit_rows = _duplicate_update_branch_commit_rows(cache.get("branch_commit_rows", {}))
+	_update_refs_discovery_loaded = true
+
+
+func _save_update_refs_cache() -> void:
+	if _state == null:
+		return
+	if _settings_store == null:
+		_settings_store = SettingsStoreScript.new()
+	_settings_store.save_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH, _build_update_refs_cache_snapshot())
+
+
+func _build_update_refs_cache_snapshot() -> Dictionary:
+	return {
+		"saved_unix": int(Time.get_unix_time_from_system()),
+		"last_checked_unix": int(_state.update_refs_last_checked_unix),
+		"last_trigger": str(_state.update_refs_last_trigger),
+		"last_http_status": int(_state.update_refs_last_http_status),
+		"branches": _state.update_ref_branches,
+		"releases": _state.update_ref_releases,
+		"latest_stable_release": str(_state.update_ref_latest_stable_release),
+		"latest_release": str(_state.update_ref_latest_release),
+		"release_source": str(_state.update_refs_release_source),
+		"commits": _state.update_ref_commits,
+		"versions": _state.update_ref_versions,
+		"release_rows": _state.update_ref_release_rows,
+		"branch_commit_rows": _state.update_ref_branch_commit_rows
+	}
 
 
 func _defer_tree_collapse_save() -> void:
@@ -1353,17 +1412,6 @@ func _on_update_check_requested(background_refresh: bool = false, trigger_source
 		_state.update_refs_state = "loading"
 		_state.update_refs_status = _localization.get_text("settings_update_refs_loading") if _localization != null else "Loading update refs."
 		_state.update_refs_error = ""
-		var empty_branches: Array[String] = []
-		var empty_releases: Array[String] = []
-		_state.update_ref_branches = empty_branches
-		_state.update_ref_releases = empty_releases
-		_state.update_ref_latest_stable_release = ""
-		_state.update_ref_latest_release = ""
-		_state.update_refs_release_source = ""
-		_state.update_ref_commits = {}
-		_state.update_ref_versions = {}
-		_state.update_ref_release_rows = []
-		_state.update_ref_branch_commit_rows = {}
 		_update_ref_version_requests_in_flight.clear()
 		_reset_update_compare_state()
 		_refresh_dock()
@@ -1674,6 +1722,7 @@ func _on_update_ref_version_request_completed(result: int, response_code: int, _
 	if version.is_empty():
 		return
 	_state.update_ref_versions[target_ref] = version
+	_save_update_refs_cache()
 	_refresh_dock()
 
 
@@ -2131,6 +2180,7 @@ func _finalize_update_refs_discovery_if_ready(serial: int) -> void:
 				_localization.get_text("settings_update_refs_success") if _localization != null else "Update refs loaded."
 			))
 			_reset_update_compare_state()
+		_save_update_refs_cache()
 	else:
 		if background_refresh:
 			_state.update_refs_refresh_state = "error"
@@ -2370,6 +2420,14 @@ func _extract_update_stable_release_names(items: Array) -> Array[String]:
 
 func _duplicate_update_ref_commits(raw_commits) -> Dictionary:
 	return _ensure_plugin_update_refs_discovery_service().duplicate_commits(raw_commits)
+
+
+func _duplicate_update_ref_rows(raw_rows) -> Array:
+	return _ensure_plugin_update_refs_discovery_service().duplicate_rows(raw_rows)
+
+
+func _duplicate_update_branch_commit_rows(raw_rows) -> Dictionary:
+	return _ensure_plugin_update_refs_discovery_service().duplicate_branch_commit_rows(raw_rows)
 
 
 func _on_start_requested() -> void:

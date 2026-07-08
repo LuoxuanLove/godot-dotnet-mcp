@@ -23,6 +23,8 @@ class FakeLocalization extends RefCounted:
 		"settings_update_current_version": "Current Version:",
 		"settings_update_channel_stable": "Stable",
 		"settings_update_channel_development": "Development",
+		"settings_update_channel_stable_selected": "Stable selected",
+		"settings_update_channel_development_selected": "Development selected",
 		"settings_update_col_version": "Version ID",
 		"settings_update_col_message": "Update",
 		"settings_update_col_date": "Date",
@@ -182,6 +184,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var log_option := _instance.get_node("Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/LogLevelRow/LogLevelOption") as OptionButton
 	var language_option := _instance.get_node("Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/LanguageRow/LanguageOption") as OptionButton
 	var channel_tabs := _instance.find_child("UpdateChannelTabs", true, false) as TabBar
+	var channel_status := _instance.find_child("UpdateChannelStatus", true, false) as Label
 	var custom_branch_row := _instance.get_node("Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CustomBranchRow") as HBoxContainer
 	var custom_branch := _instance.get_node("Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CustomBranchRow/CustomBranchValue") as OptionButton
 	var version_tree := _instance.find_child("VersionTree", true, false) as Tree
@@ -195,12 +198,17 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should render and select the current language.")
 	if channel_tabs == null or channel_tabs.get_tab_count() != 2 or channel_tabs.current_tab != 0 or channel_tabs.get_tab_title(0) != "Stable" or channel_tabs.get_tab_title(1) != "Development":
 		return _failure("Settings tab should render Stable / Development update channel tabs in the existing Settings tab.")
+	if channel_status == null or channel_status.text != "Stable selected":
+		return _failure("Settings tab should expose an explicit selected channel status beside the update channel tabs.")
 	if custom_branch == null or custom_branch.get_item_count() < 2 or str(custom_branch.get_item_metadata(0)) != "dev" or str(custom_branch.get_item_metadata(custom_branch.selected)) != "dev":
 		return _failure("Settings tab should render discovered custom branch options with dev pinned first.")
 	if custom_branch_row.visible:
 		return _failure("Settings tab should hide the branch selector while the Stable channel is active.")
 	if version_tree == null or not version_tree.visible or version_tree.get_root() == null or version_tree.get_root().get_first_child() == null:
 		return _failure("Settings tab should render the version management table for discovered stable releases.")
+	var stable_row := version_tree.get_root().get_first_child()
+	if stable_row.get_button_count(4) == 0 or stable_row.get_next() == null or stable_row.get_next().get_button_count(4) == 0:
+		return _failure("Settings tab should render Switch actions for non-current discovered versions.")
 	if recorder.update_source != "" or recorder.update_custom_branch != "" or recorder.update_interaction_refresh_count != 0 or recorder.update_check_count != 0:
 		return _failure("Settings tab should not emit update setting changes while applying a model.")
 
@@ -243,6 +251,37 @@ func run_case(tree: SceneTree) -> Dictionary:
 	channel_tabs.emit_signal("tab_changed", 1)
 	if not custom_branch_row.visible:
 		return _failure("Settings tab should immediately show the branch selector after changing to the Development channel.")
+	_instance.apply_model({
+		"localization": FakeLocalization.new(),
+		"editor_scale": 1.0,
+		"settings": {
+			"port": 4102,
+			"update_source": "custom_branch",
+			"update_custom_branch": "feature/settings"
+		},
+		"current_log_level": "error",
+		"current_language": "zh_CN",
+		"log_levels": ["debug", "info", "warning", "error"],
+		"update_refs_branches": ["dev", "feature/settings"],
+		"update_refs_state": "success",
+		"update_refs_branch_commit_rows": {
+			"feature/settings": [
+				{"kind": "branch", "ref": "feature/settings", "commit": "222222222222", "title": "Settings update", "date": "2026-07-04T12:00:00Z"},
+				{"kind": "branch", "ref": "feature/settings", "commit": "abcdef123456", "title": "Current build", "date": "2026-07-03T12:00:00Z"}
+			]
+		},
+		"plugin_version": "1.0.1",
+		"plugin_freshness": {
+			"sync": {"source_ref": "feature/settings", "source_git_commit": "abcdef123456"}
+		}
+	})
+	await tree.process_frame
+	if channel_tabs.current_tab != 1 or channel_status.text != "Development selected":
+		return _failure("Settings tab should make the selected Development channel visually and textually explicit.")
+	var dev_first_row := version_tree.get_root().get_first_child()
+	var dev_current_row := dev_first_row.get_next()
+	if dev_first_row == null or dev_first_row.get_button_count(4) == 0 or dev_current_row == null or dev_current_row.get_text(3) != "Current" or dev_current_row.get_button_count(4) != 0:
+		return _failure("Settings tab should highlight the current commit row and suppress Switch for the already-current version.")
 	custom_branch.select(1)
 	custom_branch.emit_signal("item_selected", 1)
 	var first_row := version_tree.get_root().get_first_child()

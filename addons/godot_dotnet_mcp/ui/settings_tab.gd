@@ -46,6 +46,7 @@ const UPDATE_SWITCH_BUTTON_ID := 1
 @onready var _current_version_label: Label = %CurrentVersionLabel
 @onready var _current_version_value: Label = %CurrentVersionValue
 @onready var _update_channel_tabs: TabBar = %UpdateChannelTabs
+@onready var _update_channel_status: Label = %UpdateChannelStatus
 @onready var _custom_branch_row: HBoxContainer = %CustomBranchRow
 @onready var _custom_branch_label: Label = %CustomBranchLabel
 @onready var _custom_branch_value: OptionButton = %CustomBranchValue
@@ -180,6 +181,7 @@ func _has_required_controls() -> bool:
 		_current_version_label,
 		_current_version_value,
 		_update_channel_tabs,
+		_update_channel_status,
 		_custom_branch_row,
 		_custom_branch_label,
 		_custom_branch_value,
@@ -270,6 +272,13 @@ func _apply_update_channel_tabs(active_channel: String, localization) -> void:
 	var target_index := 1 if active_channel == "development" else 0
 	if _update_channel_tabs.current_tab != target_index:
 		_update_channel_tabs.current_tab = target_index
+	_update_channel_status.text = _get_update_channel_status_text(active_channel, localization)
+
+
+func _get_update_channel_status_text(active_channel: String, localization) -> String:
+	if active_channel == "development":
+		return _localized(localization, "settings_update_channel_development_selected", "Development selected")
+	return _localized(localization, "settings_update_channel_stable_selected", "Stable selected")
 
 
 func _apply_version_rows(rows_value, empty_text: String, localization) -> void:
@@ -321,6 +330,11 @@ func _add_version_tree_row(root: TreeItem, row: Dictionary, localization) -> boo
 	item.set_text(2, str(row.get("date", "")))
 	item.set_text(3, _localized(localization, "settings_update_current_marker", "Current") if bool(row.get("current", false)) else "")
 	item.set_metadata(0, row.duplicate(true))
+	if bool(row.get("current", false)):
+		var highlight := _get_accent_color()
+		for column in range(0, 5):
+			item.set_custom_color(column, highlight)
+			item.set_custom_bg_color(column, highlight.darkened(0.7), false)
 	if bool(row.get("switch_enabled", true)):
 		var switch_text := _localized(localization, "settings_update_switch", "Switch")
 		item.set_text(4, switch_text)
@@ -524,6 +538,7 @@ func _apply_visual_style(scale: float) -> void:
 	begin_bulk_theme_override()
 	_general_card.add_theme_stylebox_override("panel", _make_theme_panel_style(scale))
 	_updates_card.add_theme_stylebox_override("panel", _make_theme_panel_style(scale))
+	_apply_channel_tab_style(scale)
 	for card_body in [_general_card_body, _updates_card_body]:
 		card_body.add_theme_constant_override("separation", int(round(10 * scale)))
 	for title in [_general_title, _updates_title]:
@@ -531,9 +546,37 @@ func _apply_visual_style(scale: float) -> void:
 		title.remove_theme_font_size_override("font_size")
 	for label in [_port_label, _log_level_label, _language_label, _remote_url_label, _current_branch_label, _current_version_label, _custom_branch_label]:
 		label.add_theme_color_override("font_color", _get_muted_text_color())
+	_update_channel_status.add_theme_color_override("font_color", _get_accent_color())
 	for label in [_updates_description, _updates_status, _updates_audit, _remote_url_value, _current_branch_value, _current_version_value]:
 		label.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
 	end_bulk_theme_override()
+
+
+func _apply_channel_tab_style(scale: float) -> void:
+	if _update_channel_tabs == null:
+		return
+	_update_channel_tabs.add_theme_stylebox_override("tab_selected", _make_channel_tab_style(scale, true))
+	_update_channel_tabs.add_theme_stylebox_override("tab_hovered", _make_channel_tab_style(scale, false, true))
+	_update_channel_tabs.add_theme_stylebox_override("tab_unselected", _make_channel_tab_style(scale, false))
+	_update_channel_tabs.add_theme_color_override("font_selected_color", _get_accent_color())
+	_update_channel_tabs.add_theme_color_override("font_hovered_color", get_theme_color("font_color", "Label"))
+	_update_channel_tabs.add_theme_color_override("font_unselected_color", get_theme_color("font_color", "Label"))
+
+
+func _make_channel_tab_style(scale: float, selected: bool, hovered: bool = false) -> StyleBox:
+	var style := StyleBoxFlat.new()
+	var accent := _get_accent_color()
+	var base := get_theme_color("dark_color_2", "Editor") if has_theme_color("dark_color_2", "Editor") else Color(0.12, 0.12, 0.12, 1.0)
+	style.bg_color = accent.darkened(0.65) if selected else (base.lightened(0.12) if hovered else base)
+	style.border_color = accent if selected else base.lightened(0.35)
+	style.border_width_bottom = int(round((3.0 if selected else 1.0) * scale))
+	style.corner_radius_top_left = int(round(4.0 * scale))
+	style.corner_radius_top_right = int(round(4.0 * scale))
+	style.content_margin_left = 12.0 * scale
+	style.content_margin_right = 12.0 * scale
+	style.content_margin_top = 6.0 * scale
+	style.content_margin_bottom = 6.0 * scale
+	return style
 
 
 func _make_theme_panel_style(_scale: float) -> StyleBox:
@@ -557,6 +600,12 @@ func _get_setting_rows() -> Array[HBoxContainer]:
 
 func _get_muted_text_color() -> Color:
 	return get_theme_color("font_disabled_color", "Editor")
+
+
+func _get_accent_color() -> Color:
+	if has_theme_color("accent_color", "Editor"):
+		return get_theme_color("accent_color", "Editor")
+	return Color(0.35, 0.62, 1.0, 1.0)
 
 
 func _on_resized() -> void:

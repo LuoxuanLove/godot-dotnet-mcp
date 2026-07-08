@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - Reworked the Settings update area into an integrated version manager with stable/development channels, cached release/tag and branch commit tables, row-level Switch actions, and one-click update guards that refuse rollback or divergent targets unless the user switches manually.
+- Persisted the Settings update version list across editor restarts and refresh it in the background at startup when cached data is available.
+- Strengthened the Settings stable/development channel selected state, highlighted the current version row, and removed redundant Switch actions from rows that already match the current plugin version.
 - Unified the Dock Resources and Prompts tabs around a single Tools-style tree, removing separate Catalog/Diagnostics view toggles while keeping protocol metadata in the selected-entry detail pane.
 - Matched the Dock Resources and Prompts catalog spacing, tree chrome, and row actions to the Tools tab by moving copy, preview, clear, and copy-preview actions into the tree context menu.
 
