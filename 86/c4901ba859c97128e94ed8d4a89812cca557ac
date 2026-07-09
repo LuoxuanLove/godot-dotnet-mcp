@@ -1,0 +1,30 @@
+addons/godot_dotnet_mcp/ui/settings_tab_model_projection.gd
+  s_23b990ea080c88::t_9b5a0516ed4050 250-252,388-411
+  s_23b990ea080c88::t_04c035b791f409 412-413
+docs/zh-CN/变更日志.md
+  s_23b990ea080c88::t_0ff6d3388f41c9 21
+tests/godot_plugin_harness_fixture/tests/settings_tab_model_projection_contract_test.gd
+  s_23b990ea080c88::t_5dff47ba1d7436 282-299
+docs/ko/변경-로그.md
+  s_23b990ea080c88::t_8c221510823a93 20
+docs/ja/変更履歴.md
+  s_23b990ea080c88::t_1f79b47ab46426 20
+docs/en/CHANGELOG.md
+  s_23b990ea080c88::t_0300df0043da36 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "86c4901ba859c97128e94ed8d4a89812cca557ac",
+  "prompts": {},
+  "sessions": {
+    "s_23b990ea080c88": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f455a-e660-7b22-834d-1ace12022177",
+        "model": "gpt-5.5"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
