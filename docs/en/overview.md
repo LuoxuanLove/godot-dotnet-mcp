@@ -8,6 +8,7 @@ Use these entry points when you need a fast path through the docs:
 - [ROADMAP.md](ROADMAP.md): planned plugin direction and version themes.
 - [CHANGELOG.md](CHANGELOG.md): shipped changes by release.
 - [interface/overview.md](interface/overview.md): Dock layout and editor-facing UI behavior.
+- [interface/dock-ui-style-guide.md](interface/dock-ui-style-guide.md): shared visual, responsive, interaction, and accessibility rules for every Dock page.
 - [process/release-runbook.md](process/release-runbook.md): release checklist and version-source rules.
 - [testing/overview.md](testing/overview.md): validation layers and CI expectations.
 - [appendix/encoding-rules.md](appendix/encoding-rules.md): repository encoding policy and Windows PowerShell cautions.
@@ -23,8 +24,9 @@ Use these entry points when you need a fast path through the docs:
 ### Use The Dock
 
 1. [interface/overview.md](interface/overview.md)
-2. [interface/server-and-config-pages.md](interface/server-and-config-pages.md)
-3. [interface/tools-page.md](interface/tools-page.md)
+2. [interface/dock-ui-style-guide.md](interface/dock-ui-style-guide.md)
+3. [interface/server-and-config-pages.md](interface/server-and-config-pages.md)
+4. [interface/tools-page.md](interface/tools-page.md)
 
 ### Prepare A Release
 

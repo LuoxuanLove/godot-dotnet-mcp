@@ -109,15 +109,69 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if update_releases.size() != 2 or not bool((update_releases[0] as Dictionary).get("selected", false)):
 		return _failure("Settings projection should offer discovered release/tag selector options and preserve the current tag.")
 	var updates: Dictionary = projected.get("updates", {})
+	if not str(updates.get("description_text", "")).contains("through One-click Update or Switch") or str(updates.get("refresh_text", "")) != "Refresh List":
+		return _failure("Settings projection should provide presentation-ready update guidance and refresh copy.")
 	if updates.has("version_text") or updates.has("source_text") or updates.has("commit_text"):
 		return _failure("Settings projection should not expose removed current version, plugin path, or commit summary rows.")
 	if bool(updates.get("prepare_enabled", true)) or not bool(updates.get("apply_enabled", false)):
 		return _failure("Settings update Sync should be enabled while Prepare remains disabled.")
+	if bool(updates.get("details_attention", true)):
+		return _failure("Settings projection should keep update details collapsed when rate-limit state is absent.")
 	if str(updates.get("source", "")) != "custom_branch" or not bool(updates.get("show_branch_row", false)):
 		return _failure("Settings projection should expose only the branch target row for custom branch sources.")
 	var status_text := str(updates.get("status_text", ""))
-	if not status_text.contains("Synced feature/settings.") or status_text.contains("Discovered") or status_text.contains("Selected target:") or not status_text.contains("Current plugin 1.2.3 [abcdef1] -> selected target 2.0.0 [1234567]") or status_text.contains("selected target feature/settings") or not status_text.contains("current ahead 1 / target ahead 4"):
-		return _failure("Settings projection should keep sync success text together with explicit current-to-target hashes and commit difference direction.")
+	var details_text := str(updates.get("details_text", ""))
+	if not status_text.contains("Synced feature/settings.") or status_text.contains("Current plugin") or not details_text.contains("Current plugin 1.2.3 [abcdef1] -> selected target 2.0.0 [1234567]") or details_text.contains("selected target feature/settings") or not details_text.contains("current ahead 1 / target ahead 4"):
+		return _failure("Settings projection should keep sync success concise while preserving explicit hashes and commit direction in update details.")
+	var rate_limited_projection: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {},
+		"update_refs_rate_limit_remaining": "0",
+		"plugin_freshness": {}
+	})
+	if not bool((rate_limited_projection.get("updates", {}) as Dictionary).get("details_attention", false)):
+		return _failure("Settings projection should request expanded details when the update API rate limit is exhausted.")
+	var refs_error_without_message: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {},
+		"update_refs_state": "error",
+		"update_refs_error": "",
+		"plugin_freshness": {}
+	})
+	if str((refs_error_without_message.get("updates", {}) as Dictionary).get("details_text", "")) != "Refs failed":
+		return _failure("Settings projection should keep foreground refs error details informative when the producer omits an explicit message.")
+	var sync_error_without_message: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {},
+		"update_refs_state": "success",
+		"update_sync_state": "error",
+		"update_sync_error": "",
+		"plugin_freshness": {}
+	})
+	if str((sync_error_without_message.get("updates", {}) as Dictionary).get("details_text", "")) != "Sync failed":
+		return _failure("Settings projection should keep foreground sync error details informative when the producer omits an explicit message.")
+	var foreground_compare_error: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {},
+		"update_refs_state": "success",
+		"update_compare_state": "error",
+		"update_compare_error": "Foreground compare failed before target verification.",
+		"plugin_freshness": {}
+	})
+	var foreground_compare_error_updates: Dictionary = foreground_compare_error.get("updates", {})
+	if not bool(foreground_compare_error_updates.get("details_attention", false)) or str(foreground_compare_error_updates.get("details_text", "")) != "Foreground compare failed before target verification.":
+		return _failure("Settings projection should automatically expose the actual foreground compare failure in update details.")
+	var foreground_compare_error_without_message: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {},
+		"update_refs_state": "success",
+		"update_compare_state": "error",
+		"update_compare_error": "",
+		"plugin_freshness": {}
+	})
+	var foreground_compare_fallback_updates: Dictionary = foreground_compare_error_without_message.get("updates", {})
+	if not bool(foreground_compare_fallback_updates.get("details_attention", false)) or not str(foreground_compare_fallback_updates.get("details_text", "")).contains("use Switch"):
+		return _failure("Settings projection should provide actionable details when a foreground compare failure omits its error message.")
 	var missing_commit_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "custom_branch", "update_custom_branch": "dev"},
@@ -128,8 +182,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"plugin_freshness": {}
 	})
 	var missing_commit_status := str((missing_commit_projection.get("updates", {}) as Dictionary).get("status_text", ""))
-	if not missing_commit_status.contains("Current plugin Unavailable [unrecorded]") or not missing_commit_status.contains("selected target Unavailable [Unavailable]") or missing_commit_status.contains("selected target dev"):
-		return _failure("Settings projection should use unrecorded for missing hashes and not fall back to raw refs as target versions.")
+	var missing_commit_details := str((missing_commit_projection.get("updates", {}) as Dictionary).get("details_text", ""))
+	if missing_commit_status.contains("Current plugin") or not missing_commit_details.contains("Current plugin Unavailable [unrecorded]") or not missing_commit_details.contains("selected target Unavailable [Unavailable]") or missing_commit_details.contains("selected target dev"):
+		return _failure("Settings projection should keep missing-hash diagnostics in details and not fall back to raw refs as target versions.")
 
 	var latest_release_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
@@ -141,7 +196,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"update_compare_target_ref": "v1.1.0-beta",
 		"plugin_freshness": {}
 	})
-	if not bool((latest_release_projection.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_release_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("v1.1.0-beta"):
+	if not bool((latest_release_projection.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_release_projection.get("updates", {}) as Dictionary).get("details_text", "")).contains("v1.1.0-beta"):
 		return _failure("Settings projection should resolve latest release targets, including prereleases, from discovered release state.")
 	if bool((latest_release_projection.get("updates", {}) as Dictionary).get("show_branch_row", true)):
 		return _failure("Settings projection should not expose editable target rows for automatic latest release sources.")
@@ -153,7 +208,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"update_refs_latest_stable_release": "",
 		"plugin_freshness": {}
 	})
-	if bool((tag_only_latest_projection.get("updates", {}) as Dictionary).get("apply_enabled", true)) or str((tag_only_latest_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("Selected target: 01"):
+	if bool((tag_only_latest_projection.get("updates", {}) as Dictionary).get("apply_enabled", true)) or str((tag_only_latest_projection.get("updates", {}) as Dictionary).get("details_text", "")).contains("Selected target: 01"):
 		return _failure("Settings projection should not treat tag-only refs such as 01 as the latest GitHub release.")
 	var explicit_tag_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
@@ -162,7 +217,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"update_refs_latest_release": "v1.1.0-beta.1",
 		"plugin_freshness": {}
 	})
-	if str((explicit_tag_projection.get("updates", {}) as Dictionary).get("source", "")) != "latest_release" or str((explicit_tag_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("Selected target: 01"):
+	if str((explicit_tag_projection.get("updates", {}) as Dictionary).get("source", "")) != "latest_release" or str((explicit_tag_projection.get("updates", {}) as Dictionary).get("details_text", "")).contains("Selected target: 01"):
 		return _failure("Settings projection should normalize old explicit release/tag settings to latest release and ignore saved downgrade tags.")
 	var removed_latest_dev_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
@@ -190,7 +245,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"update_compare_target_ref": "v1.0.0",
 		"plugin_freshness": {}
 	})
-	if not bool((latest_stable_projection.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_stable_projection.get("updates", {}) as Dictionary).get("status_text", "")).contains("v1.0.0"):
+	if not bool((latest_stable_projection.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_stable_projection.get("updates", {}) as Dictionary).get("details_text", "")).contains("v1.0.0"):
 		return _failure("Settings projection should resolve latest stable release targets from discovered release state.")
 	var stale_selection_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
@@ -219,6 +274,54 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool((background_compare_refresh_projection.get("updates", {}) as Dictionary).get("apply_enabled", false)):
 		return _failure("Settings projection should keep update Sync enabled while background refs or compare refreshes are loading.")
+	var cached_refs_error_projection: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {"update_source": "custom_branch", "update_custom_branch": "feature/settings"},
+		"update_refs_state": "success",
+		"update_refs_refresh_state": "error",
+		"update_refs_refresh_error": "Background refs refresh failed; cached versions remain available.",
+		"update_refs_commits": {"feature/settings": "1234567890abcdef"},
+		"update_refs_branch_commit_rows": {"feature/settings": [{"kind": "branch", "ref": "feature/settings", "commit": "1234567890abcdef", "title": "Cached settings update", "date": "2026-07-12T12:00:00Z"}]},
+		"update_compare_state": "success",
+		"update_compare_target_ref": "feature/settings",
+		"update_compare_target_commit": "1234567890abcdef",
+		"plugin_freshness": {}
+	})
+	var cached_refs_error_updates: Dictionary = cached_refs_error_projection.get("updates", {})
+	if not bool(cached_refs_error_updates.get("apply_enabled", false)) or (cached_refs_error_updates.get("version_rows", []) as Array).is_empty() or not bool(cached_refs_error_updates.get("details_attention", false)) or not str(cached_refs_error_updates.get("details_text", "")).contains("Background refs refresh failed") or not str(cached_refs_error_updates.get("status_text", "")).contains("Refs loaded"):
+		return _failure("Settings projection should preserve cached refs and actions while surfacing a background refs refresh failure in expanded details.")
+	var cached_compare_error_projection: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {"update_source": "custom_branch", "update_custom_branch": "feature/settings"},
+		"update_refs_state": "success",
+		"update_refs_commits": {"feature/settings": "1234567890abcdef"},
+		"update_compare_state": "success",
+		"update_compare_refresh_state": "error",
+		"update_compare_refresh_error": "Background compare refresh timed out; cached comparison remains available.",
+		"update_compare_target_ref": "feature/settings",
+		"update_compare_target_commit": "1234567890abcdef",
+		"update_compare_ahead_by": 2,
+		"update_compare_behind_by": 0,
+		"plugin_freshness": {}
+	})
+	var cached_compare_error_updates: Dictionary = cached_compare_error_projection.get("updates", {})
+	if not bool(cached_compare_error_updates.get("apply_enabled", false)) or not bool(cached_compare_error_updates.get("details_attention", false)) or not str(cached_compare_error_updates.get("details_text", "")).contains("Background compare refresh timed out") or not str(cached_compare_error_updates.get("details_text", "")).contains("current ahead 0 / target ahead 2"):
+		return _failure("Settings projection should surface a background compare refresh failure without discarding the cached comparison or update action.")
+	var unavailable_compare_refresh_projection: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {"update_source": "custom_branch", "update_custom_branch": "feature/settings"},
+		"update_refs_state": "success",
+		"update_refs_commits": {"feature/settings": "1234567890abcdef"},
+		"update_compare_state": "success",
+		"update_compare_refresh_state": "unavailable",
+		"update_compare_refresh_error": "",
+		"update_compare_target_ref": "feature/settings",
+		"update_compare_target_commit": "1234567890abcdef",
+		"plugin_freshness": {}
+	})
+	var unavailable_compare_refresh_updates: Dictionary = unavailable_compare_refresh_projection.get("updates", {})
+	if not bool(unavailable_compare_refresh_updates.get("details_attention", false)) or not str(unavailable_compare_refresh_updates.get("details_text", "")).contains("use Switch"):
+		return _failure("Settings projection should provide actionable details when a background compare refresh is unavailable without a producer error message.")
 
 	var refresh_loading_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
@@ -253,7 +356,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"update_compare_state": "success",
 		"update_compare_target_ref": "v2.0.0"
 	})
-	if not bool((latest_stable.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_stable.get("updates", {}) as Dictionary).get("status_text", "")).contains("v2.0.0"):
+	if not bool((latest_stable.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_stable.get("updates", {}) as Dictionary).get("details_text", "")).contains("v2.0.0"):
 		return _failure("Settings projection should sync the latest stable release when discovered.")
 	var latest_release: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
@@ -265,7 +368,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"update_compare_state": "success",
 		"update_compare_target_ref": "v2.1.0-beta.1"
 	})
-	if not bool((latest_release.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_release.get("updates", {}) as Dictionary).get("status_text", "")).contains("v2.1.0-beta.1"):
+	if not bool((latest_release.get("updates", {}) as Dictionary).get("apply_enabled", false)) or not str((latest_release.get("updates", {}) as Dictionary).get("details_text", "")).contains("v2.1.0-beta.1"):
 		return _failure("Settings projection should sync the latest release, including prereleases, when discovered.")
 	var fallback_branches: Array = (fallback.get("options", {}) as Dictionary).get("update_branches", [])
 	if fallback_branches.is_empty() or str((fallback_branches[0] as Dictionary).get("value", "")) != "dev":
@@ -276,8 +379,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"plugin_freshness": {}
 	})
 	var legacy_status_text := str((legacy_unavailable_projection.get("updates", {}) as Dictionary).get("status_text", ""))
-	if legacy_status_text.contains("Select branch mode") or legacy_status_text.contains("Select release/tag mode") or not legacy_status_text.contains("Click Check for Updates"):
-		return _failure("Settings projection should replace cached legacy ref-availability guidance with manual Check for Updates text.")
+	if legacy_status_text.contains("Select branch mode") or legacy_status_text.contains("Select release/tag mode") or legacy_status_text.contains("Check for Updates") or not legacy_status_text.contains("Refresh List"):
+		return _failure("Settings projection should replace cached legacy ref-availability guidance with the visible Refresh List action name.")
 
 	return {"name": "settings_tab_model_projection_contracts", "success": true, "error": ""}
 

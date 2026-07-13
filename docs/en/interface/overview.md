@@ -182,6 +182,7 @@ This means the tab scripts only keep the scaling-related hard constraints, while
 
 ## Further Reading
 
+- See [Dock UI style guide](dock-ui-style-guide.md) for the shared visual, responsive, interaction, and accessibility contract
 - See [Tools page implementation](tools-page.md) for the detailed `Tools` tab implementation
 - See [Server and Config page implementation](server-and-config-pages.md) for the detailed `Server` and `Config` tab implementation
 - See [../testing/overview.md](../testing/overview.md) for UI validation coverage

@@ -19,6 +19,7 @@ $docMap = @(
     @{ Id = "roadmap"; Paths = @{ en = "ROADMAP.md"; "zh-CN" = "路线图.md"; ja = "ロードマップ.md"; ko = "로드맵.md" } },
     @{ Id = "overview"; Paths = @{ en = "overview.md"; "zh-CN" = "概述.md"; ja = "概要.md"; ko = "개요.md" } },
     @{ Id = "interface-overview"; Paths = @{ en = "interface/overview.md"; "zh-CN" = "界面/总览.md"; ja = "インターフェース/概要.md"; ko = "인터페이스/개요.md" } },
+    @{ Id = "interface-dock-ui-style-guide"; Paths = @{ en = "interface/dock-ui-style-guide.md"; "zh-CN" = "界面/Dock界面风格规范.md"; ja = "インターフェース/Dock-UIスタイルガイド.md"; ko = "인터페이스/Dock-UI-스타일-가이드.md" } },
     @{ Id = "interface-server-config"; Paths = @{ en = "interface/server-and-config-pages.md"; "zh-CN" = "界面/服务与配置页实现.md"; ja = "インターフェース/サーバーと設定ページ実装.md"; ko = "인터페이스/서버와-설정-페이지-구현.md" } },
     @{ Id = "interface-tools"; Paths = @{ en = "interface/tools-page.md"; "zh-CN" = "界面/工具页实现.md"; ja = "インターフェース/ツールページ実装.md"; ko = "인터페이스/도구-페이지-구현.md" } },
     @{ Id = "process-agent-bot"; Paths = @{ en = "process/agent-and-bot-workflow.md"; "zh-CN" = "流程/智能体与机器人流程.md"; ja = "プロセス/エージェントとボットの流れ.md"; ko = "프로세스/에이전트와-봇-흐름.md" } },

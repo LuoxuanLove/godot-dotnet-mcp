@@ -38,6 +38,14 @@ The Tools tab also moves toward the shared catalog fact path. Titles, icons, ann
 
 This makes the Dock a preview of the MCP server surface rather than a parallel interpretation of it. When client-visible metadata changes, the UI is expected to reflect the same facts.
 
+### 🎛️ Focused Settings Experience
+
+The Settings page keeps port, log level, language, stable/development channels, branch selection, Refresh List, one-click update, and row-level Switch actions, but presents them in a quieter hierarchy. Current version and primary actions stay visible, while repository metadata, commit comparisons, HTTP refresh audit, and rate-limit timing move into on-demand details that open automatically when an error or exhausted API rate limit needs attention.
+
+The version list now uses three focused columns, marks the current row with text as well as color, and moves dates to row tooltips. Forms and actions stack into a true single-column layout at ultra-narrow Dock widths, so the update workflow remains usable without horizontal clutter.
+
+A four-language Dock UI style guide now defines the information hierarchy, editor-native theme use, spacing, responsive breakpoints, action priorities, status and empty-state behavior, accessibility, localization, and validation matrix that future pages must follow.
+
 ### 🧠 C# Semantic Runtime
 
 C# semantic tooling remains part of the installation contract. Asset Library and prepared addon installs include framework-dependent Roslyn runtime files so semantic read and patch workflows continue to work after installation when the machine has the .NET 8 runtime available.

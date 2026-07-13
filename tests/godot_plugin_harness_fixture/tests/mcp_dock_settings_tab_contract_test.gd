@@ -221,7 +221,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if recorder.port != 3200:
 		return _failure("Settings tab port changes should route through the existing Dock port_changed signal.")
 	var channel_tabs := tab_container.get_tab_control(5).find_child("UpdateChannelTabs", true, false) as TabBar
-	var custom_branch_row := tab_container.get_tab_control(5).find_child("CustomBranchRow", true, false) as HBoxContainer
+	var custom_branch_row := tab_container.get_tab_control(5).find_child("CustomBranchRow", true, false) as GridContainer
 	var custom_branch_value := tab_container.get_tab_control(5).find_child("CustomBranchValue", true, false) as OptionButton
 	var version_tree := tab_container.get_tab_control(5).find_child("VersionTree", true, false) as Tree
 	var check_button := tab_container.get_tab_control(5).find_child("CheckButton", true, false) as Button
@@ -252,10 +252,13 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var labels := tab_container.get_tab_control(5).find_children("*", "Label", true, false)
 	if _find_label_containing(labels, "Select an update mode") != null:
 		return _failure("Settings tab should normalize stale automatic discovery status copy after Dock projection.")
-	if _find_label_containing(labels, "Current Version:") == null or _find_label_containing(labels, "1.0.1 (abcdef1)") == null or _find_label_containing(labels, "Remote URL:") == null:
-		return _failure("Settings tab should display the update management summary after Dock projection.")
-	if _find_label_containing(labels, "Synced dev.") == null or _find_label_containing(labels, "Current plugin 1.0.1 [abcdef1] -> selected target 1.4.0 [1234567]") == null or _find_label_containing(labels, "selected target dev") != null or _find_label_containing(labels, "current ahead 0 / target ahead 1") == null:
-		return _failure("Settings tab should display sync success together with explicit current-to-target update hashes and commit difference direction.")
+	if _find_label_containing(labels, "Current Version:") == null or _find_label_containing(labels, "1.0.1 (abcdef1)") == null:
+		return _failure("Settings tab should display the compact update summary after Dock projection.")
+	var details_button := tab_container.get_tab_control(5).find_child("DetailsButton", true, false) as Button
+	var details_panel := tab_container.get_tab_control(5).find_child("DetailsPanel", true, false) as PanelContainer
+	var details_text := tab_container.get_tab_control(5).find_child("UpdatesDetails", true, false) as Label
+	if _find_label_containing(labels, "Synced dev.") == null or details_button == null or not details_button.visible or details_panel == null or details_panel.visible or details_text == null or not details_text.text.contains("Current plugin 1.0.1 [abcdef1] -> selected target 1.4.0 [1234567]") or details_text.text.contains("selected target dev") or not details_text.text.contains("current ahead 0 / target ahead 1"):
+		return _failure("Settings tab should preserve compare hashes in collapsed details while keeping the main sync status concise.")
 	custom_branch_value.emit_signal("pressed")
 	if recorder.update_interaction_refresh_count != 0 or recorder.update_source != "" or recorder.update_custom_branch != "":
 		return _failure("MCP Dock should not request update refresh when Settings selectors are opened.")
