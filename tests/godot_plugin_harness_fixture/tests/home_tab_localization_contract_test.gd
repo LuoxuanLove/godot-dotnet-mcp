@@ -152,7 +152,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"tab_settings",
 		"settings_general_title",
 		"settings_updates_title",
-		"settings_updates_description",
 		"settings_current_version",
 		"settings_current_source",
 		"settings_current_commit",

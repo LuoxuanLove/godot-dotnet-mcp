@@ -9,6 +9,7 @@ signal update_custom_branch_changed(branch: String)
 signal update_interaction_refresh_requested
 signal update_check_requested
 signal update_apply_requested
+signal update_compare_target_selected(kind: String, target_ref: String, target_commit: String)
 signal update_switch_requested(kind: String, target_ref: String, target_commit: String)
 
 const SettingsTabModelProjectionServiceScript = preload("res://addons/godot_dotnet_mcp/ui/settings_tab_model_projection.gd")
@@ -37,10 +38,7 @@ const UPDATE_SWITCH_BUTTON_ID := 1
 @onready var _updates_card_margin: MarginContainer = %UpdatesCardMargin
 @onready var _updates_card_body: VBoxContainer = %UpdatesCardBody
 @onready var _updates_title: Label = %UpdatesTitle
-@onready var _updates_description: Label = %UpdatesDescription
 @onready var _current_summary_grid: GridContainer = %CurrentSummaryGrid
-@onready var _remote_url_label: Label = %RemoteUrlLabel
-@onready var _remote_url_value: Label = %RemoteUrlValue
 @onready var _current_branch_label: Label = %CurrentBranchLabel
 @onready var _current_branch_value: Label = %CurrentBranchValue
 @onready var _current_version_label: Label = %CurrentVersionLabel
@@ -59,7 +57,6 @@ const UPDATE_SWITCH_BUTTON_ID := 1
 @onready var _details_panel: PanelContainer = %DetailsPanel
 @onready var _details_margin: MarginContainer = %DetailsMargin
 @onready var _details_body: VBoxContainer = %DetailsBody
-@onready var _remote_url_row: GridContainer = %RemoteUrlRow
 @onready var _updates_details: Label = %UpdatesDetails
 @onready var _updates_audit: Label = %UpdatesAudit
 @onready var _version_tree: Tree = %VersionTree
@@ -132,8 +129,6 @@ func apply_model(model: Dictionary) -> void:
 	_log_level_label.text = localization.get_text("log_level")
 	_language_label.text = localization.get_text("language")
 	_updates_title.text = localization.get_text("settings_updates_title")
-	_updates_description.text = str(updates.get("description_text", ""))
-	_remote_url_label.text = _localized(localization, "settings_update_remote_url", "Remote URL:")
 	_current_branch_label.text = _localized(localization, "settings_update_current_branch", "Current Branch:")
 	_current_version_label.text = _localized(localization, "settings_update_current_version", "Current Version:")
 	_details_label = _localized(localization, "settings_update_details", "Details")
@@ -159,12 +154,10 @@ func apply_model(model: Dictionary) -> void:
 	_custom_branch_syncing = false
 	_apply_update_selector_popup_limits()
 
-	_remote_url_value.text = str(updates.get("remote_url", ""))
 	_current_branch_value.text = str(updates.get("current_branch", ""))
 	_current_version_value.text = _format_current_version_summary(updates, localization)
 	_current_branch_label.visible = str(updates.get("active_channel", "stable")) == "development"
 	_current_branch_value.visible = _current_branch_label.visible
-	_remote_url_value.tooltip_text = _remote_url_value.text
 	_current_branch_value.tooltip_text = _current_branch_value.text
 	_current_version_value.tooltip_text = _current_version_value.text
 	_updates_status.text = str(updates.get("status_text", ""))
@@ -173,7 +166,7 @@ func apply_model(model: Dictionary) -> void:
 	_updates_details.visible = not _updates_details.text.strip_edges().is_empty()
 	_updates_audit.text = str(updates.get("audit_text", ""))
 	_updates_audit.visible = not _updates_audit.text.strip_edges().is_empty()
-	var has_details := not _remote_url_value.text.strip_edges().is_empty() or _updates_details.visible or _updates_audit.visible
+	var has_details := _updates_details.visible or _updates_audit.visible
 	_details_button.visible = has_details
 	if bool(updates.get("details_attention", false)) and has_details:
 		_details_button.button_pressed = true
@@ -203,10 +196,7 @@ func _has_required_controls() -> bool:
 		_language_option,
 		_updates_card,
 		_updates_title,
-		_updates_description,
 		_current_summary_grid,
-		_remote_url_label,
-		_remote_url_value,
 		_current_branch_label,
 		_current_branch_value,
 		_current_version_label,
@@ -284,7 +274,7 @@ func _format_current_version_summary(updates: Dictionary, localization) -> Strin
 
 
 func _apply_update_channel_tabs(active_channel: String, localization) -> void:
-	_update_channel_tabs.set_tab_title(0, _localized(localization, "settings_update_channel_stable", "Stable"))
+	_update_channel_tabs.set_tab_title(0, _localized(localization, "settings_update_channel_stable", "Release"))
 	_update_channel_tabs.set_tab_title(1, _localized(localization, "settings_update_channel_development", "Development"))
 	var target_index := 1 if active_channel == "development" else 0
 	if _update_channel_tabs.current_tab != target_index:
@@ -347,12 +337,13 @@ func _add_version_tree_row(root: TreeItem, row: Dictionary, localization) -> boo
 		var highlight := _get_accent_color()
 		for column in range(0, 3):
 			item.set_custom_color(column, highlight)
-			item.set_custom_bg_color(column, highlight.darkened(0.7), false)
 		item.set_text(2, _localized(localization, "settings_update_current_marker", "Current"))
 	elif bool(row.get("switch_enabled", true)):
 		var switch_text := _localized(localization, "settings_update_switch", "Switch")
 		item.set_text(2, switch_text)
 		item.add_button(2, _get_switch_icon(), UPDATE_SWITCH_BUTTON_ID, false, switch_text)
+	if bool(row.get("selected", false)):
+		item.select(0)
 	return true
 
 
@@ -459,9 +450,12 @@ func _on_version_tree_button_clicked(item: TreeItem, _column: int, id: int, _mou
 
 
 func _on_version_tree_cell_selected() -> void:
-	if _version_tree_syncing or _version_tree.get_selected_column() != 2:
+	if _version_tree_syncing:
 		return
-	_queue_version_switch(_version_tree.get_selected())
+	var row := _get_version_target_row(_version_tree.get_selected())
+	if row.is_empty():
+		return
+	update_compare_target_selected.emit(str(row.get("kind", "branch")), str(row.get("ref", "")), str(row.get("commit", "")))
 
 
 func _queue_version_switch(item: TreeItem) -> void:
@@ -485,14 +479,19 @@ func _emit_queued_version_switch() -> void:
 
 
 func _get_version_switch_row(item: TreeItem) -> Dictionary:
+	var row := _get_version_target_row(item)
+	if row.is_empty() or not bool(row.get("switch_enabled", true)):
+		return {}
+	return row
+
+
+func _get_version_target_row(item: TreeItem) -> Dictionary:
 	if item == null:
 		return {}
 	var metadata = item.get_metadata(0)
 	if not (metadata is Dictionary):
 		return {}
 	var row := metadata as Dictionary
-	if not bool(row.get("switch_enabled", true)):
-		return {}
 	if str(row.get("ref", "")).strip_edges().is_empty():
 		return {}
 	return row.duplicate(true)
@@ -547,15 +546,14 @@ func _apply_responsive_layout() -> void:
 		card_margin.add_theme_constant_override("margin_right", int(round(horizontal_margin)))
 		card_margin.add_theme_constant_override("margin_top", int(round(12 * scale)))
 		card_margin.add_theme_constant_override("margin_bottom", int(round(12 * scale)))
-	for grid in [_general_form, _current_summary_grid, _custom_branch_row, _update_action_grid, _remote_url_row]:
+	for grid in [_general_form, _current_summary_grid, _custom_branch_row, _update_action_grid]:
 		grid.add_theme_constant_override("h_separation", int(round(row_spacing)))
 		grid.add_theme_constant_override("v_separation", int(round(row_spacing)))
 	_general_form.columns = 1 if ultra_narrow_layout else 2
 	_current_summary_grid.columns = 2 if narrow_layout else 4
 	_custom_branch_row.columns = 1 if ultra_narrow_layout else 2
 	_update_action_grid.columns = 1 if ultra_narrow_layout else 2
-	_remote_url_row.columns = 1 if ultra_narrow_layout else 2
-	for label in [_port_label, _log_level_label, _language_label, _remote_url_label, _current_branch_label, _current_version_label, _custom_branch_label]:
+	for label in [_port_label, _log_level_label, _language_label, _current_branch_label, _current_version_label, _custom_branch_label]:
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		label.custom_minimum_size.x = 0.0 if ultra_narrow_layout else label_width
 	for field in [_port_spin, _log_level_option, _language_option, _custom_branch_value]:
@@ -585,9 +583,9 @@ func _apply_visual_style(scale: float) -> void:
 	for title in [_general_title, _updates_title]:
 		title.add_theme_color_override("font_color", get_theme_color("font_color", "Label"))
 		title.remove_theme_font_size_override("font_size")
-	for label in [_port_label, _log_level_label, _language_label, _remote_url_label, _current_branch_label, _current_version_label, _custom_branch_label]:
+	for label in [_port_label, _log_level_label, _language_label, _current_branch_label, _current_version_label, _custom_branch_label]:
 		label.add_theme_color_override("font_color", _get_muted_text_color())
-	for label in [_updates_description, _updates_status, _updates_details, _remote_url_value, _current_branch_value, _current_version_value]:
+	for label in [_updates_status, _updates_details, _current_branch_value, _current_version_value]:
 		label.add_theme_color_override("font_color", _get_description_text_color())
 	_updates_audit.add_theme_color_override("font_color", _get_meta_text_color())
 	end_bulk_theme_override()

@@ -42,23 +42,57 @@ func resolve_current_commit(freshness) -> String:
 	return ""
 
 
-func build_compare_start_snapshot(base_commit: String, target: Dictionary) -> Dictionary:
+func build_compare_cache_key(base_commit: String, target_kind: String, target_ref: String, target_commit: String) -> String:
+	return "\n".join([
+		base_commit.strip_edges(),
+		target_kind.strip_edges(),
+		target_ref.strip_edges(),
+		target_commit.strip_edges()
+	])
+
+
+func build_compare_start_snapshot(base_commit: String, target: Dictionary, compare_cache: Dictionary = {}) -> Dictionary:
 	var target_ref := str(target.get("ref", "")).strip_edges()
 	var target_commit := str(target.get("commit", "")).strip_edges()
+	var target_kind := str(target.get("kind", "branch")).strip_edges()
 	var compare_head := resolve_compare_head(target)
 	var state := "loading"
+	var ahead_by := -1
+	var behind_by := -1
+	var source := "remote_required"
 	if base_commit.strip_edges().is_empty() or compare_head.strip_edges().is_empty():
 		state = "unavailable"
 	elif not target_commit.is_empty() and base_commit == target_commit:
 		state = "success"
+		ahead_by = 0
+		behind_by = 0
+		source = "local_exact"
+	else:
+		var cache_key := build_compare_cache_key(base_commit, target_kind, target_ref, target_commit)
+		var cached = compare_cache.get(cache_key, {})
+		if cached is Dictionary and not target_commit.is_empty():
+			var cached_entry := cached as Dictionary
+			var cached_ahead := int((cached as Dictionary).get("ahead_by", -1))
+			var cached_behind := int((cached as Dictionary).get("behind_by", -1))
+			var cache_matches_target := str(cached_entry.get("base_commit", "")).strip_edges() == base_commit.strip_edges() \
+				and str(cached_entry.get("target_kind", "")).strip_edges() == target_kind \
+				and str(cached_entry.get("target_ref", "")).strip_edges() == target_ref \
+				and str(cached_entry.get("target_commit", "")).strip_edges() == target_commit
+			if cache_matches_target and cached_ahead >= 0 and cached_behind >= 0:
+				state = "success"
+				ahead_by = cached_ahead
+				behind_by = cached_behind
+				source = "cache"
 	return {
 		"state": state,
 		"base_commit": base_commit.strip_edges(),
+		"target_kind": target_kind,
 		"target_ref": target_ref,
 		"target_commit": target_commit,
 		"compare_head": compare_head,
-		"ahead_by": 0 if state == "success" else -1,
-		"behind_by": 0 if state == "success" else -1,
+		"ahead_by": ahead_by,
+		"behind_by": behind_by,
+		"source": source,
 		"error": ""
 	}
 
@@ -71,8 +105,14 @@ func parse_compare_response(body: PackedByteArray) -> Dictionary:
 	if not (json.data is Dictionary):
 		return {"success": false, "error": "Expected a JSON object"}
 	var data := json.data as Dictionary
+	if not data.has("ahead_by") or not data.has("behind_by"):
+		return {"success": false, "error": "Compare response is missing ahead_by or behind_by"}
+	var ahead_by := int(data.get("ahead_by", -1))
+	var behind_by := int(data.get("behind_by", -1))
+	if ahead_by < 0 or behind_by < 0:
+		return {"success": false, "error": "Compare response contains invalid commit counts"}
 	return {
 		"success": true,
-		"ahead_by": int(data.get("ahead_by", -1)),
-		"behind_by": int(data.get("behind_by", -1))
+		"ahead_by": ahead_by,
+		"behind_by": behind_by
 	}

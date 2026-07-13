@@ -117,16 +117,12 @@ func _find_inconsistent_update_action_guidance(locale_translations: Dictionary) 
 		var translations: Dictionary = locale_translations.get(locale_code, {})
 		var refresh_label := str(translations.get("settings_update_refresh_list", "")).strip_edges()
 		var one_click_label := str(translations.get("settings_update_one_click", "")).strip_edges()
-		var switch_label := str(translations.get("settings_update_switch", "")).strip_edges()
 		var inconsistent_keys: Array[String] = []
 		for key in refresh_guidance_keys:
 			if refresh_label.is_empty() or not str(translations.get(key, "")).contains(refresh_label):
 				inconsistent_keys.append(key)
 		if one_click_label.is_empty() or not str(translations.get("settings_update_placeholder_status", "")).contains(one_click_label):
 			inconsistent_keys.append("settings_update_placeholder_status")
-		var update_description := str(translations.get("settings_updates_description", ""))
-		if refresh_label.is_empty() or one_click_label.is_empty() or switch_label.is_empty() or not update_description.contains(refresh_label) or not update_description.contains(one_click_label) or not update_description.contains(switch_label):
-			inconsistent_keys.append("settings_updates_description")
 		if not inconsistent_keys.is_empty():
 			inconsistent_by_locale[locale_code] = inconsistent_keys
 	return inconsistent_by_locale

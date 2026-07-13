@@ -22,6 +22,8 @@ Use no more than three structural levels.
 
 The visual order must match the keyboard focus order. Put the most common path first and move fixed repository facts, hashes, timestamps, and audit trails into secondary details.
 
+A selector that scopes a list, table, preview, or editor belongs immediately before that surface. Do not insert unrelated status, metadata, or actions between the selector and the content it controls.
+
 ## Spacing And Layout Tokens
 
 All values are logical pixels multiplied by the current editor scale.
@@ -55,16 +57,18 @@ Prefer margins and ordinary container separation in `.tscn` scenes. Scripts may 
 
 ## Status, Help, And Details
 
-- A card may keep one persistent description and one live status region. Do not repeat the same instruction in both.
+- A card may keep one persistent description and one live status region. Omit the description when the controls, status, or empty state already explain the workflow, and never repeat the same instruction in both.
 - Idle guidance should name the next action. Loading state should identify the active scope, lock conflicting actions, and show progress when measurable.
 - Success text should be short. Error text must retain the cause and a recovery action when one is known.
 - Operational metadata such as trigger source, HTTP status, rate-limit reset, hashes, and comparison counts belongs in a collapsible details surface.
-- Error and exhausted-rate-limit details may open automatically; ordinary audit information stays collapsed.
+- The persistent status region owns the primary result. Details are supplemental and must not repeat the same error or summary; open them automatically only when they add actionable diagnostic evidence.
+- Error and exhausted-rate-limit details may open automatically when they add that evidence; ordinary audit information stays collapsed.
 
 ## Lists, Tables, And Empty States
 
 - Show only columns needed to choose or inspect the item. Move secondary dates and identifiers to tooltips or details on narrow layouts.
 - Current rows require a text marker or icon in addition to any color treatment, and must not offer an action that would select the same item again.
+- When row selection establishes a target, highlight the full row. Selection updates only that non-destructive target; a separate row action performs mutation, navigation, or switching.
 - Row actions are tertiary. Use a localized label or tooltip even when an editor icon is present.
 - Hide an empty `Tree` and show a concise empty state that distinguishes not-yet-loaded, loading, no-results, and error conditions.
 - Keep selection, scroll position, and deferred row actions stable while the model refreshes.
@@ -79,6 +83,8 @@ Prefer margins and ordinary container separation in `.tscn` scenes. Scripts may 
 | Destructive | Remove, clear, or delete | Visually separated and confirmed when loss is possible |
 
 Hover-only controls may duplicate a discoverable action, but must never be the sole way to invoke an important operation.
+
+Restoring cached state and changing passive selections must be side-effect free. Network access and mutations require an explicit user action, and repeated retries should respect known cooldown or rate-limit state.
 
 ## Responsive Dock Behavior
 
