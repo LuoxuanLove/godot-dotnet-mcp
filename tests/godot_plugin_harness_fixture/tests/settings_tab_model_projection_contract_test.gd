@@ -131,6 +131,25 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool((rate_limited_projection.get("updates", {}) as Dictionary).get("details_attention", false)):
 		return _failure("Settings projection should request expanded details when the update API rate limit is exhausted.")
+	var refs_error_without_message: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {},
+		"update_refs_state": "error",
+		"update_refs_error": "",
+		"plugin_freshness": {}
+	})
+	if str((refs_error_without_message.get("updates", {}) as Dictionary).get("details_text", "")) != "Refs failed":
+		return _failure("Settings projection should keep foreground refs error details informative when the producer omits an explicit message.")
+	var sync_error_without_message: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {},
+		"update_refs_state": "success",
+		"update_sync_state": "error",
+		"update_sync_error": "",
+		"plugin_freshness": {}
+	})
+	if str((sync_error_without_message.get("updates", {}) as Dictionary).get("details_text", "")) != "Sync failed":
+		return _failure("Settings projection should keep foreground sync error details informative when the producer omits an explicit message.")
 	var missing_commit_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "custom_branch", "update_custom_branch": "dev"},

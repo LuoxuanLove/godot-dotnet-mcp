@@ -227,9 +227,15 @@ func _build_update_details_text(model: Dictionary, update_settings: Dictionary, 
 	var refs_state := str(model.get("update_refs_state", "idle"))
 	var sync_state := str(model.get("update_sync_state", "idle"))
 	if refs_state == "error":
-		return str(model.get("update_refs_error", "")).strip_edges()
+		var refs_error := str(model.get("update_refs_error", "")).strip_edges()
+		if refs_error.is_empty():
+			refs_error = _get_localized_text(localization, "settings_update_refs_error", "Update refs discovery failed.")
+		return refs_error
 	if sync_state == "error":
-		return str(model.get("update_sync_error", "")).strip_edges()
+		var sync_error := str(model.get("update_sync_error", "")).strip_edges()
+		if sync_error.is_empty():
+			sync_error = _get_localized_text(localization, "settings_update_sync_error", "Update sync failed.")
+		return sync_error
 	var details := _build_background_refresh_errors(model, localization)
 	if refs_state == "idle" and sync_state == "idle":
 		return "\n".join(details)
