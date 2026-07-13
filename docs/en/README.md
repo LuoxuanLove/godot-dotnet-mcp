@@ -70,6 +70,7 @@ Then enable the plugin in `Project Settings > Plugins`.
 - [Change Log](CHANGELOG.md)
 - [Roadmap](ROADMAP.md)
 - [Documentation Overview](overview.md)
+- [Dock UI Style Guide](interface/dock-ui-style-guide.md)
 - [Server and Config Pages](interface/server-and-config-pages.md)
 - [Tools Page](interface/tools-page.md)
 - [Release Runbook](process/release-runbook.md)

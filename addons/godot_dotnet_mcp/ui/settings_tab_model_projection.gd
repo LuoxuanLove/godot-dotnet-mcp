@@ -40,6 +40,8 @@ func project(model: Dictionary) -> Dictionary:
 			"version_rows": _build_version_rows(model, update_settings, localization),
 			"empty_text": _build_update_table_empty_text(model, update_settings, localization),
 			"audit_text": _build_update_audit_text(model, localization),
+			"details_text": _build_update_details_text(model, update_settings, localization),
+			"details_attention": _should_highlight_update_details(model),
 			"status_text": _build_update_status_text(model, update_settings, localization),
 			"progress": _project_update_sync_progress(model),
 			"progress_visible": str(model.get("update_sync_state", "idle")) == "loading",
@@ -219,6 +221,25 @@ func _build_update_audit_text(model: Dictionary, localization) -> String:
 	return "  |  ".join(parts)
 
 
+func _build_update_details_text(model: Dictionary, update_settings: Dictionary, localization) -> String:
+	var refs_state := str(model.get("update_refs_state", "idle"))
+	var sync_state := str(model.get("update_sync_state", "idle"))
+	if refs_state == "idle" and sync_state == "idle":
+		return ""
+	if refs_state == "error":
+		return str(model.get("update_refs_error", "")).strip_edges()
+	if sync_state == "error":
+		return str(model.get("update_sync_error", "")).strip_edges()
+	return _build_update_compare_status_text(model, update_settings, localization)
+
+
+func _should_highlight_update_details(model: Dictionary) -> bool:
+	if str(model.get("update_refs_state", "idle")) == "error" or str(model.get("update_sync_state", "idle")) == "error":
+		return true
+	var remaining := str(model.get("update_refs_rate_limit_remaining", "")).strip_edges()
+	return not remaining.is_empty() and remaining == "0"
+
+
 func _build_update_status_text(model: Dictionary, update_settings: Dictionary, localization) -> String:
 	var sync_state := str(model.get("update_sync_state", "idle"))
 	if sync_state != "idle":
@@ -242,7 +263,7 @@ func _build_update_refs_status_text(model: Dictionary, update_settings: Dictiona
 		"loading":
 			return "%s %s" % [_get_localized_text(localization, "settings_update_refs_loading", "Loading update refs."), target]
 		"success":
-			return _build_update_compare_status_text(model, update_settings, localization)
+			return _get_localized_text(localization, "settings_update_refs_success", "Version list refreshed.")
 		"error":
 			var error := str(model.get("update_refs_error", "")).strip_edges()
 			if error.is_empty():
@@ -265,8 +286,7 @@ func _build_update_sync_status_text(model: Dictionary, update_settings: Dictiona
 			var status := str(model.get("update_sync_status", "")).strip_edges()
 			if status.is_empty():
 				status = _get_localized_text(localization, "settings_update_sync_success", "Update sync completed.")
-			var compare_status := _build_update_compare_status_text(model, update_settings, localization)
-			return "%s %s" % [status, compare_status]
+			return status
 		"error":
 			var error := str(model.get("update_sync_error", "")).strip_edges()
 			if error.is_empty():
