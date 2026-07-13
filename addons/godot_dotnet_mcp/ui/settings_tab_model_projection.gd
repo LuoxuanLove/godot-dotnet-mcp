@@ -297,7 +297,7 @@ func _build_update_refs_status_text(model: Dictionary, update_settings: Dictiona
 				error = _get_localized_text(localization, "settings_update_refs_error", "Update refs discovery failed.")
 			return "%s %s" % [error, target]
 		_:
-			return "%s %s" % [_get_localized_text(localization, "settings_update_refs_idle", "Click Check for Updates to refresh branches, releases, and tags."), target]
+			return "%s %s" % [_get_localized_text(localization, "settings_update_refs_idle", "Click Refresh List to refresh branches, releases, and tags."), target]
 
 
 func _build_update_sync_status_text(model: Dictionary, update_settings: Dictionary, localization) -> String:
@@ -426,7 +426,7 @@ func _build_selected_update_target(model: Dictionary, update_settings: Dictionar
 			target = str(model.get("update_refs_latest_stable_release", ""))
 	if target.strip_edges().is_empty():
 		var empty_key := "settings_update_branch_unavailable" if source == "custom_branch" else "settings_update_release_unavailable"
-		target = _get_localized_text(localization, empty_key, "Click Check for Updates to refresh refs.")
+		target = _get_localized_text(localization, empty_key, "Click Refresh List to load update refs.")
 	return "%s %s" % [_get_localized_text(localization, "settings_update_selected_target", "Selected target:"), target]
 
 

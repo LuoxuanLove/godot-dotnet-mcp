@@ -357,8 +357,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"plugin_freshness": {}
 	})
 	var legacy_status_text := str((legacy_unavailable_projection.get("updates", {}) as Dictionary).get("status_text", ""))
-	if legacy_status_text.contains("Select branch mode") or legacy_status_text.contains("Select release/tag mode") or not legacy_status_text.contains("Click Check for Updates"):
-		return _failure("Settings projection should replace cached legacy ref-availability guidance with manual Check for Updates text.")
+	if legacy_status_text.contains("Select branch mode") or legacy_status_text.contains("Select release/tag mode") or legacy_status_text.contains("Check for Updates") or not legacy_status_text.contains("Refresh List"):
+		return _failure("Settings projection should replace cached legacy ref-availability guidance with the visible Refresh List action name.")
 
 	return {"name": "settings_tab_model_projection_contracts", "success": true, "error": ""}
 
