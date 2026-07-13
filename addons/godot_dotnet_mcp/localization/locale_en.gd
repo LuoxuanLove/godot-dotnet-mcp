@@ -664,7 +664,7 @@ const TRANSLATIONS: Dictionary = {
 	"btn_delete_user_tool": "Delete User Tool",
 	"settings_general_title": "General Settings",
 	"settings_updates_title": "Updates",
-	"settings_updates_description": "The plugin refreshes the version list once at startup; after that, only Refresh List or an explicit tool refresh contacts GitHub.",
+	"settings_updates_description": "The plugin refreshes the version list once at startup. After that, GitHub is contacted only by Refresh List, an explicit tool refresh, or verification and synchronization through One-click Update or Switch.",
 	"settings_current_version": "Current version:",
 	"settings_current_source": "Plugin Path:",
 	"settings_current_commit": "Commit:",

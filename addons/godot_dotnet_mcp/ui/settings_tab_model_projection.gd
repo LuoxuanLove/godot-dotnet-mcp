@@ -28,7 +28,7 @@ func project(model: Dictionary) -> Dictionary:
 			"update_releases": _project_ref_options(_build_release_values(model, update_settings), str(update_settings.get("release_tag", "")), localization, "settings_update_release_unavailable")
 		},
 		"updates": {
-			"description_text": _get_localized_text(localization, "settings_updates_description", "The plugin refreshes the version list once at startup; after that, only Refresh List or an explicit tool refresh contacts GitHub."),
+			"description_text": _get_localized_text(localization, "settings_updates_description", "The plugin refreshes the version list once at startup. After that, GitHub is contacted only by Refresh List, an explicit tool refresh, or verification and synchronization through One-click Update or Switch."),
 			"refresh_text": _get_localized_text(localization, "settings_update_refresh_list", "Refresh List"),
 			"source": str(update_settings.get("source", DEFAULT_UPDATE_SOURCE)),
 			"active_channel": _resolve_update_channel(update_settings),
@@ -236,6 +236,11 @@ func _build_update_details_text(model: Dictionary, update_settings: Dictionary, 
 		if sync_error.is_empty():
 			sync_error = _get_localized_text(localization, "settings_update_sync_error", "Update sync failed.")
 		return sync_error
+	if str(model.get("update_compare_state", "idle")) == "error":
+		var compare_error := str(model.get("update_compare_error", "")).strip_edges()
+		if compare_error.is_empty():
+			compare_error = _get_localized_text(localization, "settings_update_compare_required", "Update target could not be verified; use Switch for an explicit manual change.")
+		return compare_error
 	var details := _build_background_refresh_errors(model, localization)
 	if refs_state == "idle" and sync_state == "idle":
 		return "\n".join(details)
@@ -259,7 +264,7 @@ func _build_background_refresh_errors(model: Dictionary, localization) -> Array[
 
 
 func _should_highlight_update_details(model: Dictionary) -> bool:
-	if str(model.get("update_refs_state", "idle")) == "error" or str(model.get("update_sync_state", "idle")) == "error":
+	if str(model.get("update_refs_state", "idle")) == "error" or str(model.get("update_sync_state", "idle")) == "error" or str(model.get("update_compare_state", "idle")) == "error":
 		return true
 	if str(model.get("update_refs_refresh_state", "idle")) == "error" or ["error", "unavailable"].has(str(model.get("update_compare_refresh_state", "idle"))):
 		return true

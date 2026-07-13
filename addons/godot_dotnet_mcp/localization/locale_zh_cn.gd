@@ -664,7 +664,7 @@ const TRANSLATIONS: Dictionary = {
 	"btn_delete_user_tool": "删除用户工具",
 	"settings_general_title": "常规设置",
 	"settings_updates_title": "更新",
-	"settings_updates_description": "启动插件时会刷新一次版本列表；之后只有点击刷新列表或显式工具刷新才会请求 GitHub。",
+	"settings_updates_description": "插件启动时会刷新一次版本列表；之后只有点击刷新列表、显式工具刷新或通过一键更新 / 切换进行验证与同步时才会请求 GitHub。",
 	"settings_current_version": "当前版本：",
 	"settings_current_source": "插件路径：",
 	"settings_current_commit": "提交：",

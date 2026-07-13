@@ -109,7 +109,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if update_releases.size() != 2 or not bool((update_releases[0] as Dictionary).get("selected", false)):
 		return _failure("Settings projection should offer discovered release/tag selector options and preserve the current tag.")
 	var updates: Dictionary = projected.get("updates", {})
-	if not str(updates.get("description_text", "")).contains("only Refresh List") or str(updates.get("refresh_text", "")) != "Refresh List":
+	if not str(updates.get("description_text", "")).contains("through One-click Update or Switch") or str(updates.get("refresh_text", "")) != "Refresh List":
 		return _failure("Settings projection should provide presentation-ready update guidance and refresh copy.")
 	if updates.has("version_text") or updates.has("source_text") or updates.has("commit_text"):
 		return _failure("Settings projection should not expose removed current version, plugin path, or commit summary rows.")
@@ -150,6 +150,28 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if str((sync_error_without_message.get("updates", {}) as Dictionary).get("details_text", "")) != "Sync failed":
 		return _failure("Settings projection should keep foreground sync error details informative when the producer omits an explicit message.")
+	var foreground_compare_error: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {},
+		"update_refs_state": "success",
+		"update_compare_state": "error",
+		"update_compare_error": "Foreground compare failed before target verification.",
+		"plugin_freshness": {}
+	})
+	var foreground_compare_error_updates: Dictionary = foreground_compare_error.get("updates", {})
+	if not bool(foreground_compare_error_updates.get("details_attention", false)) or str(foreground_compare_error_updates.get("details_text", "")) != "Foreground compare failed before target verification.":
+		return _failure("Settings projection should automatically expose the actual foreground compare failure in update details.")
+	var foreground_compare_error_without_message: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {},
+		"update_refs_state": "success",
+		"update_compare_state": "error",
+		"update_compare_error": "",
+		"plugin_freshness": {}
+	})
+	var foreground_compare_fallback_updates: Dictionary = foreground_compare_error_without_message.get("updates", {})
+	if not bool(foreground_compare_fallback_updates.get("details_attention", false)) or not str(foreground_compare_fallback_updates.get("details_text", "")).contains("use Switch"):
+		return _failure("Settings projection should provide actionable details when a foreground compare failure omits its error message.")
 	var missing_commit_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),
 		"settings": {"update_source": "custom_branch", "update_custom_branch": "dev"},

@@ -445,7 +445,7 @@ const TRANSLATIONS: Dictionary = {
 	"btn_delete_user_tool": "Benutzertool löschen",
 	"settings_general_title": "Allgemeine Einstellungen",
 	"settings_updates_title": "Aktualisierungen",
-	"settings_updates_description": "Das Plugin aktualisiert die Versionsliste einmal beim Start; danach greifen nur Liste aktualisieren oder eine explizite Tool-Aktualisierung auf GitHub zu.",
+	"settings_updates_description": "Das Plugin aktualisiert die Versionsliste einmal beim Start. Danach wird GitHub nur durch Liste aktualisieren, eine explizite Tool-Aktualisierung oder die Prüfung und Synchronisierung über One-Click-Update oder Wechseln kontaktiert.",
 	"settings_current_version": "Aktuelle Version:",
 	"settings_current_source": "Plugin-Pfad:",
 	"settings_current_commit": "Commit:",

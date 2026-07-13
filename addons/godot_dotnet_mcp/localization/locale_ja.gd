@@ -446,7 +446,7 @@ const TRANSLATIONS: Dictionary = {
 	"btn_delete_user_tool": "ユーザー削除ツール",
 	"settings_general_title": "一般設定",
 	"settings_updates_title": "更新",
-	"settings_updates_description": "プラグイン起動時にバージョン一覧を一度更新します。その後 GitHub に接続するのは、［一覧を更新］または明示的なツール更新だけです。",
+	"settings_updates_description": "プラグイン起動時にバージョン一覧を一度更新します。その後 GitHub に接続するのは、［一覧を更新］、明示的なツール更新、または［ワンクリック更新］か［切り替え］による対象確認と同期だけです。",
 	"settings_current_version": "現在のバージョン:",
 	"settings_current_source": "プラグインパス:",
 	"settings_current_commit": "コミット:",

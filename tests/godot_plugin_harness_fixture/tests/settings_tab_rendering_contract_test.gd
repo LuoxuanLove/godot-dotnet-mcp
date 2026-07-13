@@ -9,7 +9,7 @@ class FakeLocalization extends RefCounted:
 	var _texts := {
 		"settings_general_title": "General",
 		"settings_updates_title": "Updates",
-		"settings_updates_description": "启动插件时会刷新一次版本列表；之后只有点击刷新列表或显式工具刷新才会请求 GitHub。",
+		"settings_updates_description": "插件启动时会刷新一次版本列表；之后只有点击刷新列表、显式工具刷新或通过一键更新 / 切换进行验证与同步时才会请求 GitHub。",
 		"settings_update_source_label": "Update Source:",
 		"settings_update_custom_branch": "Branch:",
 		"settings_update_release_tag": "Tag:",
@@ -220,7 +220,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var labels := _instance.find_children("*", "Label", true, false)
 	if _find_label_containing(labels, "Select an update mode") != null:
 		return _failure("Settings tab should normalize stale automatic discovery status copy from cached localization.")
-	if _find_label_containing(labels, "只有点击刷新列表或显式工具刷新") == null:
+	if _find_label_containing(labels, "一键更新 / 切换进行验证与同步") == null:
 		return _failure("Settings tab should display the projected manual refresh policy copy.")
 	if _find_label_containing(labels, "Current Version:") == null or _find_label_containing(labels, "1.0.1 (abcdef1)") == null:
 		return _failure("Settings tab should display the compact current-version summary above the version table.")
