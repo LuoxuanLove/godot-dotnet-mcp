@@ -1,0 +1,25 @@
+docs/en/process/release-notes/release-notes-v2.0.0.md
+  s_0b5fae83c24251::t_da8811593211ca 43
+docs/zh-CN/流程/发布说明/发布说明-v2.0.0.md
+  s_0b5fae83c24251::t_da8811593211ca 43
+docs/ja/プロセス/リリースノート/リリースノート-v2.0.0.md
+  s_0b5fae83c24251::t_da8811593211ca 43
+docs/ko/프로세스/릴리스-노트/릴리스-노트-v2.0.0.md
+  s_0b5fae83c24251::t_da8811593211ca 43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.11",
+  "base_commit_sha": "f40ff3fc99e967c46464c9974d9604d9b6143042",
+  "prompts": {},
+  "sessions": {
+    "s_0b5fae83c24251": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f5b16-1dbf-7982-b141-2d3c12bdcbf0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
