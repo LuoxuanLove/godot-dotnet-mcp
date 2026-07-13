@@ -84,7 +84,7 @@ Prefer margins and ordinary container separation in `.tscn` scenes. Scripts may 
 
 Hover-only controls may duplicate a discoverable action, but must never be the sole way to invoke an important operation.
 
-Restoring cached state and changing passive selections must be side-effect free. Network access and mutations require an explicit user action, and repeated retries should respect known cooldown or rate-limit state.
+Restoring cached state must not trigger network access or operational mutations. Passive selectors may persist their selected value and reset dependent transient local state, but must not start discovery, updates, switches, navigation, or other external operations. Those operations require a dedicated explicit user action, and repeated retries must respect known cooldown or rate-limit state.
 
 ## Responsive Dock Behavior
 

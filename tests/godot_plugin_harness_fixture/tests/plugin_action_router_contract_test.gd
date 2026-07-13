@@ -198,7 +198,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("PluginActionRouter should route update Settings interaction refresh requests to plugin handlers.")
 	if _plugin.update_check_count != 1 or _plugin.update_apply_count != 1:
 		return _failure("PluginActionRouter should route update discovery and sync requests to plugin handlers.")
-	if _plugin.update_compare_targets.size() != 1 or str(_plugin.update_compare_targets[0].get("commit", "")) != "compare-sha":
+	if _plugin.update_compare_targets.size() != 1 or str(_plugin.update_compare_targets[0].get("kind", "")) != "branch" or str(_plugin.update_compare_targets[0].get("ref", "")) != "dev" or str(_plugin.update_compare_targets[0].get("commit", "")) != "compare-sha":
 		return _failure("PluginActionRouter should route row comparison targets without switching versions.")
 	if _plugin.update_switches.size() != 1 or str(_plugin.update_switches[0].get("kind", "")) != "tag" or str(_plugin.update_switches[0].get("ref", "")) != "v2.0.0" or str(_plugin.update_switches[0].get("commit", "")) != "target-sha":
 		return _failure("PluginActionRouter should route update table Switch requests to plugin handlers.")

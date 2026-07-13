@@ -101,7 +101,7 @@ func normalize_update_refs_cache(cache: Dictionary) -> Dictionary:
 	var release_rows := _normalize_update_ref_rows(cache.get("release_rows", []))
 	var branch_commit_rows := _normalize_update_branch_commit_rows(cache.get("branch_commit_rows", {}))
 	var compare_cache := _normalize_update_compare_cache(cache.get("compare_cache", {}))
-	if branches.is_empty() and releases.is_empty() and commits.is_empty() and release_rows.is_empty() and branch_commit_rows.is_empty():
+	if branches.is_empty() and releases.is_empty() and commits.is_empty() and release_rows.is_empty() and branch_commit_rows.is_empty() and compare_cache.is_empty():
 		return {}
 	return {
 		"format_version": 2,
@@ -472,8 +472,8 @@ func _normalize_update_compare_cache(raw_cache) -> Dictionary:
 		var target_kind := str(entry.get("target_kind", "branch")).strip_edges()
 		var target_ref := str(entry.get("target_ref", "")).strip_edges()
 		var target_commit := str(entry.get("target_commit", "")).strip_edges()
-		var ahead_by := int(entry.get("ahead_by", -1))
-		var behind_by := int(entry.get("behind_by", -1))
+		var ahead_by := _normalize_non_negative_integer(entry.get("ahead_by", null))
+		var behind_by := _normalize_non_negative_integer(entry.get("behind_by", null))
 		if base_commit.is_empty() or target_ref.is_empty() or target_commit.is_empty() or ahead_by < 0 or behind_by < 0:
 			continue
 		var normalized_kind := "tag" if target_kind == "tag" else "branch"
@@ -488,3 +488,13 @@ func _normalize_update_compare_cache(raw_cache) -> Dictionary:
 			"checked_unix": int(entry.get("checked_unix", 0))
 		}
 	return result
+
+
+func _normalize_non_negative_integer(value) -> int:
+	if value is int:
+		return value if value >= 0 else -1
+	if value is float:
+		if is_nan(value) or is_inf(value) or value < 0.0 or floor(value) != value:
+			return -1
+		return int(value)
+	return -1

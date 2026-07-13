@@ -84,7 +84,7 @@ list, table, preview, editor의 scope를 정하는 selector는 해당 surface �
 
 hover-only control은 이미 찾을 수 있는 action의 shortcut으로 사용할 수 있지만 중요한 작업의 유일한 진입점이 되어서는 안 됩니다.
 
-cached state 복원과 passive selection 변경은 side effect free여야 합니다. network access와 mutation은 명시적인 user action이 필요하며 repeated retry는 알려진 cooldown / rate-limit state를 따라야 합니다.
+cached state 복원은 network access나 operational mutation을 일으키지 않아야 합니다. passive selector는 선택값을 저장하고 의존하는 임시 local state를 초기화할 수 있지만 discovery, update, switch, navigation 또는 기타 external operation을 시작해서는 안 됩니다. 이러한 operation에는 전용의 명시적 user action이 필요하며 repeated retry는 알려진 cooldown / rate-limit state를 따라야 합니다.
 
 ## Dock 반응형 동작
 

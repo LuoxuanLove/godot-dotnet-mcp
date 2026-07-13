@@ -84,7 +84,7 @@ list、table、preview、editor の scope を決める selector は、その sur
 
 hover-only control は既に発見可能な action の shortcut にできますが、重要操作の唯一の入口にはしません。
 
-cached state の復元と passive selection の変更は side effect free にします。network access と mutation は明示的な user action を必要とし、repeated retry は既知の cooldown / rate-limit state に従います。
+cached state の復元は network access や operational mutation を発生させません。passive selector は選択値を永続化し、依存する一時的な local state をリセットできますが、discovery、update、switch、navigation、その他の external operation を開始してはいけません。これらの operation には専用の明示的な user action が必要で、repeated retry は既知の cooldown / rate-limit state に従います。
 
 ## Dock のレスポンシブ動作
 

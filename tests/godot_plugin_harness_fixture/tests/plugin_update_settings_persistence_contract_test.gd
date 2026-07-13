@@ -310,6 +310,30 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var normalized_compare_cache: Dictionary = normalized_cache.get("compare_cache", {})
 	if int(normalized_cache.get("format_version", 0)) != 2 or (normalized_cache.get("branches", []) as Array).size() != 1 or str((normalized_cache.get("commits", {}) as Dictionary).get("dev", "")) != "dev-sha" or (normalized_cache.get("release_rows", []) as Array).size() != 1 or normalized_compare_cache.size() != 1 or not normalized_compare_cache.has(normalized_compare_key) or normalized_compare_cache.has("valid"):
 		return _failure("settings_store.gd should normalize persisted update refs cache into stable arrays, dictionaries, and table rows.")
+	var compare_only_cache: Dictionary = settings_store.normalize_update_refs_cache({
+		"compare_cache": {
+			"valid-int": {"base_commit": "base-int", "target_kind": "branch", "target_ref": "dev", "target_commit": "int-sha", "ahead_by": 2, "behind_by": 0},
+			"valid-float": {"base_commit": "base-float", "target_kind": "tag", "target_ref": "v2.0.0", "target_commit": "float-sha", "ahead_by": 2.0, "behind_by": 0.0},
+			"numeric-string": {"base_commit": "base-string", "target_kind": "branch", "target_ref": "dev", "target_commit": "string-sha", "ahead_by": "2", "behind_by": 0},
+			"invalid-string": {"base_commit": "base-invalid-string", "target_kind": "branch", "target_ref": "dev", "target_commit": "invalid-string-sha", "ahead_by": "bogus", "behind_by": 0},
+			"boolean": {"base_commit": "base-boolean", "target_kind": "branch", "target_ref": "dev", "target_commit": "boolean-sha", "ahead_by": true, "behind_by": 0},
+			"null": {"base_commit": "base-null", "target_kind": "branch", "target_ref": "dev", "target_commit": "null-sha", "ahead_by": null, "behind_by": 0},
+			"fractional": {"base_commit": "base-fractional", "target_kind": "branch", "target_ref": "dev", "target_commit": "fractional-sha", "ahead_by": 1.5, "behind_by": 0},
+			"negative": {"base_commit": "base-negative", "target_kind": "branch", "target_ref": "dev", "target_commit": "negative-sha", "ahead_by": -1, "behind_by": 0},
+			"nan": {"base_commit": "base-nan", "target_kind": "branch", "target_ref": "dev", "target_commit": "nan-sha", "ahead_by": NAN, "behind_by": 0},
+			"infinity": {"base_commit": "base-infinity", "target_kind": "branch", "target_ref": "dev", "target_commit": "infinity-sha", "ahead_by": INF, "behind_by": 0}
+		}
+	})
+	var compare_only_entries: Dictionary = compare_only_cache.get("compare_cache", {})
+	var valid_int_key := "\n".join(["base-int", "branch", "dev", "int-sha"])
+	var valid_float_key := "\n".join(["base-float", "tag", "v2.0.0", "float-sha"])
+	if compare_only_cache.is_empty() or compare_only_entries.size() != 2 or not compare_only_entries.has(valid_int_key) or not compare_only_entries.has(valid_float_key):
+		return _failure("settings_store.gd should preserve compare-only caches while rejecting malformed comparison counts.")
+	settings_store.save_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH, compare_only_cache)
+	var compare_only_round_trip: Dictionary = settings_store.load_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH)
+	var round_trip_entries: Dictionary = compare_only_round_trip.get("compare_cache", {})
+	if round_trip_entries.size() != 2 or not round_trip_entries.has(valid_int_key) or not round_trip_entries.has(valid_float_key) or int((round_trip_entries.get(valid_float_key, {}) as Dictionary).get("ahead_by", -1)) != 2:
+		return _failure("settings_store.gd should save and restore exact comparison results without a refs snapshot.")
 	_plugin = PluginScript.new()
 	if _plugin == null:
 		return _failure("plugin.gd should instantiate for update settings persistence contracts.")
