@@ -15,8 +15,6 @@ const SettingsTabModelProjectionServiceScript = preload("res://addons/godot_dotn
 const LAYOUT_WIDTH_BUCKET := 48.0
 const SETTING_LABEL_WIDTH := 112.0
 const SETTING_FIELD_WIDTH := 180.0
-const UPDATE_DESCRIPTION_FALLBACK_ZH := "选择更新方式后，点击检查更新以刷新 GitHub 分支、发布版和标签，然后可同步选中目标。"
-const UPDATE_DESCRIPTION_FALLBACK_EN := "Choose an update mode, then click Check for Updates to refresh GitHub branches, releases, and tags before syncing the selected target."
 const UPDATE_SELECTOR_POPUP_MAX_VISIBLE_ITEMS := 12
 const UPDATE_SELECTOR_POPUP_ROW_HEIGHT := 28.0
 const UPDATE_SELECTOR_POPUP_VERTICAL_PADDING := 12.0
@@ -134,14 +132,14 @@ func apply_model(model: Dictionary) -> void:
 	_log_level_label.text = localization.get_text("log_level")
 	_language_label.text = localization.get_text("language")
 	_updates_title.text = localization.get_text("settings_updates_title")
-	_updates_description.text = _get_update_description_text(localization)
+	_updates_description.text = str(updates.get("description_text", ""))
 	_remote_url_label.text = _localized(localization, "settings_update_remote_url", "Remote URL:")
 	_current_branch_label.text = _localized(localization, "settings_update_current_branch", "Current Branch:")
 	_current_version_label.text = _localized(localization, "settings_update_current_version", "Current Version:")
 	_details_label = _localized(localization, "settings_update_details", "Details")
 	_update_details_button_presentation()
 	_custom_branch_label.text = localization.get_text("settings_update_custom_branch")
-	_check_button.text = _get_update_check_text(localization)
+	_check_button.text = str(updates.get("refresh_text", "Refresh List"))
 	_check_button.visible = true
 	_prepare_button.text = ""
 	_apply_button.text = _get_update_apply_text(localization)
@@ -263,28 +261,6 @@ func _get_update_apply_text(localization) -> String:
 	var text := _localized(localization, "settings_update_one_click", "One-click Update")
 	if text == "settings_update_one_click":
 		return "One-click Update"
-	return text
-
-
-func _get_update_description_text(localization) -> String:
-	var text := str(localization.get_text("settings_updates_description"))
-	if text.contains("准备和应用暂未实现"):
-		return UPDATE_DESCRIPTION_FALLBACK_ZH
-	if text.contains("自动发现"):
-		return UPDATE_DESCRIPTION_FALLBACK_ZH
-	if text.contains("automatically"):
-		return UPDATE_DESCRIPTION_FALLBACK_EN
-	return _localized(localization, "settings_updates_description", text)
-
-
-func _get_update_check_text(localization) -> String:
-	var text := _localized(localization, "settings_update_refresh_list", "Refresh List").strip_edges()
-	if text == "发现":
-		return "刷新列表"
-	if text == "探索":
-		return "刷新列表"
-	if text.is_empty() or text == "Discover":
-		return "Refresh List"
 	return text
 
 

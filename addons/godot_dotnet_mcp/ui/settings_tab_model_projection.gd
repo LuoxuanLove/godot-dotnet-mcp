@@ -28,6 +28,8 @@ func project(model: Dictionary) -> Dictionary:
 			"update_releases": _project_ref_options(_build_release_values(model, update_settings), str(update_settings.get("release_tag", "")), localization, "settings_update_release_unavailable")
 		},
 		"updates": {
+			"description_text": _get_localized_text(localization, "settings_updates_description", "The plugin refreshes the version list once at startup; after that, only Refresh List or an explicit tool refresh contacts GitHub."),
+			"refresh_text": _get_localized_text(localization, "settings_update_refresh_list", "Refresh List"),
 			"source": str(update_settings.get("source", DEFAULT_UPDATE_SOURCE)),
 			"active_channel": _resolve_update_channel(update_settings),
 			"custom_branch": str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH)),
@@ -224,17 +226,36 @@ func _build_update_audit_text(model: Dictionary, localization) -> String:
 func _build_update_details_text(model: Dictionary, update_settings: Dictionary, localization) -> String:
 	var refs_state := str(model.get("update_refs_state", "idle"))
 	var sync_state := str(model.get("update_sync_state", "idle"))
-	if refs_state == "idle" and sync_state == "idle":
-		return ""
 	if refs_state == "error":
 		return str(model.get("update_refs_error", "")).strip_edges()
 	if sync_state == "error":
 		return str(model.get("update_sync_error", "")).strip_edges()
-	return _build_update_compare_status_text(model, update_settings, localization)
+	var details := _build_background_refresh_errors(model, localization)
+	if refs_state == "idle" and sync_state == "idle":
+		return "\n".join(details)
+	details.append(_build_update_compare_status_text(model, update_settings, localization))
+	return "\n".join(details)
+
+
+func _build_background_refresh_errors(model: Dictionary, localization) -> Array[String]:
+	var errors: Array[String] = []
+	if str(model.get("update_refs_refresh_state", "idle")) == "error":
+		var refs_error := str(model.get("update_refs_refresh_error", "")).strip_edges()
+		if refs_error.is_empty():
+			refs_error = _get_localized_text(localization, "settings_update_refs_error", "Update refs discovery failed.")
+		errors.append(refs_error)
+	if ["error", "unavailable"].has(str(model.get("update_compare_refresh_state", "idle"))):
+		var compare_error := str(model.get("update_compare_refresh_error", "")).strip_edges()
+		if compare_error.is_empty():
+			compare_error = _get_localized_text(localization, "settings_update_compare_required", "Update target could not be verified; use Switch for an explicit manual change.")
+		errors.append(compare_error)
+	return errors
 
 
 func _should_highlight_update_details(model: Dictionary) -> bool:
 	if str(model.get("update_refs_state", "idle")) == "error" or str(model.get("update_sync_state", "idle")) == "error":
+		return true
+	if str(model.get("update_refs_refresh_state", "idle")) == "error" or ["error", "unavailable"].has(str(model.get("update_compare_refresh_state", "idle"))):
 		return true
 	var remaining := str(model.get("update_refs_rate_limit_remaining", "")).strip_edges()
 	return not remaining.is_empty() and remaining == "0"

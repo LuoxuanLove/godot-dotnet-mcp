@@ -445,7 +445,7 @@ const TRANSLATIONS: Dictionary = {
 	"btn_delete_user_tool": "Инструмент удаления пользователя",
 	"settings_general_title": "Общие настройки",
 	"settings_updates_title": "Обновления",
-	"settings_updates_description": "Выберите режим обновления, затем нажмите Проверить обновления, чтобы обновить ветки, релизы и теги GitHub перед синхронизацией выбранной цели.",
+	"settings_updates_description": "Плагин обновляет список версий один раз при запуске; после этого к GitHub обращаются только кнопка «Обновить список» или явное обновление через инструмент.",
 	"settings_current_version": "Текущая версия:",
 	"settings_current_source": "Путь плагина:",
 	"settings_current_commit": "Коммит:",

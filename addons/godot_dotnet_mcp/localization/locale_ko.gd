@@ -612,7 +612,7 @@ const TRANSLATIONS: Dictionary = {
 	"btn_delete_user_tool": "사용자 도구 삭제",
 	"settings_general_title": "일반 설정",
 	"settings_updates_title": "업데이트",
-	"settings_updates_description": "업데이트 모드를 선택한 뒤 업데이트 확인을 클릭해 GitHub 브랜치, 릴리스, 태그를 새로 고친 다음 선택한 대상을 동기화하세요.",
+	"settings_updates_description": "플러그인 시작 시 버전 목록을 한 번 새로 고칩니다. 이후에는 목록 새로 고침 또는 명시적인 도구 새로 고침만 GitHub에 요청합니다.",
 	"settings_current_version": "현재 버전:",
 	"settings_current_source": "플러그인 경로:",
 	"settings_current_commit": "커밋:",

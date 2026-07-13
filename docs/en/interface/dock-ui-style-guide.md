@@ -16,7 +16,7 @@ Use no more than three structural levels.
 
 | Level | Purpose | Guidance |
 |---|---|---|
-| Page | One Dock tab | Use one scrolling surface and no page-level horizontal scrolling. |
+| Page | One Dock tab | Use at most one page-level `ScrollContainer`; specialized `Tree` or preview panes may scroll independently, and page-level horizontal scrolling is not allowed. |
 | Card | One feature area | Give each card one title, at most one persistent description, and one status region. |
 | Group | Related fields or actions | Keep labels, controls, and feedback together with predictable spacing. |
 
@@ -124,4 +124,4 @@ Material UI changes should cover these dimensions in automated contracts or edit
 | State | Idle, loading, success, error, rate limited, and empty |
 | Theme and input | Light/dark-compatible theme values and keyboard focus |
 
-Acceptance requires no overlap, no page-level horizontal scrolling, no color-only state, complete localized actions, and continued access to every supported feature.
+Acceptance requires no overlap, no page-level horizontal scrolling, no color-only state, complete localized actions, and continued access to every feature already exposed by the affected surface.

@@ -9,7 +9,7 @@ class FakeLocalization extends RefCounted:
 	var _texts := {
 		"settings_general_title": "General",
 		"settings_updates_title": "Updates",
-		"settings_updates_description": "检查会从 GitHub 发现分支和发布；准备和应用暂未实现。",
+		"settings_updates_description": "启动插件时会刷新一次版本列表；之后只有点击刷新列表或显式工具刷新才会请求 GitHub。",
 		"settings_update_source_label": "Update Source:",
 		"settings_update_custom_branch": "Branch:",
 		"settings_update_release_tag": "Tag:",
@@ -218,12 +218,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should not emit update setting changes while applying a model.")
 
 	var labels := _instance.find_children("*", "Label", true, false)
-	if _find_label_containing(labels, "准备和应用暂未实现") != null:
-		return _failure("Settings tab should normalize stale update description copy from cached localization.")
 	if _find_label_containing(labels, "Select an update mode") != null:
 		return _failure("Settings tab should normalize stale automatic discovery status copy from cached localization.")
-	if _find_label_containing(labels, "点击检查更新") == null:
-		return _failure("Settings tab should display the manual update refresh description copy.")
+	if _find_label_containing(labels, "只有点击刷新列表或显式工具刷新") == null:
+		return _failure("Settings tab should display the projected manual refresh policy copy.")
 	if _find_label_containing(labels, "Current Version:") == null or _find_label_containing(labels, "1.0.1 (abcdef1)") == null:
 		return _failure("Settings tab should display the compact current-version summary above the version table.")
 	if _find_label_containing(labels, "Synced v1.2.3.") == null or details_button == null or not details_button.visible or details_panel == null or details_panel.visible or details_text == null or not details_text.text.contains("Current plugin 1.0.1 [abcdef1] -> selected target 1.2.3 [fedcba9]") or not details_text.text.contains("current ahead 0 / target ahead 2"):
@@ -368,6 +366,23 @@ func run_case(tree: SceneTree) -> Dictionary:
 	await tree.process_frame
 	if general_form.columns != 2 or custom_branch_row.columns != 2 or action_grid.columns != 2:
 		return _failure("Settings tab should restore compact two-column forms and actions above the ultra-narrow breakpoint (general=%d branch=%d actions=%d width=%.1f)." % [general_form.columns, custom_branch_row.columns, action_grid.columns, _instance.size.x])
+	details_button.button_pressed = false
+	_instance.apply_model({
+		"localization": FakeLocalization.new(),
+		"editor_scale": 1.0,
+		"settings": {"port": 4102, "update_source": "custom_branch", "update_custom_branch": "dev"},
+		"current_log_level": "error",
+		"current_language": "zh_CN",
+		"log_levels": ["debug", "info", "warning", "error"],
+		"update_refs_state": "success",
+		"update_refs_refresh_state": "error",
+		"update_refs_refresh_error": "Background version refresh failed; cached versions are still shown.",
+		"update_refs_commits": {"dev": "1234567890abcdef"},
+		"plugin_freshness": {}
+	})
+	await tree.process_frame
+	if not details_button.button_pressed or not details_panel.visible or not details_text.text.contains("Background version refresh failed"):
+		return _failure("Settings tab should automatically expand details for a background refresh failure while preserving cached update state.")
 
 	return {"name": "settings_tab_rendering_contracts", "success": true, "error": ""}
 

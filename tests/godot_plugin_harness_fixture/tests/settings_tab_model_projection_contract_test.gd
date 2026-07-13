@@ -109,6 +109,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if update_releases.size() != 2 or not bool((update_releases[0] as Dictionary).get("selected", false)):
 		return _failure("Settings projection should offer discovered release/tag selector options and preserve the current tag.")
 	var updates: Dictionary = projected.get("updates", {})
+	if not str(updates.get("description_text", "")).contains("only Refresh List") or str(updates.get("refresh_text", "")) != "Refresh List":
+		return _failure("Settings projection should provide presentation-ready update guidance and refresh copy.")
 	if updates.has("version_text") or updates.has("source_text") or updates.has("commit_text"):
 		return _failure("Settings projection should not expose removed current version, plugin path, or commit summary rows.")
 	if bool(updates.get("prepare_enabled", true)) or not bool(updates.get("apply_enabled", false)):
@@ -231,6 +233,54 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	})
 	if not bool((background_compare_refresh_projection.get("updates", {}) as Dictionary).get("apply_enabled", false)):
 		return _failure("Settings projection should keep update Sync enabled while background refs or compare refreshes are loading.")
+	var cached_refs_error_projection: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {"update_source": "custom_branch", "update_custom_branch": "feature/settings"},
+		"update_refs_state": "success",
+		"update_refs_refresh_state": "error",
+		"update_refs_refresh_error": "Background refs refresh failed; cached versions remain available.",
+		"update_refs_commits": {"feature/settings": "1234567890abcdef"},
+		"update_refs_branch_commit_rows": {"feature/settings": [{"kind": "branch", "ref": "feature/settings", "commit": "1234567890abcdef", "title": "Cached settings update", "date": "2026-07-12T12:00:00Z"}]},
+		"update_compare_state": "success",
+		"update_compare_target_ref": "feature/settings",
+		"update_compare_target_commit": "1234567890abcdef",
+		"plugin_freshness": {}
+	})
+	var cached_refs_error_updates: Dictionary = cached_refs_error_projection.get("updates", {})
+	if not bool(cached_refs_error_updates.get("apply_enabled", false)) or (cached_refs_error_updates.get("version_rows", []) as Array).is_empty() or not bool(cached_refs_error_updates.get("details_attention", false)) or not str(cached_refs_error_updates.get("details_text", "")).contains("Background refs refresh failed") or not str(cached_refs_error_updates.get("status_text", "")).contains("Refs loaded"):
+		return _failure("Settings projection should preserve cached refs and actions while surfacing a background refs refresh failure in expanded details.")
+	var cached_compare_error_projection: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {"update_source": "custom_branch", "update_custom_branch": "feature/settings"},
+		"update_refs_state": "success",
+		"update_refs_commits": {"feature/settings": "1234567890abcdef"},
+		"update_compare_state": "success",
+		"update_compare_refresh_state": "error",
+		"update_compare_refresh_error": "Background compare refresh timed out; cached comparison remains available.",
+		"update_compare_target_ref": "feature/settings",
+		"update_compare_target_commit": "1234567890abcdef",
+		"update_compare_ahead_by": 2,
+		"update_compare_behind_by": 0,
+		"plugin_freshness": {}
+	})
+	var cached_compare_error_updates: Dictionary = cached_compare_error_projection.get("updates", {})
+	if not bool(cached_compare_error_updates.get("apply_enabled", false)) or not bool(cached_compare_error_updates.get("details_attention", false)) or not str(cached_compare_error_updates.get("details_text", "")).contains("Background compare refresh timed out") or not str(cached_compare_error_updates.get("details_text", "")).contains("current ahead 0 / target ahead 2"):
+		return _failure("Settings projection should surface a background compare refresh failure without discarding the cached comparison or update action.")
+	var unavailable_compare_refresh_projection: Dictionary = service.project({
+		"localization": FakeLocalization.new(),
+		"settings": {"update_source": "custom_branch", "update_custom_branch": "feature/settings"},
+		"update_refs_state": "success",
+		"update_refs_commits": {"feature/settings": "1234567890abcdef"},
+		"update_compare_state": "success",
+		"update_compare_refresh_state": "unavailable",
+		"update_compare_refresh_error": "",
+		"update_compare_target_ref": "feature/settings",
+		"update_compare_target_commit": "1234567890abcdef",
+		"plugin_freshness": {}
+	})
+	var unavailable_compare_refresh_updates: Dictionary = unavailable_compare_refresh_projection.get("updates", {})
+	if not bool(unavailable_compare_refresh_updates.get("details_attention", false)) or not str(unavailable_compare_refresh_updates.get("details_text", "")).contains("use Switch"):
+		return _failure("Settings projection should provide actionable details when a background compare refresh is unavailable without a producer error message.")
 
 	var refresh_loading_projection: Dictionary = service.project({
 		"localization": FakeLocalization.new(),

@@ -16,7 +16,7 @@
 
 | 階層 | 目的 | 規則 |
 |---|---|---|
-| ページ | 1 つの Dock tab | 1 つの scroll surface を使い、ページ全体の横 scroll は禁止します。 |
+| ページ | 1 つの Dock tab | ページレベルの `ScrollContainer` は最大 1 つとし、専用の `Tree` または preview pane は個別に scroll できます。ページ全体の横 scroll は禁止します。 |
 | カード | 1 つの feature area | title は 1 つ、常設 description は最大 1 つ、status region は 1 つにします。 |
 | グループ | 関連する fields / actions | labels、controls、feedback を近接させ、一定の spacing を使います。 |
 
@@ -124,4 +124,4 @@ container と size flags を使い、Dock minimum width でも利用可能にし
 | State | idle、loading、success、error、rate limited、empty |
 | Theme / input | light / dark compatible values と keyboard focus |
 
-重なりなし、ページ全体の横 scroll なし、色だけの state なし、action の localization 完備、全 supported feature への到達を受け入れ条件とします。
+重なりなし、ページ全体の横 scroll なし、色だけの state なし、action の localization 完備、変更対象の surface が従来公開していたすべての feature への到達維持を受け入れ条件とします。

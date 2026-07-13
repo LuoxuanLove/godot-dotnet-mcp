@@ -16,7 +16,7 @@
 
 | 계층 | 목적 | 규칙 |
 |---|---|---|
-| 페이지 | 하나의 Dock tab | 하나의 scroll surface를 사용하고 페이지 전체 가로 scroll을 금지합니다. |
+| 페이지 | 하나의 Dock tab | 페이지 수준 `ScrollContainer`는 최대 하나만 사용합니다. 전용 `Tree` 또는 preview pane은 독립적으로 scroll할 수 있으며 페이지 전체 가로 scroll은 금지합니다. |
 | 카드 | 하나의 feature area | title 하나, 상시 description 최대 하나, status region 하나를 둡니다. |
 | 그룹 | 관련 fields / actions | labels, controls, feedback을 가까이 두고 일정한 spacing을 사용합니다. |
 
@@ -124,4 +124,4 @@ container와 size flags를 사용해 Dock minimum width에서도 사용할 수 �
 | State | idle, loading, success, error, rate limited, empty |
 | Theme / input | light / dark compatible values와 keyboard focus |
 
-겹침 없음, 페이지 전체 가로 scroll 없음, 색상만 사용하는 state 없음, action localization 완비, 모든 supported feature 접근 가능을 승인 조건으로 합니다.
+겹침 없음, 페이지 전체 가로 scroll 없음, 색상만 사용하는 state 없음, action localization 완비, 변경 대상 surface가 기존에 노출하던 모든 feature에 계속 접근 가능함을 승인 조건으로 합니다.
