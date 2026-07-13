@@ -1,0 +1,49 @@
+addons/godot_dotnet_mcp/ui/settings_tab_model_projection.gd
+  s_0b5fae83c24251::t_862411d4b1b847 239-243,267
+  s_0b5fae83c24251::t_f69e623e2521de 31
+addons/godot_dotnet_mcp/localization/locale_zh_tw.gd
+  s_0b5fae83c24251::t_a9a1917a8dba1b 629
+addons/godot_dotnet_mcp/localization/locale_en.gd
+  s_0b5fae83c24251::t_a9a1917a8dba1b 667
+addons/godot_dotnet_mcp/localization/locale_ja.gd
+  s_0b5fae83c24251::t_b376e6b458413b 449
+addons/godot_dotnet_mcp/localization/locale_es.gd
+  s_0b5fae83c24251::t_a9a1917a8dba1b 448
+tests/godot_plugin_harness_fixture/tests/settings_tab_rendering_contract_test.gd
+  s_0b5fae83c24251::t_f69e623e2521de 12,223
+addons/godot_dotnet_mcp/localization/locale_fr.gd
+  s_0b5fae83c24251::t_b376e6b458413b 448
+addons/godot_dotnet_mcp/localization/locale_zh_cn.gd
+  s_0b5fae83c24251::t_a9a1917a8dba1b 667
+addons/godot_dotnet_mcp/localization/locale_de.gd
+  s_0b5fae83c24251::t_a9a1917a8dba1b 448
+tests/godot_plugin_harness_fixture/tests/settings_tab_model_projection_contract_test.gd
+  s_0b5fae83c24251::t_862411d4b1b847 153-163
+  s_0b5fae83c24251::t_f69e623e2521de 112
+  s_0b5fae83c24251::t_95230040297d8f 164-174
+tests/godot_plugin_harness_fixture/tests/locale_key_parity_contract_test.gd
+  s_0b5fae83c24251::t_f69e623e2521de 120,128
+  s_0b5fae83c24251::t_862411d4b1b847 127,129
+addons/godot_dotnet_mcp/localization/locale_pt.gd
+  s_0b5fae83c24251::t_b376e6b458413b 448
+addons/godot_dotnet_mcp/localization/locale_ko.gd
+  s_0b5fae83c24251::t_b376e6b458413b 615
+addons/godot_dotnet_mcp/localization/locale_ru.gd
+  s_0b5fae83c24251::t_b376e6b458413b 448
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.11",
+  "base_commit_sha": "86da27d0031cb62c6f3035881eaa0de8b64cbbeb",
+  "prompts": {},
+  "sessions": {
+    "s_0b5fae83c24251": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f5b16-1dbf-7982-b141-2d3c12bdcbf0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
