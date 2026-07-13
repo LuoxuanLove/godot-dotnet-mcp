@@ -1,0 +1,54 @@
+addons/godot_dotnet_mcp/localization/locale_fr.gd
+  s_0b5fae83c24251::t_352a993160b856 448
+addons/godot_dotnet_mcp/localization/locale_ko.gd
+  s_0b5fae83c24251::t_352a993160b856 615
+docs/ko/인터페이스/Dock-UI-스타일-가이드.md
+  s_0b5fae83c24251::t_352a993160b856 19
+addons/godot_dotnet_mcp/localization/locale_de.gd
+  s_0b5fae83c24251::t_352a993160b856 448
+tests/godot_plugin_harness_fixture/tests/settings_tab_rendering_contract_test.gd
+  s_0b5fae83c24251::t_2bbbeb61d1b359 369
+  s_0b5fae83c24251::t_7588905067295c 370-385
+  s_0b5fae83c24251::t_352a993160b856 12,223-224
+docs/zh-CN/界面/Dock界面风格规范.md
+  s_0b5fae83c24251::t_352a993160b856 19
+addons/godot_dotnet_mcp/localization/locale_ja.gd
+  s_0b5fae83c24251::t_352a993160b856 449
+addons/godot_dotnet_mcp/ui/settings_tab_model_projection.gd
+  s_0b5fae83c24251::t_a6e395d3899be0 259
+  s_0b5fae83c24251::t_7588905067295c 233-252,258
+  s_0b5fae83c24251::t_352a993160b856 31-32
+addons/godot_dotnet_mcp/localization/locale_zh_tw.gd
+  s_0b5fae83c24251::t_352a993160b856 629
+addons/godot_dotnet_mcp/localization/locale_ru.gd
+  s_0b5fae83c24251::t_352a993160b856 448
+addons/godot_dotnet_mcp/ui/settings_tab.gd
+  s_0b5fae83c24251::t_352a993160b856 135,142
+docs/ja/インターフェース/Dock-UIスタイルガイド.md
+  s_0b5fae83c24251::t_352a993160b856 19
+tests/godot_plugin_harness_fixture/tests/settings_tab_model_projection_contract_test.gd
+  s_0b5fae83c24251::t_7588905067295c 236-268
+  s_0b5fae83c24251::t_352a993160b856 112-113
+docs/en/interface/dock-ui-style-guide.md
+  s_0b5fae83c24251::t_352a993160b856 19
+addons/godot_dotnet_mcp/localization/locale_es.gd
+  s_0b5fae83c24251::t_352a993160b856 448
+addons/godot_dotnet_mcp/localization/locale_pt.gd
+  s_0b5fae83c24251::t_352a993160b856 448
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.11",
+  "base_commit_sha": "f88e10d6058be53d1be7aa2e599614d36b0d33a6",
+  "prompts": {},
+  "sessions": {
+    "s_0b5fae83c24251": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f5b16-1dbf-7982-b141-2d3c12bdcbf0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    }
+  }
+}
