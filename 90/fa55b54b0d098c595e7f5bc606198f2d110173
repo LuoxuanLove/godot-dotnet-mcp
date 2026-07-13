@@ -1,0 +1,31 @@
+addons/godot_dotnet_mcp/plugin/config/settings_store.gd
+  s_0b5fae83c24251::t_8fbf6f59f09179 104,475-476,491-500
+docs/zh-CN/界面/Dock界面风格规范.md
+  s_0b5fae83c24251::t_8fbf6f59f09179 87
+docs/en/interface/dock-ui-style-guide.md
+  s_0b5fae83c24251::t_8fbf6f59f09179 87
+tests/godot_plugin_harness_fixture/tests/plugin_update_settings_persistence_contract_test.gd
+  s_0b5fae83c24251::t_bd304dfd0de2d5 313-336
+docs/ja/インターフェース/Dock-UIスタイルガイド.md
+  s_0b5fae83c24251::t_8fbf6f59f09179 87
+tests/godot_plugin_harness_fixture/tests/plugin_action_router_contract_test.gd
+  s_0b5fae83c24251::t_8fbf6f59f09179 201
+docs/ko/인터페이스/Dock-UI-스타일-가이드.md
+  s_0b5fae83c24251::t_8fbf6f59f09179 87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "90fa55b54b0d098c595e7f5bc606198f2d110173",
+  "prompts": {},
+  "sessions": {
+    "s_0b5fae83c24251": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f5b16-1dbf-7982-b141-2d3c12bdcbf0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
