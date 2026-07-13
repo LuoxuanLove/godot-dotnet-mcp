@@ -1,0 +1,97 @@
+addons/godot_dotnet_mcp/ui/settings_panel.tscn
+  s_0b5fae83c24251::t_fc10b6eb5e0813 106,109,111,115,120,124,129,131-134,136,138-139,148-152,157,159-160,162,164,168,170,174,178,180-183,185,197-221,223-224,226-243,250
+  s_0b5fae83c24251::t_6c28e871aabea4 49,52,55,59,65,69,72,74,78,81,142,145,155,222,225,248
+  s_0b5fae83c24251::t_8d9988d48bcd18 244
+docs/ja/概要.md
+  s_0b5fae83c24251::t_1cb988becdfa84 11,27-29
+docs/ko/소개.md
+  s_0b5fae83c24251::t_bf58cc058ae176 72
+docs/zh-CN/概述.md
+  s_0b5fae83c24251::t_1cb988becdfa84 11,27-29
+docs/en/overview.md
+  s_0b5fae83c24251::t_1cb988becdfa84 11,27-29
+tests/godot_plugin_harness_fixture/tests/settings_tab_model_projection_contract_test.gd
+  s_0b5fae83c24251::t_cf144d5dd8aa46 121-123,142-144,156,168,177,268,280
+  s_0b5fae83c24251::t_7caf8a58607a43 116-117,124-131
+  s_0b5fae83c24251::t_f18cefe20400df 205
+docs/zh-CN/界面/总览.md
+  s_0b5fae83c24251::t_1cb988becdfa84 184
+docs/ja/変更履歴.md
+  s_0b5fae83c24251::t_bf58cc058ae176 11-12
+docs/ja/インターフェース/概要.md
+  s_0b5fae83c24251::t_1cb988becdfa84 185
+scripts/validate_docs_i18n.ps1
+  s_0b5fae83c24251::t_1cb988becdfa84 22
+docs/ko/개요.md
+  s_0b5fae83c24251::t_1cb988becdfa84 11,27-29
+addons/godot_dotnet_mcp/ui/settings_tab_model_projection.gd
+  s_0b5fae83c24251::t_67ec924562d223 239-240
+  s_0b5fae83c24251::t_a6e395d3899be0 43-44,224-238,241-242,266,289
+docs/ja/インターフェース/Dock-UIスタイルガイド.md
+  s_0b5fae83c24251::t_dfdc45ced63cc4 1-103,105-127
+  s_0b5fae83c24251::t_460d75816db19a 104
+docs/ko/인터페이스/Dock-UI-스타일-가이드.md
+  s_0b5fae83c24251::t_dfdc45ced63cc4 1-127
+docs/en/README.md
+  s_0b5fae83c24251::t_bf58cc058ae176 73
+docs/en/CHANGELOG.md
+  s_0b5fae83c24251::t_bf58cc058ae176 11-12
+docs/ko/인터페이스/개요.md
+  s_0b5fae83c24251::t_1cb988becdfa84 169
+docs/ko/변경-로그.md
+  s_0b5fae83c24251::t_bf58cc058ae176 11-12
+docs/ja/プロセス/リリースノート/リリースノート-v2.0.0.md
+  s_0b5fae83c24251::t_744065b6ae0e95 41-48
+docs/ja/はじめに.md
+  s_0b5fae83c24251::t_bf58cc058ae176 68
+tests/godot_plugin_harness_fixture/tests/settings_tab_rendering_contract_test.gd
+  s_0b5fae83c24251::t_a08a0b11200cf4 183-186,189-194,206-207,215,227-233,287-288,296,329,357,359-363,367-369
+  s_0b5fae83c24251::t_cc46c8cba1db61 291
+  s_0b5fae83c24251::t_312e26a463390f 365
+  s_0b5fae83c24251::t_8d76064aec1abd 366
+  s_0b5fae83c24251::t_dac5f2bbd13e18 364
+  s_0b5fae83c24251::t_18974ab35ecd1d 358
+  s_0b5fae83c24251::t_cac70d475e3aa7 370
+docs/ko/프로세스/릴리스-노트/릴리스-노트-v2.0.0.md
+  s_0b5fae83c24251::t_744065b6ae0e95 41-48
+docs/zh-CN/说明.md
+  s_0b5fae83c24251::t_bf58cc058ae176 73
+addons/godot_dotnet_mcp/ui/settings_tab.gd
+  s_0b5fae83c24251::t_f50e566a10a813 17,31,43,52,55-57,60-66,96,111,173-175,178-182,198,209,221-222,225-228,249-250,252
+  s_0b5fae83c24251::t_cc46c8cba1db61 85,109-110,141-142,375-376,469-476
+  s_0b5fae83c24251::t_e11f1cb478f55d 329,332,335,338,366-368,372,378-379,467-468,486
+  s_0b5fae83c24251::t_8a89b5b61c0b58 574-581,584,586,588,591,598-599,603-608,614-616,656-666,670-686
+  s_0b5fae83c24251::t_9bdf9f3c551af8 167-171,317
+  s_0b5fae83c24251::t_c54444ac332941 477-478
+docs/en/interface/overview.md
+  s_0b5fae83c24251::t_1cb988becdfa84 185
+docs/zh-CN/变更日志.md
+  s_0b5fae83c24251::t_bf58cc058ae176 12-13
+docs/en/interface/dock-ui-style-guide.md
+  s_0b5fae83c24251::t_dfdc45ced63cc4 1-127
+docs/zh-CN/流程/发布说明/发布说明-v2.0.0.md
+  s_0b5fae83c24251::t_744065b6ae0e95 41-48
+docs/en/process/release-notes/release-notes-v2.0.0.md
+  s_0b5fae83c24251::t_744065b6ae0e95 41-48
+docs/zh-CN/界面/Dock界面风格规范.md
+  s_0b5fae83c24251::t_460d75816db19a 104
+  s_0b5fae83c24251::t_dfdc45ced63cc4 1-103,105-127
+tests/godot_plugin_harness_fixture/tests/mcp_dock_settings_tab_contract_test.gd
+  s_0b5fae83c24251::t_1ea383a7b1ef85 224,255-261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.11",
+  "base_commit_sha": "3a00315eb1094a0961f5d22c9fc28696a4f28545",
+  "prompts": {},
+  "sessions": {
+    "s_0b5fae83c24251": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f5b16-1dbf-7982-b141-2d3c12bdcbf0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
