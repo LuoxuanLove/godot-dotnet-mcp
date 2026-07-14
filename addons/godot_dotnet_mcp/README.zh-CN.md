@@ -11,7 +11,7 @@
 
 System 工具层是推荐起点，覆盖项目快照、项目文件树修改、编辑器会话快照、编辑器界面控制、编辑器日志访问、运行时诊断、场景分析、当前场景树修改、脚本结构检查、C# 绑定审计与符号搜索，读取的是当前编辑器状态，而不是磁盘上的文件快照。
 
-连接后，MCP 客户端还可以通过内置 Resources 与 Prompts 读取服务能力元数据、以 JSON 查看当前工具目录，并获取项目起手或工具发现引导 prompt。可先调用 `system_help` 获取当前能力说明与工具结构版本。凡涉及 Dock、弹窗、布局、焦点或按钮可见性，优先使用语义工作流工具，其次通过 Godot 编辑器 API 使用 `system_editor_control(action=activate_ui)` 和其他控件级操作。视觉确认应优先使用 `system_editor_evidence(action=capture, surface=auto/editor/control/popup/active_dialog)`，让截图元数据说明捕获 surface、目标、fallback 与降级状态；除非用户明确授权前台自动化，否则不要使用系统级鼠标/窗口控制。若可见控件枚举找不到目标，应使用 `system_editor_control(action=list_controls, include_hidden=true)` 重试。Dock 自建弹窗 UI 需要明确区分坐标空间：Control 本地点击坐标应按场景转换为 viewport 或 screen 坐标，`PopupMenu.popup(Rect2i)` 必须接收 screen 坐标，而不是 local 或 canvas global 坐标。
+连接后，MCP 客户端还可以通过内置 Resources 与 Prompts 读取服务能力元数据、以 JSON 查看当前工具目录，并获取项目起手或工具发现引导 prompt。读取 `godot-dotnet-mcp://guides/index` 与 `godot-dotnet-mcp://guides/capabilities` 获取当前 resource-first 能力指南，并使用 `prompts/list` 或 `prompts/get` 进行工作流规划。凡涉及 Dock、弹窗、布局、焦点或按钮可见性，优先使用语义工作流工具，其次通过 Godot 编辑器 API 使用 `system_editor_control(action=activate_ui)` 和其他控件级操作。视觉确认应优先使用 `system_editor_evidence(action=capture, surface=auto/editor/control/popup/active_dialog)`，让截图元数据说明捕获 surface、目标、fallback 与降级状态；除非用户明确授权前台自动化，否则不要使用系统级鼠标/窗口控制。若可见控件枚举找不到目标，应使用 `system_editor_control(action=list_controls, include_hidden=true)` 重试。Dock 自建弹窗 UI 需要明确区分坐标空间：Control 本地点击坐标应按场景转换为 viewport 或 screen 坐标，`PopupMenu.popup(Rect2i)` 必须接收 screen 坐标，而不是 local 或 canvas global 坐标。
 
 插件侧运行态细节仍推荐通过 `plugin_runtime_state` 获取；其中 `action=get_lsp_diagnostics_status` 是详细 LSP 自检入口，而 `system_project_state(include_runtime_health=true)` 只返回轻量 `self_diagnostics`、`lsp_diagnostics` 与 `tool_loader` 健康摘要。
 
@@ -66,9 +66,9 @@ addons/godot_dotnet_mcp
 4. 在右侧 Dock 中打开 `MCPDock`。
 5. 确认端口后启动服务。
 
-### 方式二：直接复制源文件
+### 方式二：直接复制
 
-将插件放到你的 Godot 项目内：
+将可安装的插件内容放到你的 Godot 项目内。请使用 Asset Library 下载内容或已准备好的可安装插件目录，不要直接复制原始仓库源码树；原始源码树包含内部 bridge 项目，这些内容不应进入宿主项目编译面。复制后的插件应保留 `plugin/runtime/roslyn_runtime/`，并确保机器上可用 .NET 8 runtime，以便 C# 语义工具运行 framework-dependent Roslyn bridge：
 
 ```text
 addons/godot_dotnet_mcp
@@ -129,7 +129,8 @@ POST http://127.0.0.1:3000/mcp
 
 - `/health` 返回正常
 - `/api/tools` 能返回工具列表
-- `system_help` 返回当前能力说明，并包含编辑器截图优先提示与隐藏控件枚举提示
+- `resources/read` 可读取 `godot-dotnet-mcp://guides/index` 等指南资源
+- `prompts/list` 与 `prompts/get` 可返回项目起手和工具发现引导
 - MCP 客户端能够连接到 `http://127.0.0.1:3000/mcp`
 
 ### 4. 读取最近一次项目运行状态

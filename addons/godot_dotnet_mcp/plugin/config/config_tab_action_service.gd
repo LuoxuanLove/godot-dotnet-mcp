@@ -57,18 +57,28 @@ func dispose() -> void:
 
 
 func handle_config_client_action_requested(client_id: String) -> void:
+	if _is_client_action_running():
+		_show_config_message(_localization.get_text("config_client_action_already_running"))
+		return
+	_begin_client_action(client_id)
+	call_deferred("_handle_config_client_action_requested_async", client_id)
+
+
+func _handle_config_client_action_requested_async(client_id: String) -> void:
+	await _wait_one_frame()
 	var client_statuses = _get_client_install_statuses.call() if _get_client_install_statuses.is_valid() else {}
 	match client_id:
 		"claude_code":
-			_toggle_claude_code_mcp_config(client_statuses.get("claude_code", {}))
+			await _toggle_claude_code_mcp_config(client_statuses.get("claude_code", {}))
 		"codex":
-			_toggle_codex_mcp_config(client_statuses.get("codex", {}))
+			await _toggle_codex_mcp_config(client_statuses.get("codex", {}))
 		"gemini":
-			_toggle_gemini_mcp_config(client_statuses.get("gemini", {}))
+			await _toggle_gemini_mcp_config(client_statuses.get("gemini", {}))
 		"qwen":
-			_toggle_qwen_mcp_config(client_statuses.get("qwen", {}))
+			await _toggle_qwen_mcp_config(client_statuses.get("qwen", {}))
 		_:
 			pass
+	_finish_client_action()
 
 
 func handle_config_client_launch_requested(client_id: String) -> void:
@@ -82,6 +92,12 @@ func handle_config_client_launch_requested(client_id: String) -> void:
 			_launch_desktop_agent_for_current_project(
 				_get_client_display_name("trae"),
 				client_statuses.get("trae", {})
+			)
+		"antigravity":
+			_launch_desktop_agent(
+				_get_client_display_name("antigravity"),
+				client_statuses.get("antigravity", {}),
+				PackedStringArray()
 			)
 		"codex_desktop":
 			_launch_desktop_agent(_get_client_display_name("codex_desktop"), client_statuses.get("codex_desktop", {}), PackedStringArray())
@@ -165,37 +181,62 @@ func handle_config_client_open_config_file_requested(client_id: String) -> void:
 
 
 func handle_config_write_requested(config_type: String, filepath: String, config: String, client_name: String) -> void:
+	if _is_client_action_running():
+		_show_config_message(_localization.get_text("config_client_action_already_running"))
+		return
+	_begin_named_client_action(client_name)
+	call_deferred("_handle_config_write_requested_async", config_type, filepath, config, client_name)
+
+
+func _handle_config_write_requested_async(config_type: String, filepath: String, config: String, client_name: String) -> void:
+	await _wait_one_frame()
 	var preflight = _config_service.preflight_write_config(config_type, filepath, config)
 	if not bool(preflight.get("success", false)):
+		_finish_client_action()
 		_show_config_message(_build_config_write_failure_message(preflight, filepath))
 		return
 
 	if bool(preflight.get("requires_confirmation", false)):
+		_finish_client_action()
 		_show_config_confirmation(
 			_build_config_write_confirmation_message(client_name, preflight),
 			func() -> void:
-				_perform_config_write(config_type, filepath, config, client_name, preflight, true)
+				_begin_named_client_action(client_name)
+				call_deferred("_perform_config_write_async", config_type, filepath, config, client_name, preflight, true)
 		)
 		return
 
-	_perform_config_write(config_type, filepath, config, client_name, preflight, false)
+	await _perform_config_write_async(config_type, filepath, config, client_name, preflight, false)
 
 
 func handle_config_remove_requested(config_type: String, filepath: String, client_name: String) -> void:
+	if _is_client_action_running():
+		_show_config_message(_localization.get_text("config_client_action_already_running"))
+		return
+	_begin_named_client_action(client_name)
+	call_deferred("_handle_config_remove_requested_async", config_type, filepath, client_name)
+
+
+func _handle_config_remove_requested_async(config_type: String, filepath: String, client_name: String) -> void:
+	await _wait_one_frame()
 	var inspection = _config_service.inspect_config_entry(config_type, filepath)
 	if not bool(inspection.get("success", false)):
+		_finish_client_action()
 		_show_config_message(_build_config_remove_failure_message(inspection, filepath))
 		return
 
 	var status = str(inspection.get("status", "missing_file"))
 	if status != "present":
+		_finish_client_action()
 		_show_config_message(_build_config_remove_noop_message(inspection, client_name))
 		return
 
+	_finish_client_action()
 	_show_config_confirmation(
 		_build_config_remove_confirmation_message(client_name, inspection),
 		func() -> void:
-			_perform_config_remove(config_type, filepath, client_name, inspection)
+			_begin_named_client_action(client_name)
+			call_deferred("_perform_config_remove_async", config_type, filepath, client_name, inspection)
 	)
 
 
@@ -281,6 +322,19 @@ func _perform_config_write(
 	_show_config_message("\n\n".join(success_lines))
 
 
+func _perform_config_write_async(
+	config_type: String,
+	filepath: String,
+	config: String,
+	client_name: String,
+	preflight: Dictionary,
+	allow_incompatible_overwrite: bool
+) -> void:
+	await _wait_one_frame()
+	_perform_config_write(config_type, filepath, config, client_name, preflight, allow_incompatible_overwrite)
+	_finish_client_action()
+
+
 func _perform_config_remove(config_type: String, filepath: String, client_name: String, inspection: Dictionary) -> void:
 	var result = _config_service.remove_config_entry(config_type, filepath, {"inspection": inspection})
 	if not bool(result.get("success", false)):
@@ -302,6 +356,12 @@ func _perform_config_remove(config_type: String, filepath: String, client_name: 
 		success_lines.append(_localization.get_text("msg_config_backup_created") % backup_path)
 	success_lines.append(_build_client_runtime_followup_message(config_type))
 	_show_config_message("\n\n".join(success_lines))
+
+
+func _perform_config_remove_async(config_type: String, filepath: String, client_name: String, inspection: Dictionary) -> void:
+	await _wait_one_frame()
+	_perform_config_remove(config_type, filepath, client_name, inspection)
+	_finish_client_action()
 
 
 func _build_config_write_confirmation_message(client_name: String, preflight: Dictionary) -> String:
@@ -449,6 +509,8 @@ func _build_client_runtime_followup_message(client_id: String) -> String:
 				return _localization.get_text("msg_config_restart_cursor")
 			"trae":
 				return _localization.get_text("msg_config_restart_trae")
+			"antigravity":
+				return _localization.get_text("msg_config_restart_antigravity")
 			"opencode", "opencode_desktop":
 				return _localization.get_text("msg_config_restart_opencode")
 			_:
@@ -499,6 +561,52 @@ func _get_client_display_name(client_id: String) -> String:
 			return client_id
 
 
+func _is_client_action_running() -> bool:
+	return _state != null and str(_state.client_action_state) == "loading"
+
+
+func _begin_client_action(client_id: String) -> void:
+	_begin_named_client_action(_get_client_display_name(client_id), client_id)
+
+
+func _begin_named_client_action(client_name: String, client_id: String = "") -> void:
+	if _state == null:
+		return
+	_state.client_action_state = "loading"
+	_state.client_action_client_id = client_id
+	_state.client_action_status = _localization.get_text("config_client_action_running_status") % client_name
+	_refresh_dock_if_possible()
+
+
+func _finish_client_action() -> void:
+	if _state == null:
+		return
+	_state.client_action_state = "idle"
+	_state.client_action_client_id = ""
+	_state.client_action_status = ""
+	_invalidate_client_install_status_cache_if_possible()
+	_refresh_dock_if_possible()
+
+
+func _wait_one_frame() -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null:
+		await tree.process_frame
+
+
+func _execute_client_cli_command(executable_path: String, arguments: PackedStringArray) -> Dictionary:
+	if _config_service != null and _config_service.has_method("execute_cli_command_async"):
+		return await _config_service.execute_cli_command_async(executable_path, arguments)
+	if _config_service != null:
+		return _config_service.execute_cli_command(executable_path, arguments)
+	return {
+		"success": false,
+		"exit_code": -1,
+		"output": [],
+		"message": "Client configuration service is not available."
+	}
+
+
 func _toggle_claude_code_mcp_config(detection: Dictionary) -> void:
 	if detection.is_empty() or str(detection.get("status", "")) != "ready":
 		_show_config_message(_get_client_install_message_text("claude_code", str(detection.get("status", "missing"))))
@@ -512,7 +620,7 @@ func _toggle_claude_code_mcp_config(detection: Dictionary) -> void:
 	var entry_status = str(detection.get("config_entry_status", {}).get("status", "missing_server"))
 	var client_name = _localization.get_text("config_client_claude_code")
 	if entry_status == "present":
-		var remove_result = _config_service.execute_cli_command(executable_path, PackedStringArray(["mcp", "remove", MCP_SERVER_KEY]))
+		var remove_result = await _execute_client_cli_command(executable_path, PackedStringArray(["mcp", "remove", MCP_SERVER_KEY]))
 		if not bool(remove_result.get("success", false)):
 			_show_config_message("%s\n\n%s" % [
 				_localization.get_text("msg_config_remove_failed"),
@@ -524,7 +632,7 @@ func _toggle_claude_code_mcp_config(detection: Dictionary) -> void:
 		_show_config_message(_localization.get_text("msg_config_remove_success") % client_name)
 		return
 
-	var add_result = _config_service.execute_cli_command(executable_path, _build_claude_code_add_arguments())
+	var add_result = await _execute_client_cli_command(executable_path, _build_claude_code_add_arguments())
 	if not bool(add_result.get("success", false)):
 		_show_config_message("%s\n\n%s" % [
 			_localization.get_text("msg_client_action_failed") % client_name,
@@ -550,7 +658,7 @@ func _toggle_codex_mcp_config(detection: Dictionary) -> void:
 	var client_name = _localization.get_text("config_client_codex")
 	var entry_status = str(detection.get("config_entry_status", {}).get("status", "missing_server"))
 	if entry_status == "present":
-		var remove_result = _config_service.execute_cli_command(executable_path, PackedStringArray(["mcp", "remove", MCP_SERVER_KEY]))
+		var remove_result = await _execute_client_cli_command(executable_path, PackedStringArray(["mcp", "remove", MCP_SERVER_KEY]))
 		if not bool(remove_result.get("success", false)):
 			_show_config_message("%s\n\n%s" % [
 				_localization.get_text("msg_config_remove_failed"),
@@ -563,7 +671,7 @@ func _toggle_codex_mcp_config(detection: Dictionary) -> void:
 		return
 
 	var transport = _build_client_transport_model(str(_state.settings.get("host", "127.0.0.1")), int(_state.settings.get("port", 3000)))
-	var add_result = _config_service.execute_cli_command(executable_path, _build_codex_add_arguments(transport))
+	var add_result = await _execute_client_cli_command(executable_path, _build_codex_add_arguments(transport))
 	if not bool(add_result.get("success", false)):
 		_show_config_message("%s\n\n%s" % [
 			_localization.get_text("msg_client_action_failed") % client_name,
@@ -589,7 +697,7 @@ func _toggle_gemini_mcp_config(detection: Dictionary) -> void:
 	var client_name = _localization.get_text("config_client_gemini")
 	var entry_status = str(detection.get("config_entry_status", {}).get("status", "missing_server"))
 	if entry_status == "present":
-		var remove_result = _config_service.execute_cli_command(executable_path, PackedStringArray(["mcp", "remove", MCP_SERVER_KEY]))
+		var remove_result = await _execute_client_cli_command(executable_path, PackedStringArray(["mcp", "remove", MCP_SERVER_KEY]))
 		if not bool(remove_result.get("success", false)):
 			_show_config_message("%s\n\n%s" % [
 				_localization.get_text("msg_config_remove_failed"),
@@ -601,7 +709,7 @@ func _toggle_gemini_mcp_config(detection: Dictionary) -> void:
 		_show_config_message(_localization.get_text("msg_config_remove_success") % client_name)
 		return
 
-	var add_result = _config_service.execute_cli_command(executable_path, _build_gemini_add_arguments())
+	var add_result = await _execute_client_cli_command(executable_path, _build_gemini_add_arguments())
 	if not bool(add_result.get("success", false)):
 		_show_config_message("%s\n\n%s" % [
 			_localization.get_text("msg_client_action_failed") % client_name,
@@ -627,7 +735,7 @@ func _toggle_qwen_mcp_config(detection: Dictionary) -> void:
 	var client_name = _localization.get_text("config_client_qwen")
 	var entry_status = str(detection.get("config_entry_status", {}).get("status", "missing_server"))
 	if entry_status == "present":
-		var remove_result = _config_service.execute_cli_command(executable_path, PackedStringArray(["mcp", "remove", MCP_SERVER_KEY]))
+		var remove_result = await _execute_client_cli_command(executable_path, PackedStringArray(["mcp", "remove", MCP_SERVER_KEY]))
 		if not bool(remove_result.get("success", false)):
 			_show_config_message("%s\n\n%s" % [
 				_localization.get_text("msg_config_remove_failed"),
@@ -639,7 +747,7 @@ func _toggle_qwen_mcp_config(detection: Dictionary) -> void:
 		_show_config_message(_localization.get_text("msg_config_remove_success") % client_name)
 		return
 
-	var add_result = _config_service.execute_cli_command(executable_path, _build_qwen_add_arguments())
+	var add_result = await _execute_client_cli_command(executable_path, _build_qwen_add_arguments())
 	if not bool(add_result.get("success", false)):
 		_show_config_message("%s\n\n%s" % [
 			_localization.get_text("msg_client_action_failed") % client_name,

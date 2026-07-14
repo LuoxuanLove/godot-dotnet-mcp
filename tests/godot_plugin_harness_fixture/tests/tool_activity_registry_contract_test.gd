@@ -116,6 +116,35 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(final_status.get("running_count", -1)) != 0 or int(final_status.get("recent_count", 0)) != 2:
 		return _failure("Tool activity registry should finish all calls cleanly.")
 
+	var stale_record: Dictionary = registry.begin_call(
+		"system_runtime_step",
+		"system",
+		"runtime_step",
+		{"action": "capture"},
+		{"purpose": "verify stale sweep"},
+		{"transport": "http"}
+	)
+	var stale_call_id := str(stale_record.get("call_id", ""))
+	if stale_call_id.is_empty():
+		return _failure("Tool activity registry should expose call ids for stale sweep contracts.")
+	var stale_internal: Dictionary = registry._running.get(stale_call_id, {})
+	stale_internal["started_at_unix"] = 100
+	registry._running[stale_call_id] = stale_internal
+	var sweep_result: Dictionary = registry.sweep_stale(300, 1000)
+	if int(sweep_result.get("swept_count", 0)) != 1:
+		return _failure("Tool activity registry should sweep stale running calls after the TTL.")
+	final_status = registry.get_status()
+	if int(final_status.get("running_count", -1)) != 0 or int(final_status.get("recent_count", 0)) != 3:
+		return _failure("Tool activity registry should move stale calls from running to recent.")
+	var stale_lookup: Dictionary = registry.get_call(stale_call_id)
+	if not bool(stale_lookup.get("found", false)):
+		return _failure("Tool activity registry should retain swept stale calls in recent history.")
+	var stale_call: Dictionary = stale_lookup.get("call", {})
+	if str(stale_call.get("state", "")) != "stale":
+		return _failure("Tool activity registry should mark swept calls as stale.")
+	if not str(stale_call.get("error", "")).contains("TTL"):
+		return _failure("Tool activity registry should explain stale activity sweep errors.")
+
 	return {
 		"name": "tool_activity_registry_contracts",
 		"success": true,

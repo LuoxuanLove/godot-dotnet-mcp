@@ -41,6 +41,21 @@ static func get_trae_config_path() -> String:
 	return candidates[0]
 
 
+static func get_antigravity_config_hint_path() -> String:
+	var home = _get_home_dir()
+	match OS.get_name():
+		"macOS":
+			return _normalize_path(home + "/Library/Application Support/Antigravity")
+		"Windows":
+			return _normalize_path(OS.get_environment("APPDATA") + "/Antigravity")
+		_:
+			return _normalize_path(home + "/.config/Antigravity")
+
+
+static func get_antigravity_mcp_config_path() -> String:
+	return _normalize_path(_get_home_dir() + "/.gemini/config/mcp_config.json")
+
+
 static func get_gemini_config_path() -> String:
 	return _normalize_path(_get_home_dir() + "/.gemini/settings.json")
 

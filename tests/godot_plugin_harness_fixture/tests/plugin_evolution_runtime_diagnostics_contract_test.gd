@@ -27,7 +27,14 @@ class FakePlugin extends Node:
 			"data": {
 				"limit": limit,
 				"runtime_state_count": runtime_state.size(),
-				"runtime_state": runtime_state.duplicate(true)
+				"runtime_state": runtime_state.duplicate(true),
+				"failed_loads": [{
+					"script_path": "res://addons/godot_dotnet_mcp/custom_tools/runtime_failed_user_tool.gd",
+					"load_error": "Duplicate user tool logical name: duplicated_tool",
+					"diagnostic_code": "duplicate_user_tool_logical_name",
+					"recommended_action": "Rename one of the conflicting user tool declarations so each logical tool name is unique.",
+					"next_tool_hint": "Run plugin_evolution_runtime_diagnostics after renaming to confirm the duplicate runtime failure cleared."
+				}]
 			}
 		}
 
@@ -75,6 +82,14 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("runtime_diagnostics should preserve runtime snapshot entries.")
 	if int(result.get("data", {}).get("runtime_state_count", 0)) != 1:
 		return _failure("runtime_diagnostics should preserve the runtime snapshot count in the returned payload.")
+	var failed_loads = result.get("data", {}).get("failed_loads", [])
+	if not (failed_loads is Array) or (failed_loads as Array).is_empty():
+		return _failure("runtime_diagnostics should expose user-tool recovery diagnostics.")
+	var first_failure: Dictionary = (failed_loads as Array)[0] as Dictionary
+	if str(first_failure.get("diagnostic_code", "")) != "duplicate_user_tool_logical_name":
+		return _failure("runtime_diagnostics should preserve recovery diagnostic codes through the public plugin_evolution entry.")
+	if str(first_failure.get("recommended_action", "")).find("Rename") == -1:
+		return _failure("runtime_diagnostics should preserve recovery recommendations through the public plugin_evolution entry.")
 
 	return {
 		"name": "plugin_evolution_runtime_diagnostics_contracts",

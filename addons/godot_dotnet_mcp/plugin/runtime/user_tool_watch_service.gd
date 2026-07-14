@@ -2,11 +2,14 @@
 extends RefCounted
 class_name UserToolWatchService
 
+const UserToolScanService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_scan_service.gd")
+
 const CUSTOM_TOOLS_DIR := "res://addons/godot_dotnet_mcp/custom_tools"
 const ENABLE_RUNTIME_LOADING_SETTING := "godot_dotnet_mcp/user_tools/enable_runtime_loading"
 const ENABLE_RUNTIME_LOADING_SETTING_LEGACY := "user_tools/enable_runtime_loading"
-const POLL_INTERVAL_MSEC := 500
+const POLL_INTERVAL_MSEC := 5000
 const SETTLE_DELAY_MSEC := 300
+const SCAN_ENTRY_BUDGET_PER_TICK := 16
 
 var _plugin: Object
 var _reload_coordinator = null
@@ -21,6 +24,13 @@ var _pending_changes: Dictionary = {}
 var _pending_since_msec := 0
 var _last_change_reason := ""
 var _last_error := ""
+var _initial_scan_pending := false
+var _runtime_loading_enabled_cache := false
+var _scan_service := UserToolScanService.new()
+
+
+func _init() -> void:
+	_scan_service.configure(CUSTOM_TOOLS_DIR, SCAN_ENTRY_BUDGET_PER_TICK)
 
 
 func configure(plugin: Object, reload_coordinator, user_tool_service, apply_external_user_tool_catalog_refresh: Callable = Callable()) -> void:
@@ -34,17 +44,19 @@ func start() -> void:
 	_watching = true
 	_last_poll_msec = 0
 	_last_scan_unix = int(Time.get_unix_time_from_system())
+	_runtime_loading_enabled_cache = _is_runtime_loading_enabled()
 	_pending_snapshot.clear()
 	_pending_changes.clear()
 	_pending_since_msec = 0
+	_scan_service.reset()
+	_initial_scan_pending = true
 	_last_change_reason = ""
 	_last_error = ""
-	var scan_result = _scan_snapshot()
-	if _as_bool(scan_result.get("success", false)):
-		_known_snapshot = (scan_result.get("snapshot", {}) as Dictionary).duplicate(true)
-	else:
+	if not _runtime_loading_enabled_cache:
+		_initial_scan_pending = false
 		_known_snapshot.clear()
-		_last_error = str(scan_result.get("error", "watch_start_failed"))
+		return
+	_known_snapshot.clear()
 
 
 func stop() -> void:
@@ -52,35 +64,65 @@ func stop() -> void:
 	_pending_snapshot.clear()
 	_pending_changes.clear()
 	_pending_since_msec = 0
+	_scan_service.reset()
+	_initial_scan_pending = false
 
 
 func tick() -> void:
 	if not _watching:
 		return
-	if not _is_runtime_loading_enabled():
+	var now_msec := Time.get_ticks_msec()
+	if not _scan_service.is_scan_in_progress() and not _initial_scan_pending:
+		if _last_poll_msec > 0 and now_msec - _last_poll_msec < POLL_INTERVAL_MSEC:
+			return
+		_last_poll_msec = now_msec
+	_runtime_loading_enabled_cache = _is_runtime_loading_enabled()
+	if not _runtime_loading_enabled_cache:
 		_pending_snapshot.clear()
 		_pending_changes.clear()
 		_pending_since_msec = 0
+		_scan_service.reset()
+		_initial_scan_pending = false
 		return
-	var now_msec := Time.get_ticks_msec()
-	if _last_poll_msec > 0 and now_msec - _last_poll_msec < POLL_INTERVAL_MSEC:
+	if _scan_service.is_scan_in_progress():
+		var sliced_result := _scan_service.continue_scan()
+		if bool(sliced_result.get("complete", false)):
+			_handle_scan_result(sliced_result, now_msec)
 		return
-	_last_poll_msec = now_msec
+	if _initial_scan_pending:
+		var baseline_result := _scan_service.begin_scan()
+		if bool(baseline_result.get("complete", false)):
+			_handle_scan_result(baseline_result, now_msec)
+		return
+	var scan_result := _scan_service.begin_scan()
+	if bool(scan_result.get("complete", false)):
+		_handle_scan_result(scan_result, now_msec)
 
-	var scan_result = _scan_snapshot()
+
+func _handle_scan_result(scan_result: Dictionary, now_msec: int) -> void:
 	_last_scan_unix = int(Time.get_unix_time_from_system())
 	if not _as_bool(scan_result.get("success", false)):
 		_last_error = str(scan_result.get("error", "watch_scan_failed"))
 		return
 
-	var snapshot := (scan_result.get("snapshot", {}) as Dictionary).duplicate(true)
+	var snapshot: Dictionary = {}
+	var raw_snapshot = scan_result.get("snapshot", {})
+	if raw_snapshot is Dictionary:
+		snapshot = raw_snapshot as Dictionary
+	if _initial_scan_pending:
+		_known_snapshot = snapshot
+		_initial_scan_pending = false
+		_last_poll_msec = now_msec
+		_last_error = ""
+		_last_change_reason = "watch_baseline_ready"
+		return
 	var changes = _compute_changes(_known_snapshot, snapshot)
 	if _changes_are_empty(changes):
 		return
 
 	if not _snapshots_equal(snapshot, _pending_snapshot):
-		_pending_snapshot = snapshot.duplicate(true)
-		_pending_changes = changes.duplicate(true)
+		_pending_snapshot = snapshot
+		_pending_changes = changes
 		_pending_since_msec = now_msec
 		_last_change_reason = "external_watch_pending"
 		return
@@ -90,7 +132,7 @@ func tick() -> void:
 
 	var apply_result = _apply_pending_changes(_pending_changes)
 	if _as_bool(apply_result.get("success", false)):
-		_known_snapshot = snapshot.duplicate(true)
+		_known_snapshot = snapshot
 		_last_change_reason = str(apply_result.get("reason", "external_watch"))
 		_last_error = ""
 	else:
@@ -101,13 +143,24 @@ func tick() -> void:
 
 
 func get_status() -> Dictionary:
+	return get_status_snapshot()
+
+
+func get_status_snapshot() -> Dictionary:
+	var scan_status := _scan_service.get_status()
 	return {
-		"enabled": _is_runtime_loading_enabled(),
-		"watching": _watching and _is_runtime_loading_enabled(),
+		"enabled": _runtime_loading_enabled_cache,
+		"watching": _watching and _runtime_loading_enabled_cache,
+		"baseline_scan_pending": _initial_scan_pending,
 		"known_script_count": _known_snapshot.size(),
 		"last_scan_unix": _last_scan_unix,
+		"scan_in_progress": bool(scan_status.get("scan_in_progress", false)),
+		"scan_entries_processed": int(scan_status.get("scan_entries_processed", 0)),
+		"scan_pending_directories": int(scan_status.get("scan_pending_directories", 0)),
+		"last_scan_duration_ms": float(scan_status.get("last_scan_duration_ms", 0.0)),
+		"last_scan_slices": int(scan_status.get("last_scan_slices", 0)),
 		"last_change_reason": _last_change_reason,
-		"last_error": _last_error
+		"last_error": _last_error if not _last_error.is_empty() else str(scan_status.get("last_error", ""))
 	}
 
 
@@ -164,43 +217,6 @@ func _compute_changes(previous: Dictionary, current: Dictionary) -> Dictionary:
 		"added": added,
 		"changed": changed
 	}
-
-
-func _scan_snapshot() -> Dictionary:
-	var snapshot: Dictionary = {}
-	var script_paths: Array[String] = []
-	_collect_script_paths(CUSTOM_TOOLS_DIR, script_paths)
-	for script_path in script_paths:
-		var global_path = ProjectSettings.globalize_path(script_path)
-		if not FileAccess.file_exists(script_path):
-			continue
-		snapshot[script_path] = {
-			"modified_unix": int(FileAccess.get_modified_time(script_path)),
-			"size_bytes": int(FileAccess.get_file_as_bytes(global_path).size())
-		}
-	return {"success": true, "snapshot": snapshot}
-
-
-func _collect_script_paths(dir_path: String, output: Array[String]) -> void:
-	var global_path = ProjectSettings.globalize_path(dir_path)
-	if not DirAccess.dir_exists_absolute(global_path):
-		return
-	var dir = DirAccess.open(dir_path)
-	if dir == null:
-		return
-	dir.list_dir_begin()
-	while true:
-		var entry = dir.get_next()
-		if entry.is_empty():
-			break
-		if entry.begins_with("."):
-			continue
-		var child_path = "%s/%s" % [dir_path, entry]
-		if dir.current_is_dir():
-			_collect_script_paths(child_path, output)
-		elif entry.ends_with(".gd"):
-			output.append(child_path.replace("\\", "/"))
-	dir.list_dir_end()
 
 
 func _changes_are_empty(changes: Dictionary) -> bool:

@@ -1,6 +1,7 @@
 extends RefCounted
 
 const AdapterScript = preload("res://addons/godot_dotnet_mcp/tools/core/tool_lsp_diagnostics_adapter.gd")
+const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
 
 
 class FakeToolLoader extends RefCounted:
@@ -45,7 +46,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(first_snapshot.get("service_generation", 0)) != 1:
 		return _failure("Adapter should start with diagnostics service generation 1 after the first reset.")
 
+	MCPDebugBuffer.clear()
 	_adapter.tick(0.0)
+	if MCPDebugBuffer.size() != 0:
+		return _failure("Adapter idle tick should not emit diagnostics debug-buffer entries.")
+
 	_adapter.reset()
 	var second_service = _adapter.get_service()
 	if second_service == null or second_service == first_service:

@@ -46,46 +46,39 @@ theme_override_constants/separation = 10
 unique_name_in_owner = true
 horizontal_alignment = 0
 
-[node name="PortRow" type="HBoxContainer" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody"]
+[node name="GeneralForm" type="GridContainer" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
+columns = 2
 theme_override_constants/separation = 8
 
-[node name="PortLabel" type="Label" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/PortRow"]
+[node name="PortLabel" type="Label" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/GeneralForm"]
 unique_name_in_owner = true
 vertical_alignment = 1
 
-[node name="PortSpin" type="SpinBox" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/PortRow"]
+[node name="PortSpin" type="SpinBox" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/GeneralForm"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
 min_value = 1024.0
 max_value = 65535.0
 
-[node name="LogLevelRow" type="HBoxContainer" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody"]
-unique_name_in_owner = true
-size_flags_horizontal = 3
-theme_override_constants/separation = 8
-
-[node name="LogLevelLabel" type="Label" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/LogLevelRow"]
+[node name="LogLevelLabel" type="Label" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/GeneralForm"]
 unique_name_in_owner = true
 vertical_alignment = 1
 
-[node name="LogLevelOption" type="OptionButton" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/LogLevelRow"]
+[node name="LogLevelOption" type="OptionButton" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/GeneralForm"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
+fit_to_longest_item = false
 
-[node name="LanguageRow" type="HBoxContainer" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody"]
-unique_name_in_owner = true
-size_flags_horizontal = 3
-theme_override_constants/separation = 8
-
-[node name="LanguageLabel" type="Label" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/LanguageRow"]
+[node name="LanguageLabel" type="Label" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/GeneralForm"]
 unique_name_in_owner = true
 vertical_alignment = 1
 
-[node name="LanguageOption" type="OptionButton" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/LanguageRow"]
+[node name="LanguageOption" type="OptionButton" parent="Scroll/Margin/Content/GeneralCard/GeneralCardMargin/GeneralCardBody/GeneralForm"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
+fit_to_longest_item = false
 
 [node name="UpdatesCard" type="PanelContainer" parent="Scroll/Margin/Content"]
 unique_name_in_owner = true
@@ -106,26 +99,33 @@ theme_override_constants/separation = 10
 unique_name_in_owner = true
 horizontal_alignment = 0
 
-[node name="UpdatesDescription" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
-unique_name_in_owner = true
-autowrap_mode = 3
-
-[node name="UpdateSourceRow" type="HBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+[node name="CurrentSummaryGrid" type="GridContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
-theme_override_constants/separation = 8
+columns = 4
 
-[node name="SourceOptionLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateSourceRow"]
+[node name="CurrentVersionLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CurrentSummaryGrid"]
 unique_name_in_owner = true
 vertical_alignment = 1
 
-[node name="SourceOption" type="OptionButton" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateSourceRow"]
+[node name="CurrentVersionValue" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CurrentSummaryGrid"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
+text_overrun_behavior = 3
 
-[node name="CustomBranchRow" type="HBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+[node name="CurrentBranchLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CurrentSummaryGrid"]
+unique_name_in_owner = true
+vertical_alignment = 1
+
+[node name="CurrentBranchValue" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CurrentSummaryGrid"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
+text_overrun_behavior = 3
+
+[node name="CustomBranchRow" type="GridContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+columns = 2
 theme_override_constants/separation = 8
 
 [node name="CustomBranchLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CustomBranchRow"]
@@ -135,32 +135,141 @@ vertical_alignment = 1
 [node name="CustomBranchValue" type="OptionButton" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CustomBranchRow"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
+fit_to_longest_item = false
 
-[node name="UpdatesStatus" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
-unique_name_in_owner = true
-autowrap_mode = 3
-
-[node name="UpdateButtonsRow" type="HBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+[node name="UpdateActionGrid" type="GridContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
+columns = 2
+
+[node name="CheckButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateActionGrid"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+disabled = true
+text = ""
+
+[node name="ApplyButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateActionGrid"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+disabled = true
+text = ""
+
+[node name="StatusPanel" type="PanelContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="StatusMargin" type="MarginContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/StatusPanel"]
+unique_name_in_owner = true
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="UpdatesStatus" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/StatusPanel/StatusMargin"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 0)
+autowrap_mode = 3
+clip_text = true
+
+[node name="UpdatesProgress" type="ProgressBar" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+unique_name_in_owner = true
+visible = false
+size_flags_horizontal = 3
+max_value = 100.0
+show_percentage = false
+
+[node name="VersionToolbar" type="GridContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+columns = 2
+
+[node name="UpdatesAudit" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionToolbar"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 0)
+horizontal_alignment = 2
+vertical_alignment = 1
+clip_text = true
+text_overrun_behavior = 3
+
+[node name="VersionPanels" type="GridContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+columns = 2
+
+[node name="StableVersionPanel" type="PanelContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="StableVersionBody" type="VBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/StableVersionPanel"]
+unique_name_in_owner = true
+size_flags_vertical = 3
 theme_override_constants/separation = 8
 
-[node name="CheckButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateButtonsRow"]
+[node name="StableVersionHeader" type="HBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/StableVersionPanel/StableVersionBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="StableChannelButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/StableVersionPanel/StableVersionBody/StableVersionHeader"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+toggle_mode = true
+text = ""
+
+[node name="StableVersionTree" type="Tree" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/StableVersionPanel/StableVersionBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+custom_minimum_size = Vector2(0, 220)
+columns = 3
+hide_root = true
+select_mode = 1
+
+[node name="StableVersionEmptyLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/StableVersionPanel/StableVersionBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+autowrap_mode = 3
+
+[node name="DevelopmentVersionPanel" type="PanelContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="DevelopmentVersionBody" type="VBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/DevelopmentVersionPanel"]
+unique_name_in_owner = true
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="DevelopmentVersionHeader" type="HBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/DevelopmentVersionPanel/DevelopmentVersionBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="DevelopmentChannelButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/DevelopmentVersionPanel/DevelopmentVersionBody/DevelopmentVersionHeader"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+toggle_mode = true
+text = ""
+
+[node name="DevelopmentVersionTree" type="Tree" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/DevelopmentVersionPanel/DevelopmentVersionBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+custom_minimum_size = Vector2(0, 220)
+columns = 3
+hide_root = true
+select_mode = 1
+
+[node name="DevelopmentVersionEmptyLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/DevelopmentVersionPanel/DevelopmentVersionBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+autowrap_mode = 3
+
+[node name="PrepareButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
 visible = false
-disabled = true
-text = ""
-
-[node name="PrepareButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateButtonsRow"]
-unique_name_in_owner = true
-size_flags_horizontal = 3
-visible = false
-disabled = true
-text = ""
-
-[node name="ApplyButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/UpdateButtonsRow"]
-unique_name_in_owner = true
-size_flags_horizontal = 3
 disabled = true
 text = ""

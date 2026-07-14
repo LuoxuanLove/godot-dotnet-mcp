@@ -78,6 +78,28 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not FileAccess.file_exists(_created_script_path):
 		return _failure("restore uses latest backup metadata correctly: restored script file should exist")
 
+	var second_delete_result: Dictionary = _service.delete_tool(_created_script_path, true, "user_tool_maintenance_contract_test")
+	if not bool(second_delete_result.get("success", false)):
+		return _failure("delete before tampered restore should succeed.")
+	var latest_deleted_path := "%s/latest_deleted.json" % _backup_dir
+	var latest_payload = _read_json(latest_deleted_path)
+	if not (latest_payload is Dictionary):
+		return _failure("tampered restore setup should read latest_deleted.json.")
+	var tampered_payload: Dictionary = (latest_payload as Dictionary).duplicate(true)
+	tampered_payload["script_path"] = "res://outside_custom_tools/restored_outside.gd"
+	_write_json(latest_deleted_path, tampered_payload)
+	var tampered_restore_result: Dictionary = _service.restore_latest_backup(true, "user_tool_maintenance_contract_test")
+	if bool(tampered_restore_result.get("success", false)):
+		return _failure("restore should reject tampered latest_deleted metadata outside custom_tools.")
+	if str(tampered_restore_result.get("data", {}).get("error_code", "")) != "invalid_restore_script_path":
+		return _failure("tampered restore rejection should report invalid_restore_script_path.")
+	if FileAccess.file_exists("res://outside_custom_tools/restored_outside.gd"):
+		return _failure("tampered restore should not write outside custom_tools.")
+	_write_json(latest_deleted_path, latest_payload)
+	var second_restore_result: Dictionary = _service.restore_latest_backup(true, "user_tool_maintenance_contract_test")
+	if not bool(second_restore_result.get("success", false)):
+		return _failure("restore should still accept untampered latest_deleted metadata after rejection.")
+
 	for index in range(520):
 		_service._append_audit("truncate_probe", true, true, {
 			"index": index,
@@ -127,6 +149,26 @@ func _has_success_audit(entries: Array[Dictionary], action: String, script_path:
 		if payload is Dictionary and str((payload as Dictionary).get("script_path", "")) == script_path:
 			return true
 	return false
+
+
+func _read_json(path: String):
+	var file = FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return null
+	var content := file.get_as_text()
+	file.close()
+	var json := JSON.new()
+	if json.parse(content) != OK:
+		return null
+	return json.get_data()
+
+
+func _write_json(path: String, data: Dictionary) -> void:
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return
+	file.store_string(JSON.stringify(data))
+	file.close()
 
 
 func _remove_tree(path: String) -> void:

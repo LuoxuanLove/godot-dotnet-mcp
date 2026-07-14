@@ -8,16 +8,34 @@ var _emit_client_connected := Callable()
 var _emit_client_disconnected := Callable()
 var _route_request_async := Callable()
 var _write_http_response := Callable()
+var _write_sse_stream_open := Callable()
+var _write_sse_heartbeat := Callable()
+var _write_sse_events := Callable()
+var _get_sse_events_since_index := Callable()
 var _tick_loader := Callable()
+var _max_pending_request_bytes := DEFAULT_MAX_PENDING_REQUEST_BYTES
+var _sse_heartbeat_interval_seconds := DEFAULT_SSE_HEARTBEAT_INTERVAL_SECONDS
+var _http_idle_connection_timeout_seconds := DEFAULT_HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS
+var _last_sse_inbound_log_at_unix := 0
 
 const MAX_REQUESTS_PER_DRAIN := 16
 const MAX_ACCEPTS_PER_FRAME := 8
-const MAX_PENDING_REQUEST_BYTES := 1024 * 1024
+const MAX_REQUEST_HEADER_BYTES := 64 * 1024
+const DEFAULT_MAX_PENDING_REQUEST_BYTES := (1024 * 1024) + MAX_REQUEST_HEADER_BYTES
+const DEFAULT_SSE_HEARTBEAT_INTERVAL_SECONDS := 15
+const DEFAULT_HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS := 30
+const ENV_SSE_HEARTBEAT_INTERVAL_SECONDS := "GODOT_DOTNET_MCP_SSE_HEARTBEAT_INTERVAL_SECONDS"
+const ENV_HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS := "GODOT_DOTNET_MCP_HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS"
+const SSE_INBOUND_LOG_THROTTLE_SECONDS := 5
 
 
 func configure(connection_state, request_decoder, context = null) -> void:
 	_connection_state = connection_state
 	_request_decoder = request_decoder
+	_max_pending_request_bytes = DEFAULT_MAX_PENDING_REQUEST_BYTES
+	_sse_heartbeat_interval_seconds = _read_positive_int_environment(ENV_SSE_HEARTBEAT_INTERVAL_SECONDS, DEFAULT_SSE_HEARTBEAT_INTERVAL_SECONDS)
+	_http_idle_connection_timeout_seconds = _read_positive_int_environment(ENV_HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS, DEFAULT_HTTP_IDLE_CONNECTION_TIMEOUT_SECONDS)
+	_last_sse_inbound_log_at_unix = 0
 	if context == null:
 		_reset_callbacks()
 		return
@@ -26,7 +44,13 @@ func configure(connection_state, request_decoder, context = null) -> void:
 	_emit_client_disconnected = context.emit_client_disconnected
 	_route_request_async = context.route_request_async
 	_write_http_response = context.write_http_response
+	_write_sse_stream_open = context.write_sse_stream_open
+	_write_sse_heartbeat = context.write_sse_heartbeat
+	_write_sse_events = context.write_sse_events
+	_get_sse_events_since_index = context.get_sse_events_since_index
 	_tick_loader = context.tick_loader
+	if int(context.max_pending_request_bytes) > 0:
+		_max_pending_request_bytes = int(context.max_pending_request_bytes)
 
 
 func dispose() -> void:
@@ -77,25 +101,34 @@ func _process_client(client: StreamPeerTCP) -> bool:
 	if status == StreamPeerTCP.STATUS_CONNECTED:
 		if _connection_state.is_processing(client):
 			return false
+		if _connection_state.has_method("is_sse_streaming") and bool(_connection_state.is_sse_streaming(client)):
+			return _process_sse_streaming_client(client)
 		var available = client.get_available_bytes()
+		var received_bytes_this_frame := false
 		if available > 0:
 			var data = client.get_data(available)
 			if data[0] != OK:
 				_log("Error receiving data: %s" % data[0], "warning")
 				return false
-			var request_str = data[1].get_string_from_utf8()
-			var pending_data = _connection_state.get_pending_data(client) + request_str
-			var pending_byte_size: int = pending_data.to_utf8_buffer().size()
-			if pending_byte_size > MAX_PENDING_REQUEST_BYTES:
+			var incoming_bytes: PackedByteArray = data[1]
+			received_bytes_this_frame = not incoming_bytes.is_empty()
+			var pending_byte_size: int = _connection_state.append_pending_bytes(client, incoming_bytes)
+			if pending_byte_size > _max_pending_request_bytes:
+				if _try_handle_pending_framing_error(client, _connection_state.get_pending_bytes(client)):
+					return true
 				_log("Closing client with oversized pending HTTP request buffer: %d bytes" % pending_byte_size, "warning")
 				if _connection_state.has_method("record_rejected_request"):
 					_connection_state.record_rejected_request()
 				client.disconnect_from_host()
 				return true
-			_connection_state.set_pending_data(client, pending_data)
-			_log("Received %d bytes, total pending: %d" % [available, pending_data.length()], "debug")
-		if not _connection_state.get_pending_data(client).is_empty():
+			_log("Received %d bytes, total pending: %d bytes" % [available, pending_byte_size], "debug")
+		if not received_bytes_this_frame and _should_disconnect_idle_http_client(client):
+			_log("Closing idle HTTP client after %d seconds without activity" % _http_idle_connection_timeout_seconds, "debug")
+			client.disconnect_from_host()
+			return true
+		if not _connection_state.is_pending_empty(client):
 			_process_http_request_async(client)
+			return false
 		return false
 
 	if status == StreamPeerTCP.STATUS_ERROR or status == StreamPeerTCP.STATUS_NONE:
@@ -103,6 +136,30 @@ func _process_client(client: StreamPeerTCP) -> bool:
 		return true
 
 	return false
+
+
+func _should_disconnect_idle_http_client(client: StreamPeerTCP) -> bool:
+	if _connection_state == null:
+		return false
+	if not _connection_state.has_method("get_last_seen_at_unix"):
+		return false
+	var last_seen_at_unix := int(_connection_state.get_last_seen_at_unix(client))
+	if last_seen_at_unix <= 0:
+		return false
+	var now := int(Time.get_unix_time_from_system())
+	return now - last_seen_at_unix >= _http_idle_connection_timeout_seconds
+
+
+func _try_handle_pending_framing_error(client: StreamPeerTCP, pending_data: PackedByteArray) -> bool:
+	if _request_decoder == null:
+		return false
+	var decoded_request: Dictionary = _request_decoder.decode_pending_request_bytes(pending_data)
+	if not bool(decoded_request.get("ready", false)):
+		return false
+	if not bool(decoded_request.get("framing_error", false)):
+		return false
+	_handle_framing_error(client, decoded_request)
+	return true
 
 
 func _process_http_request_async(client: StreamPeerTCP) -> void:
@@ -113,18 +170,22 @@ func _process_http_request_async(client: StreamPeerTCP) -> void:
 
 	var drained_count := 0
 	while _connection_state != null and _connection_state.has_client(client):
-		var data = _connection_state.get_pending_data(client)
+		var data: PackedByteArray = _connection_state.get_pending_bytes(client)
 		if data.is_empty():
 			return
-		var decoded_request: Dictionary = _request_decoder.decode_pending_request(data)
+		var decoded_request: Dictionary = _request_decoder.decode_pending_request_bytes(data)
 		if not bool(decoded_request.get("ready", false)):
-			_log_pending_request_wait(decoded_request, data)
+			_log_pending_request_wait(decoded_request, data.size())
+			return
+		if bool(decoded_request.get("framing_error", false)):
+			_handle_framing_error(client, decoded_request)
 			return
 
 		var headers: Dictionary = decoded_request.get("headers", {})
-		_connection_state.set_pending_data(client, str(decoded_request.get("remaining_data", "")))
+		var remaining_bytes: PackedByteArray = decoded_request.get("remaining_bytes", PackedByteArray())
+		_connection_state.set_pending_bytes(client, remaining_bytes)
 		if headers.is_empty():
-			if _connection_state.get_pending_data(client).is_empty():
+			if _connection_state.is_pending_empty(client):
 				return
 			continue
 
@@ -156,28 +217,183 @@ func _process_http_request_async(client: StreamPeerTCP) -> void:
 		var no_body := bool(response.get("_no_body", false))
 		if response.has("_no_body"):
 			response.erase("_no_body")
+		var terminate_mcp_session_id := str(response.get("_terminate_mcp_session_id", "")).strip_edges()
+		if response.has("_terminate_mcp_session_id"):
+			response.erase("_terminate_mcp_session_id")
+		var stream_mode := str(response.get("_stream_mode", "")).strip_edges()
+		if response.has("_stream_mode"):
+			response.erase("_stream_mode")
 
 		if _connection_state == null:
 			return
 		if _connection_state.has_client(client) and client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
-			var write_ok := bool(_write_http_response.call(client, response, no_body))
+			var write_ok := false
+			if stream_mode == "sse":
+				write_ok = _open_sse_stream(client, response)
+			else:
+				write_ok = bool(_write_http_response.call(client, response, no_body))
 			if not write_ok:
 				_log("Closing client after HTTP response write failure", "warning")
 				client.disconnect_from_host()
 				_connection_state.clear_processing(client)
 				return
+			if not terminate_mcp_session_id.is_empty():
+				_disconnect_mcp_sse_session(client, terminate_mcp_session_id)
+				if _connection_state == null or not _connection_state.has_client(client):
+					return
+			if stream_mode == "sse":
+				_connection_state.clear_processing(client)
+				return
 		_connection_state.clear_processing(client)
 
 		drained_count += 1
-		if drained_count >= MAX_REQUESTS_PER_DRAIN and not _connection_state.get_pending_data(client).is_empty():
+		if drained_count >= MAX_REQUESTS_PER_DRAIN and not _connection_state.is_pending_empty(client):
 			call_deferred("_process_http_request_async", client)
 			return
 
 
-func _log_pending_request_wait(decoded_request: Dictionary, data: String) -> void:
+func _handle_framing_error(client: StreamPeerTCP, decoded_request: Dictionary) -> void:
+	var error_type := str(decoded_request.get("error", "bad_request"))
+	var message := str(decoded_request.get("message", "Invalid HTTP request framing."))
+	_log("Rejecting malformed HTTP request: %s (%s)" % [message, error_type], "warning")
+	if _connection_state != null:
+		_connection_state.set_pending_data(client, "")
+		if _connection_state.has_method("record_rejected_request"):
+			_connection_state.record_rejected_request()
+	if _write_http_response.is_valid():
+		_write_http_response.call(client, {
+			"_status_code": 400,
+			"jsonrpc": "2.0",
+			"error": {
+				"code": -32700,
+				"message": message,
+				"data": {"type": error_type}
+			},
+			"id": null
+		}, false)
+	client.disconnect_from_host()
+
+
+func _open_sse_stream(client: StreamPeerTCP, response: Dictionary) -> bool:
+	if not _write_sse_stream_open.is_valid():
+		return false
+	var stream_response := response.duplicate(true)
+	var session_id := str(stream_response.get("_sse_session_id", "")).strip_edges()
+	var next_event_index := int(stream_response.get("_sse_next_event_index", 0))
+	stream_response.erase("_sse_session_id")
+	stream_response.erase("_sse_next_event_index")
+	var write_ok := bool(_write_sse_stream_open.call(client, stream_response))
+	if write_ok and _connection_state != null and _connection_state.has_method("mark_sse_streaming"):
+		_connection_state.mark_sse_streaming(client, session_id, next_event_index)
+		_connection_state.set_pending_data(client, "")
+	return write_ok
+
+
+func _process_sse_streaming_client(client: StreamPeerTCP) -> bool:
+	if client.get_available_bytes() > 0:
+		var byte_count := client.get_available_bytes()
+		client.get_data(byte_count)
+		_log_sse_inbound_bytes(byte_count)
+	if _drain_sse_events(client):
+		return true
+	if not _write_sse_heartbeat.is_valid():
+		return false
+	var last_heartbeat := 0
+	if _connection_state != null and _connection_state.has_method("get_sse_last_heartbeat_at_unix"):
+		last_heartbeat = int(_connection_state.get_sse_last_heartbeat_at_unix(client))
+	var now := int(Time.get_unix_time_from_system())
+	if last_heartbeat > 0 and now - last_heartbeat < _sse_heartbeat_interval_seconds:
+		return false
+	var heartbeat_ok := bool(_write_sse_heartbeat.call(client))
+	if not heartbeat_ok:
+		_log("Closing SSE stream after heartbeat write failure", "warning")
+		client.disconnect_from_host()
+		return true
+	if _connection_state != null and _connection_state.has_method("mark_sse_heartbeat"):
+		_connection_state.mark_sse_heartbeat(client)
+	return false
+
+
+func _log_sse_inbound_bytes(byte_count: int) -> void:
+	var now := int(Time.get_unix_time_from_system())
+	if _last_sse_inbound_log_at_unix > 0 and now - _last_sse_inbound_log_at_unix < SSE_INBOUND_LOG_THROTTLE_SECONDS:
+		return
+	_last_sse_inbound_log_at_unix = now
+	_log("Discarded %d inbound byte(s) from a server-to-client SSE stream." % byte_count, "debug")
+
+
+func _disconnect_mcp_sse_session(request_client: StreamPeerTCP, session_id: String) -> void:
+	if _connection_state == null or not _connection_state.has_method("disconnect_sse_session"):
+		return
+	var disconnected_count := int(_connection_state.disconnect_sse_session(session_id))
+	if disconnected_count > 0:
+		_log("Disconnected %d SSE stream(s) for terminated MCP session %s" % [disconnected_count, session_id], "info")
+		if _emit_client_disconnected.is_valid():
+			for _i in range(disconnected_count):
+				_emit_client_disconnected.call()
+	if _connection_state != null and _connection_state.has_client(request_client):
+		_connection_state.clear_processing(request_client)
+
+
+func _drain_sse_events(client: StreamPeerTCP) -> bool:
+	if not _write_sse_events.is_valid() or not _get_sse_events_since_index.is_valid():
+		return false
+	if _connection_state == null:
+		return false
+	if not _connection_state.has_method("get_sse_session_id") or not _connection_state.has_method("get_sse_next_event_index"):
+		return false
+	var session_id := str(_connection_state.get_sse_session_id(client)).strip_edges()
+	if session_id.is_empty():
+		return false
+	var next_event_index := int(_connection_state.get_sse_next_event_index(client))
+	var event_batch = _get_sse_events_since_index.call(session_id, next_event_index)
+	var events: Array = []
+	var next_batch_index := next_event_index
+	if event_batch is Dictionary:
+		var batch_events = (event_batch as Dictionary).get("events", [])
+		if batch_events is Array:
+			events = batch_events
+		next_batch_index = int((event_batch as Dictionary).get("next_index", next_event_index))
+	elif event_batch is Array:
+		events = event_batch
+		next_batch_index = next_event_index + events.size()
+	if events.is_empty():
+		return false
+	var body := _format_sse_events(events)
+	var write_ok := bool(_write_sse_events.call(client, body))
+	if not write_ok:
+		_log("Closing SSE stream after queued event write failure", "warning")
+		client.disconnect_from_host()
+		return true
+	if _connection_state.has_method("mark_sse_events_sent"):
+		_connection_state.mark_sse_events_sent(client, next_batch_index)
+	return false
+
+
+func _format_sse_events(events: Array) -> String:
+	var body := ""
+	for event in events:
+		if not (event is Dictionary):
+			continue
+		body += "id: %s\nretry: %d\nevent: %s\ndata: %s\n\n" % [
+			str((event as Dictionary).get("id", "")),
+			int((event as Dictionary).get("retry", 1000)),
+			str((event as Dictionary).get("event", "message")),
+			_format_sse_event_data((event as Dictionary).get("data", {}))
+		]
+	return body
+
+
+func _format_sse_event_data(data: Variant) -> String:
+	if data is String:
+		return str(data)
+	return JSON.stringify(data)
+
+
+func _log_pending_request_wait(decoded_request: Dictionary, pending_byte_size: int) -> void:
 	var waiting_for := str(decoded_request.get("waiting_for", ""))
-	if waiting_for == "headers" and data.length() > 0:
-		_log("Waiting for headers... current data length: %d" % data.length(), "debug")
+	if waiting_for == "headers" and pending_byte_size > 0:
+		_log("Waiting for headers... current data length: %d bytes" % pending_byte_size, "debug")
 	elif waiting_for == "chunked_body":
 		_log("Waiting for chunked body...", "debug")
 	elif waiting_for == "body":
@@ -193,10 +409,24 @@ func _log(message: String, level: String = "debug") -> void:
 		_log_callback.call(message, level)
 
 
+func _read_positive_int_environment(name: String, default_value: int) -> int:
+	if not OS.has_environment(name):
+		return default_value
+	var value := OS.get_environment(name).strip_edges()
+	if not value.is_valid_int():
+		return default_value
+	var parsed := int(value)
+	return parsed if parsed > 0 else default_value
+
+
 func _reset_callbacks() -> void:
 	_log_callback = Callable()
 	_emit_client_connected = Callable()
 	_emit_client_disconnected = Callable()
 	_route_request_async = Callable()
 	_write_http_response = Callable()
+	_write_sse_stream_open = Callable()
+	_write_sse_heartbeat = Callable()
+	_write_sse_events = Callable()
+	_get_sse_events_since_index = Callable()
 	_tick_loader = Callable()

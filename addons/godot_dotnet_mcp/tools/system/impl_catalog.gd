@@ -3,10 +3,15 @@ extends RefCounted
 
 ## System implementation: tool catalog search
 
-const ToolCatalogSearchService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_search_service.gd")
-
 var bridge
 var _runtime_context: Dictionary = {}
+
+const REPLACEMENT_RESOURCES := [
+	"godot-dotnet-mcp://tools/catalog/exposed",
+	"godot-dotnet-mcp://tools/catalog/visible",
+	"godot-dotnet-mcp://tools/catalog",
+	"godot-dotnet-mcp://guides/capabilities"
+]
 
 const HANDLED_TOOLS := ["tool_catalog"]
 func handles(tool_name: String) -> bool:
@@ -21,7 +26,7 @@ func get_tools() -> Array[Dictionary]:
 	return [
 		{
 			"name": "tool_catalog",
-			"description": "TOOL CATALOG: Search the current tool catalog by query, category, or domain key. ACTIONS: search (default). Returns matching tools with exposed/enabled state, actions, parameters, group path, and match reasons. Use visibility=visible to include non-public visible internal tools.",
+			"description": "TOOL CATALOG: Search the current tool catalog by query, category, or domain key. ACTIONS: search (default). Returns matching tools with exposed/enabled state, actions, parameters, group path, match reasons, available filter values, filter warnings, and suggested next queries. Use visibility=visible to include non-public visible internal tools.",
 			"inputSchema": {
 				"type": "object",
 				"properties": {
@@ -41,22 +46,7 @@ func get_tools() -> Array[Dictionary]:
 func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	if tool_name not in HANDLED_TOOLS:
 		return _error("Unknown tool: %s" % tool_name)
-	var action := str(args.get("action", "search")).strip_edges()
-	if action.is_empty():
-		action = "search"
-	match action:
-		"search":
-			return _execute_search(args)
-		_:
-			return _error("Unknown tool_catalog action: %s" % action)
-
-
-func _execute_search(args: Dictionary) -> Dictionary:
-	var loader = _runtime_context.get("tool_loader", null)
-	var result: Dictionary = ToolCatalogSearchService.search(loader, args)
-	if not bool(result.get("success", false)) and bridge != null and bridge.has_method("error"):
-		return bridge.error(str(result.get("message", result.get("error", "Tool catalog search failed"))))
-	return result
+	return _removed_public_tool()
 
 
 func _error(message: String) -> Dictionary:
@@ -66,4 +56,18 @@ func _error(message: String) -> Dictionary:
 		"success": false,
 		"error": message,
 		"message": message
+	}
+
+
+func _removed_public_tool() -> Dictionary:
+	var message := "system_tool_catalog has been removed from the public tool surface. Read the catalog resources instead."
+	return {
+		"success": false,
+		"error": message,
+		"data": {
+			"error_type": "removed_public_tool",
+			"removed_tool": "system_tool_catalog",
+			"replacement_methods": ["resources/read", "resources/list"],
+			"replacement_resources": REPLACEMENT_RESOURCES.duplicate()
+		}
 	}

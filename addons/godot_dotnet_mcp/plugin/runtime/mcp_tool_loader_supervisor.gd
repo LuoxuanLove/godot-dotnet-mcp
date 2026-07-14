@@ -11,6 +11,7 @@ var _tool_loader_healthy := false
 var _tool_loader_status: String = "uninitialized"
 var _tool_loader_last_summary: Dictionary = {}
 var _disabled_tools: Dictionary = {}
+var _disabled_tools_signature := ""
 var _log := Callable()
 var _record_registration_issue := Callable()
 var _tool_activity_registry = null
@@ -32,7 +33,9 @@ func ensure_initialized() -> void:
 	if _tool_loader == null:
 		_replace_tool_loader()
 	if not _tool_loader_initialized:
-		register_tools()
+		register_tools("lazy_initialize")
+	elif _tool_loader_status == "empty_registry":
+		register_tools("lazy_recover", true)
 
 
 func register_tools(reason: String = "initialize", force_reload_scripts: bool = false) -> Dictionary:
@@ -54,12 +57,17 @@ func register_tools(reason: String = "initialize", force_reload_scripts: bool = 
 
 
 func set_disabled_tools(disabled: Array) -> void:
+	var normalized := _normalize_disabled_tools(disabled)
+	var next_signature := "|".join(normalized)
+	if next_signature == _disabled_tools_signature:
+		return
 	_disabled_tools.clear()
-	for name in disabled:
-		_disabled_tools[str(name)] = true
+	for name in normalized:
+		_disabled_tools[name] = true
 	if _tool_loader != null:
-		_tool_loader.set_disabled_tools(disabled)
+		_tool_loader.set_disabled_tools(normalized)
 		refresh_status_from_loader()
+	_disabled_tools_signature = next_signature
 
 
 func get_disabled_tools() -> Array:
@@ -67,6 +75,8 @@ func get_disabled_tools() -> Array:
 
 
 func is_tool_enabled(tool_name: String) -> bool:
+	if not _is_tool_known(tool_name):
+		return false
 	return not _disabled_tools.has(tool_name)
 
 
@@ -76,6 +86,10 @@ func is_tool_exposed(tool_name: String) -> bool:
 	if not _tool_loader.has_method("is_tool_exposed"):
 		return false
 	return bool(_tool_loader.is_tool_exposed(tool_name))
+
+
+func is_tool_known(tool_name: String) -> bool:
+	return _is_tool_known(tool_name)
 
 
 func get_tool_loader() -> MCPToolLoader:
@@ -94,6 +108,12 @@ func tick(delta: float) -> void:
 
 
 func get_status() -> Dictionary:
+	var status := get_light_status()
+	status["last_summary"] = _tool_loader_last_summary.duplicate(true)
+	return status
+
+
+func get_light_status() -> Dictionary:
 	return {
 		"initialized": _tool_loader_initialized,
 		"healthy": _tool_loader_healthy,
@@ -102,7 +122,7 @@ func get_status() -> Dictionary:
 		"exposed_tool_count": int(_tool_loader_last_summary.get("exposed_tool_count", 0)),
 		"category_count": int(_tool_loader_last_summary.get("category_count", 0)),
 		"tool_load_error_count": int(_tool_loader_last_summary.get("tool_load_error_count", 0)),
-		"last_summary": _tool_loader_last_summary.duplicate(true)
+		"catalog_revision": _get_tool_loader_catalog_revision()
 	}
 
 
@@ -113,7 +133,8 @@ func refresh_status_from_loader() -> void:
 		"tool_count": _tool_loader.get_tool_definitions().size(),
 		"exposed_tool_count": _tool_loader.get_exposed_tool_definitions().size(),
 		"category_count": _tool_loader.get_domain_states().size(),
-		"tool_load_error_count": _tool_loader.get_tool_load_errors().size()
+		"tool_load_error_count": _tool_loader.get_tool_load_errors().size(),
+		"catalog_revision": _get_tool_loader_catalog_revision()
 	}
 	var status := _classify_tool_loader_health(summary)
 	_apply_status(status, summary)
@@ -129,6 +150,7 @@ func dispose() -> void:
 	_tool_loader_status = "disposed"
 	_tool_loader_last_summary = {}
 	_disabled_tools.clear()
+	_disabled_tools_signature = ""
 	_log = Callable()
 	_record_registration_issue = Callable()
 	_tool_activity_registry = null
@@ -139,10 +161,25 @@ func _rebuild_tool_loader(reason: String, force_reload_scripts: bool) -> Diction
 	var summary = _tool_loader.initialize(get_disabled_tools(), force_reload_scripts)
 	if _tool_loader != null and _tool_loader.has_method("get_performance_summary"):
 		summary["performance"] = _tool_loader.get_performance_summary()
+	summary["catalog_revision"] = _get_tool_loader_catalog_revision()
 	var category_count = int(summary.get("category_count", 0))
 	var tool_count = int(summary.get("tool_count", 0))
 	_log_message("Tool loader summary after %s: %d tools / %d categories" % [reason, tool_count, category_count], "debug")
 	return summary
+
+
+func _is_tool_known(tool_name: String) -> bool:
+	var normalized := tool_name.strip_edges()
+	if normalized.is_empty() or _tool_loader == null or not _tool_loader.has_method("get_tool_definitions"):
+		return false
+	for tool_def in _tool_loader.get_tool_definitions():
+		if not (tool_def is Dictionary):
+			continue
+		var def_dict := tool_def as Dictionary
+		var full_name := str(def_dict.get("full_name", def_dict.get("name", "")))
+		if full_name == normalized:
+			return true
+	return false
 
 
 func _replace_tool_loader() -> void:
@@ -155,6 +192,20 @@ func _replace_tool_loader() -> void:
 		_tool_loader.set_tool_activity_registry(_tool_activity_registry)
 	if not _disabled_tools.is_empty():
 		_tool_loader.set_disabled_tools(get_disabled_tools())
+
+
+func _normalize_disabled_tools(disabled: Array) -> Array[String]:
+	var unique := {}
+	for name in disabled:
+		var normalized := str(name).strip_edges()
+		if normalized.is_empty():
+			continue
+		unique[normalized] = true
+	var result: Array[String] = []
+	for name in unique.keys():
+		result.append(str(name))
+	result.sort()
+	return result
 
 
 func _should_recover_tool_loader(summary: Dictionary) -> bool:
@@ -188,6 +239,12 @@ func _apply_status(status: Dictionary, summary: Dictionary) -> void:
 	_tool_loader_healthy = bool(status.get("healthy", false))
 	_tool_loader_status = str(status.get("status", "unknown"))
 	_tool_loader_last_summary = summary.duplicate(true)
+
+
+func _get_tool_loader_catalog_revision() -> int:
+	if _tool_loader != null and _tool_loader.has_method("get_catalog_revision"):
+		return int(_tool_loader.get_catalog_revision())
+	return 0
 
 
 func _maybe_record_registration_issue(reason: String, status: Dictionary, summary: Dictionary) -> void:

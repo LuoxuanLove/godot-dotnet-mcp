@@ -4,6 +4,9 @@ class_name ClientConfigService
 
 const ConfigPathsScript = preload("res://addons/godot_dotnet_mcp/plugin/config/config_paths.gd")
 const MCP_SERVER_KEY := "godot-mcp"
+const CLI_COMMAND_OUTPUT_DIR := "user://godot_dotnet_mcp/client_cli"
+const CLI_COMMAND_TIMEOUT_MSEC := 30000
+const CLI_COMMAND_OUTPUT_LIMIT_BYTES := 64 * 1024
 
 
 func get_claude_config_path() -> String:
@@ -16,6 +19,14 @@ func get_cursor_config_path() -> String:
 
 func get_trae_config_path() -> String:
 	return ConfigPathsScript.get_trae_config_path()
+
+
+func get_antigravity_config_hint_path() -> String:
+	return ConfigPathsScript.get_antigravity_config_hint_path()
+
+
+func get_antigravity_mcp_config_path() -> String:
+	return ConfigPathsScript.get_antigravity_mcp_config_path()
 
 
 func get_gemini_config_path(scope: String = "user") -> String:
@@ -137,6 +148,21 @@ func preflight_write_config(config_type: String, filepath: String, new_config: S
 	if existing_root.has(container_key) and not (existing_root.get(container_key) is Dictionary):
 		result["status"] = "incompatible_mcp" if config_type == "opencode" else "incompatible_mcp_servers"
 		result["requires_confirmation"] = true
+		return result
+
+	var mcp_servers: Dictionary = existing_root.get(container_key, {})
+	var conflicting_servers := PackedStringArray()
+	for server_name in result.get("server_names", PackedStringArray()):
+		var server_key := str(server_name)
+		if not mcp_servers.has(server_key):
+			continue
+		var existing_entry = mcp_servers.get(server_key)
+		if not _is_managed_server_entry(config_type, existing_entry):
+			conflicting_servers.append(server_key)
+	if not conflicting_servers.is_empty():
+		result["status"] = "conflicting_server_entry"
+		result["requires_confirmation"] = true
+		result["conflicting_servers"] = conflicting_servers
 		return result
 
 	result["status"] = "mergeable"
@@ -494,6 +520,22 @@ func execute_cli_command(executable_path: String, arguments: PackedStringArray) 
 	}
 
 
+func execute_cli_command_async(executable_path: String, arguments: PackedStringArray) -> Dictionary:
+	var command = executable_path.strip_edges()
+	if command.is_empty():
+		return {
+			"success": false,
+			"exit_code": -1,
+			"output": [],
+			"message": "CLI executable path is empty."
+		}
+
+	var invocation = _build_cli_invocation(command, arguments)
+	if OS.get_name() == "Windows":
+		return await _execute_windows_cli_command_async(invocation)
+	return await _execute_process_cli_command_async(invocation)
+
+
 func launch_desktop_client(executable_path: String, arguments: PackedStringArray, working_directory: String) -> Dictionary:
 	if executable_path.strip_edges().is_empty():
 		return {
@@ -578,6 +620,127 @@ func _build_cli_invocation(executable_path: String, arguments: PackedStringArray
 		"command": executable_path,
 		"arguments": arguments
 	}
+
+
+func _execute_windows_cli_command_async(invocation: Dictionary) -> Dictionary:
+	var dir_error := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(CLI_COMMAND_OUTPUT_DIR))
+	if dir_error != OK:
+		return {
+			"success": false,
+			"exit_code": -1,
+			"output": [],
+			"message": "Failed to create CLI output directory: %s" % dir_error
+		}
+	var output_path := CLI_COMMAND_OUTPUT_DIR.path_join("client-command-%d.log" % Time.get_ticks_usec())
+	var output_absolute_path := ProjectSettings.globalize_path(output_path)
+	var command_line := "& %s" % _to_powershell_literal(str(invocation.get("command", "")))
+	for argument in invocation.get("arguments", PackedStringArray()):
+		command_line += " %s" % _to_powershell_literal(str(argument))
+	var script := "try { %s *>&1 | Out-File -LiteralPath %s -Encoding UTF8; if ($null -eq $LASTEXITCODE) { exit 0 }; exit $LASTEXITCODE } catch { $_ | Out-File -LiteralPath %s -Encoding UTF8; exit 1 }" % [
+		command_line,
+		_to_powershell_literal(output_absolute_path),
+		_to_powershell_literal(output_absolute_path)
+	]
+	var pid := OS.create_process(
+		"powershell.exe",
+		PackedStringArray([
+			"-NoProfile",
+			"-ExecutionPolicy",
+			"Bypass",
+			"-Command",
+			script
+		]),
+		false
+	)
+	if pid <= 0:
+		return {
+			"success": false,
+			"exit_code": -1,
+			"output": [],
+			"message": "Failed to start CLI command process."
+		}
+	var wait_result := await _wait_for_process_exit_async(pid)
+	var exit_code := int(wait_result.get("exit_code", -1))
+	var output_text := ""
+	if FileAccess.file_exists(output_absolute_path):
+		var read_result := _read_text_file(output_absolute_path)
+		if bool(read_result.get("success", false)):
+			output_text = _limit_cli_output(str(read_result.get("text", "")))
+		DirAccess.remove_absolute(output_absolute_path)
+	var output := []
+	if not output_text.is_empty():
+		output.append(output_text.strip_edges())
+	if bool(wait_result.get("timed_out", false)):
+		var timeout_message := "CLI command timed out after %d ms." % CLI_COMMAND_TIMEOUT_MSEC
+		output.append(timeout_message)
+		return {
+			"success": false,
+			"exit_code": exit_code,
+			"timed_out": true,
+			"output": output,
+			"message": "\n".join(output)
+		}
+	return {
+		"success": exit_code == 0,
+		"exit_code": exit_code,
+		"output": output,
+		"message": "\n".join(output)
+	}
+
+
+func _execute_process_cli_command_async(invocation: Dictionary) -> Dictionary:
+	var pid := OS.create_process(
+		str(invocation.get("command", "")),
+		invocation.get("arguments", PackedStringArray()),
+		false
+	)
+	if pid <= 0:
+		return {
+			"success": false,
+			"exit_code": -1,
+			"output": [],
+			"message": "Failed to start CLI command process."
+		}
+	var wait_result := await _wait_for_process_exit_async(pid)
+	var exit_code := int(wait_result.get("exit_code", -1))
+	return {
+		"success": exit_code == 0 and not bool(wait_result.get("timed_out", false)),
+		"exit_code": exit_code,
+		"timed_out": bool(wait_result.get("timed_out", false)),
+		"output": [],
+		"message": "CLI command timed out after %d ms." % CLI_COMMAND_TIMEOUT_MSEC if bool(wait_result.get("timed_out", false)) else "CLI command exited with code %d." % exit_code
+	}
+
+
+func _wait_for_process_exit_async(pid: int, timeout_msec: int = CLI_COMMAND_TIMEOUT_MSEC) -> Dictionary:
+	var tree := Engine.get_main_loop() as SceneTree
+	var started_usec := Time.get_ticks_usec()
+	while OS.is_process_running(pid):
+		var elapsed_msec := int((Time.get_ticks_usec() - started_usec) / 1000)
+		if elapsed_msec >= max(timeout_msec, 1):
+			OS.kill(pid)
+			return {
+				"exit_code": -1,
+				"timed_out": true,
+				"elapsed_msec": elapsed_msec
+			}
+		if tree != null:
+			await tree.process_frame
+		else:
+			OS.delay_msec(50)
+	return {
+		"exit_code": OS.get_process_exit_code(pid),
+		"timed_out": false,
+		"elapsed_msec": int((Time.get_ticks_usec() - started_usec) / 1000)
+	}
+
+
+func _limit_cli_output(output_text: String) -> String:
+	var output_bytes := output_text.to_utf8_buffer()
+	if output_bytes.size() <= CLI_COMMAND_OUTPUT_LIMIT_BYTES:
+		return output_text
+	var limited := output_bytes.slice(0, CLI_COMMAND_OUTPUT_LIMIT_BYTES).get_string_from_utf8()
+	return "%s\n... output truncated after %d bytes ..." % [limited, CLI_COMMAND_OUTPUT_LIMIT_BYTES]
 
 
 func _launch_powershell_background(script: String) -> Dictionary:
@@ -796,7 +959,19 @@ func _prepare_new_config(new_config: String, config_type: String = "") -> Dictio
 
 
 func _preflight_requires_confirmation(status: String) -> bool:
-	return status == "invalid_json" or status == "incompatible_root" or status == "incompatible_mcp_servers" or status == "incompatible_mcp"
+	return status == "invalid_json" or status == "incompatible_root" or status == "incompatible_mcp_servers" or status == "incompatible_mcp" or status == "conflicting_server_entry"
+
+
+func _is_managed_server_entry(config_type: String, value) -> bool:
+	if not (value is Dictionary):
+		return false
+	var entry: Dictionary = value
+	var url := str(entry.get("url", "")).strip_edges().to_lower()
+	return _is_local_mcp_url(url)
+
+
+func _is_local_mcp_url(url: String) -> bool:
+	return url.begins_with("http://127.0.0.1:") or url.begins_with("http://localhost:")
 
 
 func _get_backup_path(filepath: String) -> String:

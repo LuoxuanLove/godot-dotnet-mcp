@@ -20,6 +20,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var untranslated_by_locale := _find_placeholder_keys(localization, localization.get_available_language_codes(), all_keys)
 	if not untranslated_by_locale.is_empty():
 		return _failure("Supported locale dictionaries contain placeholder or generated translation text: %s" % _format_missing_keys(untranslated_by_locale))
+	var inconsistent_update_guidance := _find_inconsistent_update_action_guidance(locale_translations)
+	if not inconsistent_update_guidance.is_empty():
+		return _failure("Settings update guidance should use the localized visible action names: %s" % _format_missing_keys(inconsistent_update_guidance))
 
 	return {
 		"name": "locale_key_parity_contracts",
@@ -101,6 +104,30 @@ func _find_placeholder_keys(localization, locale_codes: Array[String], all_keys:
 	return placeholder_by_locale
 
 
+func _find_inconsistent_update_action_guidance(locale_translations: Dictionary) -> Dictionary:
+	var inconsistent_by_locale := {}
+	var refresh_guidance_keys := [
+		"settings_update_placeholder_status",
+		"settings_update_branch_unavailable",
+		"settings_update_release_unavailable",
+		"settings_update_refs_idle"
+	]
+	for raw_locale_code in locale_translations.keys():
+		var locale_code := str(raw_locale_code)
+		var translations: Dictionary = locale_translations.get(locale_code, {})
+		var refresh_label := str(translations.get("settings_update_refresh_list", "")).strip_edges()
+		var one_click_label := str(translations.get("settings_update_one_click", "")).strip_edges()
+		var inconsistent_keys: Array[String] = []
+		for key in refresh_guidance_keys:
+			if refresh_label.is_empty() or not str(translations.get(key, "")).contains(refresh_label):
+				inconsistent_keys.append(key)
+		if one_click_label.is_empty() or not str(translations.get("settings_update_placeholder_status", "")).contains(one_click_label):
+			inconsistent_keys.append("settings_update_placeholder_status")
+		if not inconsistent_keys.is_empty():
+			inconsistent_by_locale[locale_code] = inconsistent_keys
+	return inconsistent_by_locale
+
+
 func _looks_like_generated_fallback(text: String) -> bool:
 	for prefix in ["Deutsch: ", "Español: ", "Français: ", "日本語: ", "Português: ", "Русский: ", "简体中文: ", "繁體中文: ", "한국어: "]:
 		if text.begins_with(prefix):
@@ -110,6 +137,8 @@ func _looks_like_generated_fallback(text: String) -> bool:
 
 func _looks_like_placeholder_translation(text: String) -> bool:
 	if text.begins_with("Localized "):
+		return true
+	if text.contains("????"):
 		return true
 	for marker in ["쓰기s", "읽기-back", "열기ed", "구성uration", "설정ting", "설정up", "디버그gee", "오류s", "작업s", "생성 and", "읽기 or", "실행 and", "구성ure"]:
 		if text.contains(marker):

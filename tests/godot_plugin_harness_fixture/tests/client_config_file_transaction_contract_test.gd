@@ -5,6 +5,7 @@ const ClientConfigFileTransactionScript = preload("res://addons/godot_dotnet_mcp
 
 const DESKTOP_FILE := "user://client_config_transaction_contract_desktop.json"
 const OPENCODE_FILE := "user://client_config_transaction_contract_opencode.json"
+const ANTIGRAVITY_FILE := "user://client_config_transaction_contract_antigravity.json"
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
@@ -12,6 +13,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	_cleanup_file("%s.bak" % DESKTOP_FILE)
 	_cleanup_file(OPENCODE_FILE)
 	_cleanup_file("%s.bak" % OPENCODE_FILE)
+	_cleanup_file(ANTIGRAVITY_FILE)
+	_cleanup_file("%s.bak" % ANTIGRAVITY_FILE)
 
 	var serializer = ClientConfigSerializerScript.new()
 	var transaction = ClientConfigFileTransactionScript.new()
@@ -58,6 +61,22 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if (after_remove_servers as Dictionary).has("godot-mcp"):
 		return _failure("remove_config_entry should remove the godot-mcp entry.")
 
+	_write_text(DESKTOP_FILE, JSON.stringify({
+		"mcpServers": {
+			"godot-mcp": {
+				"url": "https://example.invalid/mcp"
+			}
+		}
+	}, "  "))
+	var conflicting_preflight: Dictionary = transaction.call("preflight_write_config", "", DESKTOP_FILE, new_desktop_config)
+	if str(conflicting_preflight.get("status", "")) != "conflicting_server_entry":
+		return _failure("Desktop preflight should require confirmation before replacing a non-local godot-mcp entry.")
+	if not bool(conflicting_preflight.get("requires_confirmation", false)):
+		return _failure("Desktop conflicting_server_entry should require confirmation.")
+	var conflicting_servers: PackedStringArray = conflicting_preflight.get("conflicting_servers", PackedStringArray())
+	if not conflicting_servers.has("godot-mcp"):
+		return _failure("Desktop conflicting_server_entry should identify the conflicting server name.")
+
 	_write_text(OPENCODE_FILE, "{\"mcp\":\"invalid\"}")
 	var opencode_config := JSON.stringify({
 		"mcp": {
@@ -76,6 +95,53 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if bool(blocked_write.get("success", false)) or str(blocked_write.get("error", "")) != "precheck_confirmation_required":
 		return _failure("Opencode write should stop when confirmation is required.")
 
+	_write_text(OPENCODE_FILE, JSON.stringify({
+		"mcp": {
+			"godot-mcp": {
+				"transport": "stdio",
+				"command": "custom-godot-mcp-wrapper"
+			}
+		}
+	}, "  "))
+	var opencode_stdio_conflict_preflight: Dictionary = transaction.call("preflight_write_config", "opencode", OPENCODE_FILE, opencode_config)
+	if str(opencode_stdio_conflict_preflight.get("status", "")) != "conflicting_server_entry":
+		return _failure("Opencode preflight should require confirmation before replacing an existing stdio server entry.")
+	if not bool(opencode_stdio_conflict_preflight.get("requires_confirmation", false)):
+		return _failure("Opencode stdio conflicting_server_entry should require confirmation.")
+
+	_write_text(ANTIGRAVITY_FILE, JSON.stringify({
+		"mcpServers": {
+			"other-server": {
+				"url": "http://localhost:3100/mcp"
+			}
+		}
+	}, "  "))
+	var antigravity_config := JSON.stringify({
+		"mcpServers": {
+			"godot-mcp": {
+				"url": "http://127.0.0.1:3000/mcp"
+			}
+		}
+	}, "  ")
+	var antigravity_preflight: Dictionary = transaction.call("preflight_write_config", "antigravity", ANTIGRAVITY_FILE, antigravity_config)
+	if str(antigravity_preflight.get("status", "")) != "mergeable":
+		return _failure("Antigravity preflight should merge into its Gemini-backed mcp_config.json shape.")
+	var antigravity_write: Dictionary = transaction.call("write_config_file", "antigravity", ANTIGRAVITY_FILE, antigravity_config, {"preflight": antigravity_preflight})
+	if not bool(antigravity_write.get("success", false)):
+		return _failure("Antigravity write_config_file should add godot-mcp to mcpServers.")
+	var antigravity_root = _read_json(ANTIGRAVITY_FILE)
+	var antigravity_servers = antigravity_root.get("mcpServers", {})
+	if not (antigravity_servers is Dictionary) or not (antigravity_servers as Dictionary).has("other-server") or not (antigravity_servers as Dictionary).has("godot-mcp"):
+		return _failure("Antigravity config write should preserve existing MCP servers and add godot-mcp.")
+	if str((antigravity_servers as Dictionary).get("godot-mcp", {}).get("url", "")) != "http://127.0.0.1:3000/mcp":
+		return _failure("Antigravity config write should use the HTTP MCP endpoint URL.")
+	var antigravity_remove: Dictionary = transaction.call("remove_config_entry", "antigravity", ANTIGRAVITY_FILE)
+	if not bool(antigravity_remove.get("success", false)) or not bool(antigravity_remove.get("removed", false)):
+		return _failure("Antigravity remove_config_entry should remove the managed godot-mcp server.")
+	var antigravity_after_remove_servers = _read_json(ANTIGRAVITY_FILE).get("mcpServers", {})
+	if not (antigravity_after_remove_servers is Dictionary) or not (antigravity_after_remove_servers as Dictionary).has("other-server") or (antigravity_after_remove_servers as Dictionary).has("godot-mcp"):
+		return _failure("Antigravity remove_config_entry should preserve other servers and remove godot-mcp.")
+
 	return {
 		"name": "client_config_file_transaction_contracts",
 		"success": true,
@@ -83,8 +149,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"details": {
 			"desktop_preflight_status": str(preflight.get("status", "")),
 			"backup_created": FileAccess.file_exists("%s.bak" % DESKTOP_FILE),
+			"desktop_conflict_status": str(conflicting_preflight.get("status", "")),
 			"opencode_preflight_status": str(opencode_preflight.get("status", "")),
-			"opencode_requires_confirmation": bool(opencode_preflight.get("requires_confirmation", false))
+			"opencode_stdio_conflict_status": str(opencode_stdio_conflict_preflight.get("status", "")),
+			"opencode_requires_confirmation": bool(opencode_preflight.get("requires_confirmation", false)),
+			"antigravity_preflight_status": str(antigravity_preflight.get("status", ""))
 		}
 	}
 
@@ -94,6 +163,8 @@ func cleanup_case(_tree: SceneTree) -> void:
 	_cleanup_file("%s.bak" % DESKTOP_FILE)
 	_cleanup_file(OPENCODE_FILE)
 	_cleanup_file("%s.bak" % OPENCODE_FILE)
+	_cleanup_file(ANTIGRAVITY_FILE)
+	_cleanup_file("%s.bak" % ANTIGRAVITY_FILE)
 
 
 func _write_text(path: String, text: String) -> void:

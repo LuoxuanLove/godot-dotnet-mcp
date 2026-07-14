@@ -2,6 +2,7 @@
 extends RefCounted
 class_name UserToolMaintenanceService
 
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 const CUSTOM_TOOLS_DIR := "res://addons/godot_dotnet_mcp/custom_tools"
 const USER_CATEGORY := "user"
 const USER_DOMAIN := "user"
@@ -33,6 +34,16 @@ func create_tool_scaffold(tool_name: String, display_name: String, description: 
 	if declared_tool_name.is_empty():
 		return _authorization_required("create_user_tool", {"reason": "empty_declared_tool_name"})
 	var public_tool_name := _build_public_tool_name(declared_tool_name)
+	if not ToolCatalogManifest.is_valid_mcp_tool_name(public_tool_name):
+		return {
+			"success": false,
+			"error": "User tool public name must follow MCP 2025-11-25 naming guidance",
+			"data": {
+				"tool_name": declared_tool_name,
+				"public_tool_name": public_tool_name,
+				"requested_tool_name": tool_name
+			}
+		}
 
 	var preview = {
 		"category": USER_CATEGORY,
@@ -116,6 +127,12 @@ func restore_latest_backup(authorized: bool, agent_hint: String = "") -> Diction
 	if not authorized:
 		_append_audit("restore_user_tool", false, false, preview, "", agent_hint)
 		return _authorization_required("restore_user_tool", preview)
+
+	var metadata_result := _validate_restore_backup_metadata(preview)
+	if not bool(metadata_result.get("success", false)):
+		_append_audit("restore_user_tool", true, false, preview, str(metadata_result.get("data", {}).get("error_code", "invalid_backup_metadata")), agent_hint)
+		return metadata_result
+	preview = metadata_result.get("data", preview)
 
 	var script_path = str(preview.get("script_path", ""))
 	if script_path.is_empty():
@@ -384,6 +401,11 @@ func _backup_user_tool(script_path: String) -> Dictionary:
 
 
 func _restore_backup_payload(backup_data: Dictionary) -> Dictionary:
+	var validation := _validate_restore_backup_metadata(backup_data)
+	if not bool(validation.get("success", false)):
+		return validation
+	backup_data = validation.get("data", backup_data)
+
 	var backup_path = str(backup_data.get("backup_path", ""))
 	var script_path = str(backup_data.get("script_path", ""))
 	if backup_path.is_empty() or script_path.is_empty():
@@ -411,6 +433,52 @@ func _restore_backup_payload(backup_data: Dictionary) -> Dictionary:
 			return copy_uid_result
 
 	return {"success": true}
+
+
+func _validate_restore_backup_metadata(backup_data: Dictionary) -> Dictionary:
+	var normalized_script_path := _normalize_script_path(str(backup_data.get("script_path", "")))
+	if normalized_script_path.is_empty():
+		return {
+			"success": false,
+			"error": "Backup metadata script path must stay inside custom_tools.",
+			"data": {"error_code": "invalid_restore_script_path", "script_path": str(backup_data.get("script_path", ""))}
+		}
+
+	var normalized_backup_path := _normalize_backup_path(str(backup_data.get("backup_path", "")), ".gd.bak")
+	if normalized_backup_path.is_empty():
+		return {
+			"success": false,
+			"error": "Backup metadata backup path must stay inside the managed backup directory.",
+			"data": {"error_code": "invalid_restore_backup_path", "backup_path": str(backup_data.get("backup_path", ""))}
+		}
+
+	var normalized := backup_data.duplicate(true)
+	normalized["script_path"] = normalized_script_path
+	normalized["backup_path"] = normalized_backup_path
+
+	var uid_path := str(normalized.get("uid_path", ""))
+	if not uid_path.is_empty():
+		var expected_uid_path := "%s.uid" % normalized_script_path
+		if _normalize_script_uid_path(uid_path, expected_uid_path).is_empty():
+			return {
+				"success": false,
+				"error": "Backup metadata uid path must match the restored user tool script.",
+				"data": {"error_code": "invalid_restore_uid_path", "uid_path": uid_path, "expected_uid_path": expected_uid_path}
+			}
+		normalized["uid_path"] = expected_uid_path
+
+	var backup_uid_path := str(normalized.get("backup_uid_path", ""))
+	if not backup_uid_path.is_empty():
+		var normalized_backup_uid_path := _normalize_backup_path(backup_uid_path, ".gd.uid.bak")
+		if normalized_backup_uid_path.is_empty():
+			return {
+				"success": false,
+				"error": "Backup metadata uid backup path must stay inside the managed backup directory.",
+				"data": {"error_code": "invalid_restore_backup_uid_path", "backup_uid_path": backup_uid_path}
+			}
+		normalized["backup_uid_path"] = normalized_backup_uid_path
+
+	return {"success": true, "data": normalized}
 
 
 func _get_latest_deleted_backup() -> Dictionary:
@@ -516,6 +584,36 @@ func _normalize_script_path(script_path: String) -> String:
 	if not localized.begins_with(_custom_tools_dir + "/"):
 		return ""
 	return localized
+
+
+func _normalize_script_uid_path(uid_path: String, expected_uid_path: String) -> String:
+	var normalized = uid_path.replace("\\", "/").strip_edges()
+	if normalized.is_empty() or not normalized.ends_with(".gd.uid"):
+		return ""
+	if not normalized.begins_with("res://") and not normalized.begins_with("user://"):
+		normalized = "res://" + normalized.trim_prefix("/")
+	var global_expected = ProjectSettings.globalize_path(expected_uid_path).replace("\\", "/")
+	var global_path = ProjectSettings.globalize_path(normalized).replace("\\", "/")
+	if OS.get_name() == "Windows":
+		global_expected = global_expected.to_lower()
+		global_path = global_path.to_lower()
+	if global_path != global_expected:
+		return ""
+	return expected_uid_path
+
+
+func _normalize_backup_path(path: String, expected_suffix: String) -> String:
+	var normalized = path.replace("\\", "/").strip_edges()
+	if normalized.is_empty() or not normalized.ends_with(expected_suffix):
+		return ""
+	var global_root = ProjectSettings.globalize_path(_backup_dir).replace("\\", "/").trim_suffix("/")
+	var global_path = ProjectSettings.globalize_path(normalized).replace("\\", "/")
+	if OS.get_name() == "Windows":
+		global_root = global_root.to_lower()
+		global_path = global_path.to_lower()
+	if global_path == global_root or not global_path.begins_with(global_root + "/"):
+		return ""
+	return ProjectSettings.localize_path(ProjectSettings.globalize_path(normalized)).replace("\\", "/")
 
 
 func _slugify_tool_name(value: String) -> String:

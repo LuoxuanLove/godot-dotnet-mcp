@@ -1,8 +1,9 @@
-name: version-policy
+﻿name: version-policy
 
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, edited, ready_for_review]
+  merge_group:
   workflow_dispatch:
     inputs:
       pull_number:
@@ -16,6 +17,7 @@ permissions:
 
 jobs:
   version-policy:
+    if: github.event_name != 'merge_group'
     runs-on: windows-2025
 
     steps:

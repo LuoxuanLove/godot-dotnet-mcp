@@ -2,10 +2,13 @@
 extends RefCounted
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
+const UserToolScanService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/user_tool_scan_service.gd")
 const _CUSTOM_TOOLS_DIR = "res://addons/godot_dotnet_mcp/custom_tools"
 const _CUSTOM_TOOLS_ENABLED_SETTING = "godot_dotnet_mcp/user_tools/enable_runtime_loading"
 const _CUSTOM_TOOLS_ENABLED_SETTING_LEGACY = "user_tools/enable_runtime_loading"
 const _RELOAD_DEBOUNCE_MSEC := 300
+const _INVENTORY_RESCAN_INTERVAL_MSEC := 5000
 
 var _runtime_context: Dictionary = {}
 var _slots_by_script: Dictionary = {}
@@ -13,9 +16,12 @@ var _tool_index: Dictionary = {}
 var _requested_missing_scripts: Dictionary = {}
 var _pending_refresh := false
 var _last_scan_msec := 0
+var _definitions_revision := 0
+var _scan_service := UserToolScanService.new()
 
 
 func _init() -> void:
+	_scan_service.configure(_CUSTOM_TOOLS_DIR, 256)
 	_request_full_refresh("initialize")
 
 
@@ -48,6 +54,10 @@ func get_tools() -> Array[Dictionary]:
 			tool_copy["last_refresh_reason"] = str(slot.get("last_refresh_reason", ""))
 			tools.append(tool_copy)
 	return tools
+
+
+func get_definitions_revision() -> int:
+	return _definitions_revision
 
 
 func execute(tool_name: String, args: Dictionary) -> Dictionary:
@@ -83,7 +93,10 @@ func tick(_delta: float) -> void:
 			_request_full_refresh("runtime_loading_disabled")
 		return
 	var now_msec := Time.get_ticks_msec()
-	if _pending_refresh or now_msec - _last_scan_msec >= _RELOAD_DEBOUNCE_MSEC:
+	if _pending_refresh:
+		if _last_scan_msec <= 0 or now_msec - _last_scan_msec >= _RELOAD_DEBOUNCE_MSEC:
+			_refresh_if_needed("tick")
+	elif _last_scan_msec <= 0 or now_msec - _last_scan_msec >= _INVENTORY_RESCAN_INTERVAL_MSEC:
 		_refresh_if_needed("tick")
 	for script_path in _get_sorted_script_paths():
 		_process_pending_slot_change(script_path)
@@ -104,6 +117,7 @@ func before_unload(reason: String) -> void:
 		slot["instance"] = null
 		_slots_by_script[script_path] = slot
 	_tool_index.clear()
+	_bump_definitions_revision()
 
 
 func get_runtime_state_snapshot() -> Array[Dictionary]:
@@ -151,6 +165,8 @@ func request_reload_by_script(script_path: String, reason: String = "manual") ->
 	slot["discovery_source"] = _get_discovery_source(reason)
 	slot["state"] = "reload_pending"
 	_slots_by_script[normalized_path] = slot
+	_pending_refresh = true
+	_bump_definitions_revision()
 
 
 func request_reload_all(reason: String = "manual") -> void:
@@ -166,8 +182,11 @@ func _refresh_if_needed(reason: String) -> void:
 		_last_scan_msec = Time.get_ticks_msec()
 		_pending_refresh = false
 		return
+	var now_msec := Time.get_ticks_msec()
+	if not _pending_refresh and _last_scan_msec > 0 and now_msec - _last_scan_msec < _INVENTORY_RESCAN_INTERVAL_MSEC:
+		return
 	_reconcile_script_inventory(reason)
-	_last_scan_msec = Time.get_ticks_msec()
+	_last_scan_msec = now_msec
 	_pending_refresh = false
 
 
@@ -184,13 +203,15 @@ func _reconcile_script_inventory(reason: String) -> void:
 			_requested_missing_scripts.erase(script_path)
 			var created = _create_slot(script_path, modified_unix, slot_reason)
 			_slots_by_script[script_path] = created
+			_bump_definitions_revision()
 			MCPDebugBuffer.record("info", "user", "Created runtime slot for %s" % script_path)
 			continue
-		if slot.get("instance", null) == null or (slot.get("tool_defs", []) as Array).is_empty():
+		if (slot.get("instance", null) == null or (slot.get("tool_defs", []) as Array).is_empty()) and not _is_slot_pending_empty_reload(slot):
 			slot["pending_reload"] = true
 			slot["pending_reason"] = "recover_empty_slot"
 			slot["state"] = "reload_pending"
 			_slots_by_script[script_path] = slot
+			_bump_definitions_revision()
 			MCPDebugBuffer.record("info", "user", "Marked empty user tool slot for reload: %s" % script_path)
 		if int(slot.get("last_seen_modified_unix", 0)) != modified_unix:
 			slot["last_seen_modified_unix"] = modified_unix
@@ -201,15 +222,19 @@ func _reconcile_script_inventory(reason: String) -> void:
 			slot["discovery_source"] = _get_discovery_source(str(slot.get("pending_reason", "file_changed")))
 			slot["state"] = "reload_pending"
 			_slots_by_script[script_path] = slot
+			_bump_definitions_revision()
 
 	for script_path in _slots_by_script.keys():
 		if discovered.has(script_path):
 			continue
 		var slot: Dictionary = _slots_by_script.get(script_path, {})
 		if int(slot.get("active_calls", 0)) > 0:
+			if _as_bool(slot.get("removed_pending", false)) and str(slot.get("state", "")) == "waiting_quiesce":
+				continue
 			slot["removed_pending"] = true
 			slot["state"] = "waiting_quiesce"
 			_slots_by_script[script_path] = slot
+			_bump_definitions_revision()
 			continue
 		_unload_slot(script_path, "script_removed")
 
@@ -283,8 +308,10 @@ func _reload_slot(script_path: String, reason: String) -> void:
 		slot["last_error"] = str(load_result.get("error", "reload_failed"))
 		slot["last_refresh_reason"] = reason
 		slot["discovery_source"] = _get_discovery_source(reason)
-		slot["instance"] = old_instance
+		slot["instance"] = null
+		slot["tool_defs"] = []
 		_slots_by_script[script_path] = slot
+		_bump_definitions_revision()
 		MCPDebugBuffer.record("warning", "user", "Reload failed for %s: %s" % [script_path, slot["last_error"]])
 		return
 
@@ -306,6 +333,7 @@ func _reload_slot(script_path: String, reason: String) -> void:
 	slot["last_refresh_reason"] = reason
 	slot["discovery_source"] = _get_discovery_source(reason)
 	_slots_by_script[script_path] = slot
+	_bump_definitions_revision()
 	MCPDebugBuffer.record("info", "user", "Reloaded user tool runtime: %s v%d" % [script_path, int(slot.get("version", 0))])
 
 
@@ -347,6 +375,10 @@ func _instantiate_user_tool(script_path: String, force_reload: bool) -> Dictiona
 		if logical_name.is_empty():
 			MCPDebugBuffer.record("warning", "user", "User tool declared empty logical name: %s" % script_path)
 			return {"success": false, "error": "User tool declared an empty tool name"}
+		var public_tool_name := _build_public_tool_name(logical_name)
+		if not ToolCatalogManifest.is_valid_mcp_tool_name(public_tool_name):
+			MCPDebugBuffer.record("warning", "user", "User tool declared invalid MCP public tool name %s in %s" % [public_tool_name, script_path])
+			return {"success": false, "error": "User tool declared an invalid MCP public tool name: %s" % public_tool_name}
 		var tool_copy: Dictionary = (tool_def as Dictionary).duplicate(true)
 		tool_copy["name"] = logical_name
 		tool_copy["source"] = "user_tool"
@@ -375,6 +407,7 @@ func _rebuild_tool_index() -> void:
 				conflict_slot["state"] = "reload_failed"
 				conflict_slot["tool_defs"] = []
 				_slots_by_script[script_path] = conflict_slot
+				_bump_definitions_revision()
 				continue
 			_tool_index[logical_name] = script_path
 
@@ -384,6 +417,7 @@ func _unload_all(reason: String) -> void:
 		_unload_slot(script_path, reason)
 	_slots_by_script.clear()
 	_tool_index.clear()
+	_bump_definitions_revision()
 
 
 func _unload_slot(script_path: String, reason: String) -> void:
@@ -394,37 +428,26 @@ func _unload_slot(script_path: String, reason: String) -> void:
 	if instance != null and instance.has_method("before_unload"):
 		instance.before_unload(reason)
 	_slots_by_script.erase(script_path)
+	_bump_definitions_revision()
 
 
 func _scan_custom_tool_scripts() -> Array[String]:
+	var scan_result := _scan_service.begin_scan()
+	var guard := 0
+	while not bool(scan_result.get("complete", false)) and guard < 1024:
+		scan_result = _scan_service.continue_scan()
+		guard += 1
+	if not bool(scan_result.get("success", false)):
+		MCPDebugBuffer.record("warning", "user", "User tool scan failed: %s" % str(scan_result.get("error", "scan_failed")))
+		return []
+	var snapshot: Dictionary = scan_result.get("snapshot", {})
 	var script_paths: Array[String] = []
-	_collect_script_paths(_CUSTOM_TOOLS_DIR, script_paths)
+	for script_path in snapshot.keys():
+		var normalized_path := _normalize_script_path(str(script_path))
+		if not normalized_path.is_empty():
+			script_paths.append(normalized_path)
 	script_paths.sort()
 	return script_paths
-
-
-func _collect_script_paths(dir_path: String, output: Array[String]) -> void:
-	var global_path = ProjectSettings.globalize_path(dir_path)
-	if not DirAccess.dir_exists_absolute(global_path):
-		return
-	var dir = DirAccess.open(dir_path)
-	if dir == null:
-		return
-	dir.list_dir_begin()
-	while true:
-		var entry = dir.get_next()
-		if entry.is_empty():
-			break
-		if entry.begins_with("."):
-			continue
-		var child_path = "%s/%s" % [dir_path, entry]
-		if dir.current_is_dir():
-			_collect_script_paths(child_path, output)
-		elif entry.ends_with(".gd"):
-			var normalized_path = _normalize_script_path(child_path)
-			if not normalized_path.is_empty():
-				output.append(normalized_path)
-	dir.list_dir_end()
 
 
 func _normalize_script_path(script_path: String) -> String:
@@ -451,6 +474,10 @@ func _normalize_logical_tool_name(tool_name: String) -> String:
 	if normalized.begins_with("user_"):
 		normalized = normalized.trim_prefix("user_")
 	return normalized
+
+
+func _build_public_tool_name(logical_name: String) -> String:
+	return "user_%s" % logical_name
 
 
 func _is_runtime_loading_enabled() -> bool:
@@ -495,3 +522,14 @@ func _as_bool(value) -> bool:
 
 func _get_discovery_source(reason: String) -> String:
 	return "external_watch" if reason.begins_with("watcher_") else "plugin_flow"
+
+
+func _bump_definitions_revision() -> void:
+	_definitions_revision += 1
+
+
+func _is_slot_pending_empty_reload(slot: Dictionary) -> bool:
+	return (
+		_as_bool(slot.get("pending_reload", false))
+		and str(slot.get("pending_reason", "")) == "recover_empty_slot"
+	)

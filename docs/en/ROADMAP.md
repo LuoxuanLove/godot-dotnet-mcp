@@ -18,6 +18,12 @@ This project should not compete on raw tool count. It should compete on semantic
 
 The 1.x line should keep improving the editor-native plugin structure while turning Godot .NET MCP into an evidence-first workflow platform for Agents. The first goal is to help the Agent discover the right capabilities, make focused changes, verify them in Godot, and report trustworthy evidence.
 
+### v2.0.0 Protocol Refactor
+
+v2.0.0 follows the [protocol refactor plan](process/v2.0.0-protocol-refactor-plan.md): context, state, and catalogs move to Resources; workflow guidance stays in Prompts; and Tools narrow to action and computational workflow entries. The target baseline is MCP 2025-11-25, with `127.0.0.1:3000/mcp` as the default Streamable HTTP endpoint, newline-delimited stdio as the default stdio mode, and schema/metadata/UI catalog adaptation handled as explicit gates. The work is intentionally split into PR-sized refactor axes with removal guards and migration contracts.
+
+The current execution checklist is tracked in the [v2.0.0 refactor progress tracker](process/v2.0.0-refactor-progress-tracker.md).
+
 ### Capability Discovery and Tool Governance
 
 - Strengthen `system_help` and the tool catalog resources so the Agent can choose tools by task instead of guessing from a large flat list
@@ -84,13 +90,13 @@ These examples should emphasize repeatability and evidence, not marketing breadt
 - Keep Asset Library installation verification aligned with the exported plugin contents
 - Make sure release notes and the changelog describe user-visible capabilities and important internal verification changes, not implementation logs
 
-## v2.0 Direction
+## Post-2.0 / v3 Candidate Direction
 
-v2.0 is the right stage to explore structural extensions beyond the 1.x editor-native plugin boundary. The main area to explore is an optional external or headless companion mode.
+After the v2.0.0 protocol refactor, the next major exploration area is structural extension beyond the editor-native plugin boundary. This is not part of the v2.0.0 release scope; it is a future candidate direction for an optional external or headless companion mode.
 
 ### Optional External or Headless Companion
 
-Only consider a v2.0 companion if it solves real workflows that the editor-native plugin cannot cover well. Possible goals include:
+Only consider a companion if it solves real workflows that the editor-native plugin cannot cover well. Possible goals include:
 
 - checking `.tscn`, `.tres`, `.csproj`, solution files, and C# source without opening the editor UI
 - running builds, restores, static audits, resource-reference checks, and binding checks in local automation or CI-style environments
@@ -100,7 +106,7 @@ Only consider a v2.0 companion if it solves real workflows that the editor-nativ
 
 This companion must not weaken the core plugin experience. The editor plugin should remain the authoritative source for live editor state, selected nodes, Dock state, editor screenshots, editor logs, and editor UI control.
 
-### v2.0 Structure Principles
+### Future Structure Principles
 
 - Keep the 1.x editor-native plugin as the stable mode, not as a soon-to-be-removed transition path
 - Any companion must be optional, explicit, and capability-gated. It must not become a hidden required background process

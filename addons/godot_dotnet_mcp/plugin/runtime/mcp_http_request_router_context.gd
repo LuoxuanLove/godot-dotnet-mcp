@@ -8,6 +8,7 @@ var build_tools_list_response := Callable()
 var handle_editor_lifecycle_request := Callable()
 var handle_editor_lifecycle_post_request := Callable()
 var build_cors_response := Callable()
+var sse_event_queue = null
 
 
 func dispose() -> void:
@@ -17,3 +18,4 @@ func dispose() -> void:
 	handle_editor_lifecycle_request = Callable()
 	handle_editor_lifecycle_post_request = Callable()
 	build_cors_response = Callable()
+	sse_event_queue = null

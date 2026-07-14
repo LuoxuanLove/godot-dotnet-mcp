@@ -7,9 +7,15 @@ const MCPRuntimeControlSessionSelectorScript = preload("res://addons/godot_dotne
 const MCPRuntimeControlErrorMapperScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_control_error_mapper.gd")
 const MCPRuntimeControlReplyResolverScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_control_reply_resolver.gd")
 const MCPRuntimeControlRequestCoordinatorScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_control_request_coordinator.gd")
+const MCPRuntimeCommandServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_command_service.gd")
 const DEFAULT_COMMAND_TIMEOUT_MS := 5000
 const DEFAULT_SEQUENCE_TIMEOUT_MS := 15000
 const DEFAULT_ENABLE_TIMEOUT_MS := 5000
+const MAX_CAPTURE_FRAME_COUNT := MCPRuntimeCommandServiceScript.MAX_CAPTURE_FRAME_COUNT
+const MAX_CAPTURE_INTERVAL_FRAMES := MCPRuntimeCommandServiceScript.MAX_CAPTURE_INTERVAL_FRAMES
+const MAX_STEP_WAIT_FRAMES := MCPRuntimeCommandServiceScript.MAX_STEP_WAIT_FRAMES
+const MAX_INPUT_DURATION_MS := MCPRuntimeCommandServiceScript.MAX_INPUT_DURATION_MS
+const MAX_INPUTS_PER_REQUEST := MCPRuntimeCommandServiceScript.MAX_INPUTS_PER_REQUEST
 
 var _plugin: EditorPlugin
 var _debugger_bridge: EditorDebuggerPlugin
@@ -134,8 +140,16 @@ func capture(args: Dictionary) -> Dictionary:
 	var interval_frames := int(args.get("interval_frames", 1))
 	if frame_count <= 0:
 		return _error_mapper.error("invalid_argument", "frame_count must be greater than 0", {}, "capture")
+	if frame_count > MAX_CAPTURE_FRAME_COUNT:
+		return _error_mapper.error("invalid_argument", "frame_count must be %d or less" % MAX_CAPTURE_FRAME_COUNT, {
+			"max_frame_count": MAX_CAPTURE_FRAME_COUNT
+		}, "capture")
 	if interval_frames < 0:
 		return _error_mapper.error("invalid_argument", "interval_frames must be 0 or greater", {}, "capture")
+	if interval_frames > MAX_CAPTURE_INTERVAL_FRAMES:
+		return _error_mapper.error("invalid_argument", "interval_frames must be %d or less" % MAX_CAPTURE_INTERVAL_FRAMES, {
+			"max_interval_frames": MAX_CAPTURE_INTERVAL_FRAMES
+		}, "capture")
 	var payload := {
 		"frame_count": frame_count,
 		"interval_frames": interval_frames,
@@ -152,6 +166,9 @@ func send_inputs(args: Dictionary) -> Dictionary:
 	var inputs = args.get("inputs", [])
 	if not (inputs is Array) or (inputs as Array).is_empty():
 		return _error_mapper.error("invalid_argument", "system_runtime_step(action=input) requires a non-empty inputs array", {}, "input")
+	var budget_result := _validate_runtime_input_budget(inputs as Array, "input")
+	if not bool(budget_result.get("success", false)):
+		return budget_result
 	var timeout_ms := _resolve_timeout_ms(args, DEFAULT_COMMAND_TIMEOUT_MS)
 	return await _request_runtime_command("input", {
 		"inputs": (inputs as Array).duplicate(true)
@@ -165,6 +182,14 @@ func step(args: Dictionary) -> Dictionary:
 	var wait_frames := int(args.get("wait_frames", 1))
 	if wait_frames < 0:
 		return _error_mapper.error("invalid_argument", "wait_frames must be 0 or greater", {}, "step")
+	if wait_frames > MAX_STEP_WAIT_FRAMES:
+		return _error_mapper.error("invalid_argument", "wait_frames must be %d or less" % MAX_STEP_WAIT_FRAMES, {
+			"max_wait_frames": MAX_STEP_WAIT_FRAMES
+		}, "step")
+	if inputs is Array:
+		var budget_result := _validate_runtime_input_budget(inputs as Array, "step")
+		if not bool(budget_result.get("success", false)):
+			return budget_result
 	var timeout_ms := _resolve_timeout_ms(args, DEFAULT_SEQUENCE_TIMEOUT_MS)
 	var payload := {
 		"inputs": (inputs as Array).duplicate(true) if inputs is Array else [],
@@ -195,6 +220,26 @@ func _request_runtime_command_on_session(session_id: int, action: String, payloa
 		}, action)
 
 	return await _request_coordinator.request_runtime_command(session_id, action, payload, timeout_ms)
+
+
+func _validate_runtime_input_budget(inputs: Array, action: String) -> Dictionary:
+	if inputs.size() > MAX_INPUTS_PER_REQUEST:
+		return _error_mapper.error("invalid_argument", "Runtime input accepts at most %d entries" % MAX_INPUTS_PER_REQUEST, {
+			"max_inputs": MAX_INPUTS_PER_REQUEST
+		}, action)
+	for raw_input in inputs:
+		if not (raw_input is Dictionary):
+			continue
+		var input_entry: Dictionary = raw_input
+		var op := str(input_entry.get("op", "")).to_lower()
+		if not (op in ["tap", "hold", "click"]):
+			continue
+		var duration_ms := maxi(int(input_entry.get("duration_ms", 60)), 1)
+		if duration_ms > MAX_INPUT_DURATION_MS:
+			return _error_mapper.error("invalid_argument", "Runtime input duration_ms must be %d or less" % MAX_INPUT_DURATION_MS, {
+				"max_duration_ms": MAX_INPUT_DURATION_MS
+			}, action)
+	return {"success": true}
 
 
 func _connect_debugger_bridge() -> void:

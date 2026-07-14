@@ -4,6 +4,8 @@ extends RefCounted
 
 const ToolCatalogSearchService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_search_service.gd")
 
+const JSON_SCHEMA_2020_12_URI := "https://json-schema.org/draft/2020-12/schema"
+
 
 class FakeToolLoader:
 	extends RefCounted
@@ -32,6 +34,18 @@ class FakeToolLoader:
 				"properties": {
 					"action": {"type": "string", "enum": ["open", "resolve_row", "run_task"], "description": "Settings dialog workflow action"},
 					"capture_policy": {"type": "string", "description": "Capture policy for run_task"}
+				}
+			}
+		}, {
+			"name": "system_plugin_maintenance",
+			"description": "Canonical plugin maintenance workflow for status, plugin reload, plugin update status, update source selection, and update start",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["status", "reload", "update_status", "set_update_source", "refresh_update_refs", "start_update"], "description": "Plugin maintenance action"}
 				}
 			}
 		}, {
@@ -79,6 +93,58 @@ class FakeToolLoader:
 	func get_tool_definitions() -> Array:
 		var tools := get_exposed_tool_definitions()
 		tools.append({
+			"name": "system_tool_activity",
+			"description": "Removed public activity diagnostics entry",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"action": {"type": "string", "enum": ["status", "recent", "get"], "description": "Removed activity query action"}
+				}
+			}
+		})
+		tools.append({
+			"name": "system_scene_validate",
+			"description": "Removed public scene validation entry",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"scene": {"type": "string", "description": "Scene path"}
+				}
+			}
+		})
+		tools.append({
+			"name": "system_scene_analyze",
+			"description": "Removed public scene analysis entry",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"scene": {"type": "string", "description": "Scene path"}
+				}
+			}
+		})
+		tools.append({
+			"name": "system_tool_catalog",
+			"description": "Removed public tool catalog search entry",
+			"category": "system",
+			"domain_key": "core",
+			"enabled": true,
+			"inputSchema": {
+				"type": "object",
+				"properties": {
+					"query": {"type": "string", "description": "Removed public catalog search query"}
+				}
+			}
+		})
+		tools.append({
 			"name": "project_input",
 			"description": "Manage input action mappings",
 			"category": "project",
@@ -89,6 +155,19 @@ class FakeToolLoader:
 				"properties": {
 					"action": {"type": "string", "enum": ["list_actions", "get_action"], "description": "Input map action"},
 					"name": {"type": "string", "description": "Input action name"}
+				}
+			},
+			"outputSchema": {
+				"type": "object",
+				"required": ["success", "data"],
+				"properties": {
+					"success": {"type": "boolean"},
+					"data": {
+						"type": "object",
+						"properties": {
+							"actions": {"type": "array", "items": {"type": "string"}}
+						}
+					}
 				}
 			}
 		})
@@ -161,6 +240,54 @@ class FakeToolLoader:
 						"property_path": {"type": "string", "description": "Inspector property path or fragment"}
 					}
 				}
+			}, {
+				"name": "tool_catalog",
+				"full_name": "system_tool_catalog",
+				"category": "system",
+				"domain_key": "core",
+				"enabled": true,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"query": {"type": "string", "description": "Removed public catalog search query"}
+					}
+				}
+			}, {
+				"name": "tool_activity",
+				"full_name": "system_tool_activity",
+				"category": "system",
+				"domain_key": "core",
+				"enabled": true,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"action": {"type": "string", "enum": ["status", "recent", "get"], "description": "Removed activity query action"}
+					}
+				}
+			}, {
+				"name": "scene_validate",
+				"full_name": "system_scene_validate",
+				"category": "system",
+				"domain_key": "core",
+				"enabled": true,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"scene": {"type": "string", "description": "Scene path"}
+					}
+				}
+			}, {
+				"name": "scene_analyze",
+				"full_name": "system_scene_analyze",
+				"category": "system",
+				"domain_key": "core",
+				"enabled": true,
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"scene": {"type": "string", "description": "Scene path"}
+					}
+				}
 			}],
 			"project": [{
 				"name": "input",
@@ -173,6 +300,19 @@ class FakeToolLoader:
 					"properties": {
 						"action": {"type": "string", "enum": ["list_actions", "get_action"], "description": "Input map action"},
 						"name": {"type": "string", "description": "Input action name"}
+					}
+				},
+				"outputSchema": {
+					"type": "object",
+					"required": ["success", "data"],
+					"properties": {
+						"success": {"type": "boolean"},
+						"data": {
+							"type": "object",
+							"properties": {
+								"actions": {"type": "array", "items": {"type": "string"}}
+							}
+						}
 					}
 				}
 			}]
@@ -188,13 +328,23 @@ class FakeToolLoader:
 	func get_tool_loader_status() -> Dictionary:
 		return {"healthy": true, "status": "ready", "tool_count": 6, "exposed_tool_count": 5}
 
+	func is_public_removed_tool(tool_name: String) -> bool:
+		return tool_name == "system_tool_catalog" or tool_name == "system_tool_activity" or tool_name == "system_scene_validate" or tool_name == "system_scene_analyze"
+
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	var source_guard := _verify_search_requests_legacy_snapshot_view()
+	if not source_guard.is_empty():
+		return _failure(source_guard)
+
 	var loader := FakeToolLoader.new()
 	var exposed_search: Dictionary = ToolCatalogSearchService.search(loader, {"query": "input", "limit": 10})
 	if not bool(exposed_search.get("success", false)):
 		return _failure("Exposed catalog search should succeed.")
 	var exposed_data: Dictionary = exposed_search.get("data", {})
+	var exposed_loader_status: Dictionary = exposed_data.get("tool_loader_status", {})
+	if str(exposed_loader_status.get("status", "")) != "ready":
+		return _failure("Catalog search should preserve loader status even when requesting only the legacy presentation view.")
 	var exposed_matches: Array = exposed_data.get("matches", [])
 	if exposed_matches.size() != 1 or str((exposed_matches[0] as Dictionary).get("name", "")) != "system_runtime_step":
 		return _failure("Default search should match exposed tools by action/description.")
@@ -241,8 +391,56 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Internal project_input should be reported as not exposed.")
 	if not (visible_matches[0] as Dictionary).has("input_schema"):
 		return _failure("include_schema=true should preserve the full input schema.")
+	if not (visible_matches[0] as Dictionary).has("output_schema"):
+		return _failure("include_schema=true should preserve the output schema.")
+	var input_schema: Dictionary = (visible_matches[0] as Dictionary).get("input_schema", {})
+	if str(input_schema.get("$schema", "")) != JSON_SCHEMA_2020_12_URI:
+		return _failure("include_schema=true should advertise JSON Schema 2020-12 on input_schema.")
+	var output_schema: Dictionary = (visible_matches[0] as Dictionary).get("output_schema", {})
+	if str(output_schema.get("$schema", "")) != JSON_SCHEMA_2020_12_URI:
+		return _failure("include_schema=true should advertise JSON Schema 2020-12 on output_schema.")
+	if not ((output_schema.get("required", []) as Array).has("data")):
+		return _failure("Catalog search should preserve explicit output schema requirements.")
 	if not ((visible_matches[0] as Dictionary).get("match_reasons", []) as Array).has("param_enum"):
 		return _failure("Catalog search should match enum values and report param_enum.")
+	var removed_visible_search: Dictionary = ToolCatalogSearchService.search(loader, {
+		"query": "activity diagnostics",
+		"visibility": "visible",
+		"limit": 10
+	})
+	var removed_visible_matches: Array = (removed_visible_search.get("data", {}) as Dictionary).get("matches", [])
+	if not removed_visible_matches.is_empty():
+		return _failure("Visible catalog search should filter removed public tool system_tool_activity.")
+	var removed_catalog_visible_search: Dictionary = ToolCatalogSearchService.search(loader, {
+		"query": "removed public catalog",
+		"visibility": "visible",
+		"limit": 10
+	})
+	var removed_catalog_visible_matches: Array = (removed_catalog_visible_search.get("data", {}) as Dictionary).get("matches", [])
+	if not removed_catalog_visible_matches.is_empty():
+		return _failure("Visible catalog search should filter removed public tool system_tool_catalog.")
+	for removed_plugin_query in ["plugin reload", "plugin update"]:
+		var removed_plugin_visible_search: Dictionary = ToolCatalogSearchService.search(loader, {
+			"query": removed_plugin_query,
+			"visibility": "visible",
+			"limit": 10
+		})
+		var removed_plugin_visible_matches: Array = (removed_plugin_visible_search.get("data", {}) as Dictionary).get("matches", [])
+		var removed_plugin_visible_names := _match_names(removed_plugin_visible_matches)
+		for removed_plugin_tool_name in ["system_plugin_reload", "system_plugin_update"]:
+			if removed_plugin_visible_names.has(removed_plugin_tool_name):
+				return _failure("Visible catalog search should filter removed public plugin tool %s." % removed_plugin_tool_name)
+		if not removed_plugin_visible_names.has("system_plugin_maintenance"):
+			return _failure("Visible catalog search should route removed plugin query '%s' to system_plugin_maintenance." % removed_plugin_query)
+	for removed_scene_query in ["scene validation", "scene analysis"]:
+		var removed_scene_visible_search: Dictionary = ToolCatalogSearchService.search(loader, {
+			"query": removed_scene_query,
+			"visibility": "visible",
+			"limit": 10
+		})
+		var removed_scene_visible_matches: Array = (removed_scene_visible_search.get("data", {}) as Dictionary).get("matches", [])
+		if not removed_scene_visible_matches.is_empty():
+			return _failure("Visible catalog search should filter removed public scene tool query '%s'." % removed_scene_query)
 
 	var domain_search: Dictionary = ToolCatalogSearchService.search(loader, {"domain": "core", "query": "label"})
 	var domain_matches: Array = (domain_search.get("data", {}) as Dictionary).get("matches", [])
@@ -252,6 +450,32 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var alternate_domain_matches: Array = (alternate_domain_search.get("data", {}) as Dictionary).get("matches", [])
 	if not alternate_domain_matches.is_empty():
 		return _failure("Domain-key-filtered search should exclude matches from other domains.")
+	var alternate_summary: Dictionary = (alternate_domain_search.get("data", {}) as Dictionary).get("summary", {})
+	var available_filters: Dictionary = alternate_summary.get("available_filters", {})
+	if not ((available_filters.get("domain", []) as Array).has("core")):
+		return _failure("Catalog diagnostics should report available domain filters.")
+	var filter_warnings: Array = alternate_summary.get("filter_warnings", [])
+	if filter_warnings.is_empty():
+		return _failure("Catalog diagnostics should warn about unavailable domain filters.")
+	if str((filter_warnings[0] as Dictionary).get("filter", "")) != "domain":
+		return _failure("Catalog diagnostics should identify the unavailable filter type.")
+	var suggested_next_queries: Array = alternate_summary.get("suggested_next_queries", [])
+	if suggested_next_queries.is_empty():
+		return _failure("Catalog diagnostics should suggest a follow-up query when filters are too narrow.")
+	var mixed_domain_search: Dictionary = ToolCatalogSearchService.search(loader, {"domain": ["core", "plugin"], "query": "label"})
+	var mixed_domain_summary: Dictionary = (mixed_domain_search.get("data", {}) as Dictionary).get("summary", {})
+	var mixed_suggested_queries: Array = mixed_domain_summary.get("suggested_next_queries", [])
+	if mixed_suggested_queries.is_empty():
+		return _failure("Catalog diagnostics should suggest removing only unavailable filters from mixed domain filters.")
+	var mixed_removal_query: Dictionary = mixed_suggested_queries[0] as Dictionary
+	if (mixed_removal_query.get("domain", []) as Array) != ["core"]:
+		return _failure("Catalog diagnostics should preserve valid domain filters when removing unavailable domain filters.")
+
+	var category_misuse_search: Dictionary = ToolCatalogSearchService.search(loader, {"domain": "project", "query": "get_action", "visibility": "visible"})
+	var category_misuse_summary: Dictionary = (category_misuse_search.get("data", {}) as Dictionary).get("summary", {})
+	var category_misuse_warnings: Array = category_misuse_summary.get("filter_warnings", [])
+	if category_misuse_warnings.is_empty() or not (category_misuse_warnings[0] as Dictionary).has("hint"):
+		return _failure("Catalog diagnostics should hint when a domain filter value is available as a category.")
 
 	var invalid_visibility: Dictionary = ToolCatalogSearchService.search(loader, {"visibility": "all"})
 	if bool(invalid_visibility.get("success", true)):
@@ -274,6 +498,16 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _verify_search_requests_legacy_snapshot_view() -> String:
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_search_service.gd")
+	if source.is_empty():
+		return "Tool catalog search service source should be readable."
+	var required := "ToolCatalogSnapshotServiceScript.build_snapshot(loader, {\n\t\t\"presentation_views\": [\"legacy\"]\n\t})"
+	if source.find(required) == -1:
+		return "Tool catalog search should request only the legacy presentation view."
+	return ""
 
 
 func _match_names(matches: Array) -> Array[String]:

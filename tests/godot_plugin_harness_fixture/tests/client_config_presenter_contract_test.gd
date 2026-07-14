@@ -8,6 +8,7 @@ class FakeLocalization extends RefCounted:
 		var texts := {
 			"config_client_claude_code": "Claude Code CLI",
 			"config_client_claude_desktop": "Claude Desktop",
+			"config_client_antigravity": "Antigravity",
 			"config_client_cursor": "Cursor",
 			"config_client_gemini": "Gemini CLI",
 			"config_client_qwen": "Qwen Code CLI",
@@ -60,6 +61,8 @@ class FakeLocalization extends RefCounted:
 			"config_client_codex_desc": "Codex description",
 			"config_client_qwen_desc": "Qwen description",
 			"config_client_windsurf_desc": "Windsurf description",
+			"config_client_antigravity_desc": "Antigravity description",
+			"config_client_antigravity_user_data_dir_hint": "Antigravity user data directory: %s",
 			"config_client_cline_desc": "Cline description",
 			"config_client_roo_code_desc": "Roo Code description",
 			"config_client_cherry_studio_desc": "Cherry Studio description",
@@ -81,6 +84,12 @@ class FakeConfigService extends RefCounted:
 
 	func get_trae_config_path() -> String:
 		return "C:/Users/Test/AppData/Roaming/Trae/User/mcp.json"
+
+	func get_antigravity_config_hint_path() -> String:
+		return "C:/Users/Test/AppData/Roaming/Antigravity"
+
+	func get_antigravity_mcp_config_path() -> String:
+		return "C:/Users/Test/.gemini/config/mcp_config.json"
 
 	func get_windsurf_config_path() -> String:
 		return "C:/Users/Test/.codeium/windsurf/mcp_config.json"
@@ -177,6 +186,23 @@ func run_case(_tree: SceneTree) -> Dictionary:
 				"executable_path": "C:/Apps/Codex/Codex.exe",
 				"capability": "invalid"
 			},
+			"antigravity": {
+				"status": "ready",
+				"config_path": "C:/Users/Test/.gemini/config/mcp_config.json",
+				"guidance_path": "C:/Users/Test/AppData/Roaming/Antigravity",
+				"config_entry_status": {"status": "missing_server"},
+				"write_supported": true,
+				"launch_supported": true,
+				"path_pick_supported": true,
+				"path_clear_supported": false,
+				"runtime_status": {"status": "not_running"},
+				"executable_path": "C:/Apps/Antigravity/Antigravity.exe",
+				"capability": {
+					"support_level": "full_write",
+					"actions": ["copy_config", "write_config", "remove_config", "open_config_dir", "open_config_file", "pick_path", "open_app"],
+					"notes": ["config_client_capability_full_write"]
+				}
+			},
 			"cherry_studio": {
 				"status": "config_only",
 				"config_path": "C:/Users/Test/AppData/Roaming/CherryStudio",
@@ -196,7 +222,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		config_service
 	)
 	var cursor_model: Dictionary = desktop_models[1]
-	if desktop_models.size() != 9:
+	if desktop_models.size() != 10:
 		return _failure("Presenter should expose all supported desktop clients in the config page model.")
 	if str(cursor_model.get("install_status_text", "")).find("C:/Users/Test/.cursor/mcp.json") == -1:
 		return _failure("Desktop client status should surface the concrete config path once godot-mcp is installed.")
@@ -210,21 +236,40 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Presenter should merge realtime config-path actions when detection capability is present.")
 	if str(cursor_model.get("guidance_text", "")).find("Manual setup guidance") == -1:
 		return _failure("Presenter should use detection capability support_level for the visible capability summary.")
-	var codex_desktop_model: Dictionary = desktop_models[3]
+	var antigravity_model: Dictionary = desktop_models[3]
+	if str(antigravity_model.get("name_key", "")) != "config_client_antigravity":
+		return _failure("Presenter should include Antigravity in the desktop client list.")
+	if str(antigravity_model.get("path", "")) != "C:/Users/Test/.gemini/config/mcp_config.json":
+		return _failure("Presenter should expose Antigravity's MCP config file path.")
+	if str(antigravity_model.get("guidance_path", "")) != "C:/Users/Test/AppData/Roaming/Antigravity":
+		return _failure("Presenter should still surface the Antigravity user-data path as supplemental guidance.")
+	if not bool(antigravity_model.get("writeable", false)) or not bool(antigravity_model.get("remove_supported", false)):
+		return _failure("Antigravity should expose one-click write/remove config actions.")
+	if not bool(antigravity_model.get("open_config_dir_supported", false)) or not bool(antigravity_model.get("open_config_file_supported", false)):
+		return _failure("Antigravity should expose config file buttons once its MCP config path is known.")
+	if not antigravity_model.get("capability", {}).get("actions", []).has("write_config") or not antigravity_model.get("capability", {}).get("actions", []).has("open_config_file"):
+		return _failure("Antigravity capability should expose config-file write/open actions.")
+	if str(antigravity_model.get("guidance_text", "")).find("C:/Users/Test/AppData/Roaming/Antigravity") == -1:
+		return _failure("Presenter should include Antigravity user-data guidance in visible guidance text.")
+	if str(antigravity_model.get("capability", {}).get("kind", "")) != "full_write":
+		return _failure("Antigravity should expose full-write config support.")
+	if str(antigravity_model.get("launch_action_label_key", "")) != "config_client_action_open_app":
+		return _failure("Antigravity should launch as an agent app rather than an IDE project-open flow.")
+	var codex_desktop_model: Dictionary = desktop_models[4]
 	if str(codex_desktop_model.get("capability", {}).get("kind", "")) != "launch_path":
 		return _failure("Presenter should fall back to legacy inference when detection capability is not a dictionary.")
 	if str(codex_desktop_model.get("capability", {}).get("support_level", "")) != "launch_path":
 		return _failure("A launch-only desktop client should expose launch_path as its capability support level.")
 	if str(codex_desktop_model.get("guidance_text", "")).find("Launch and path management") == -1:
 		return _failure("Launch-only desktop client guidance should summarize launch/path-only support.")
-	var cherry_model: Dictionary = desktop_models[8]
+	var cherry_model: Dictionary = desktop_models[9]
 	if str(cherry_model.get("capability", {}).get("kind", "")) != "manual_guidance":
 		return _failure("A config/manual guidance client should be labelled separately from full one-click clients.")
 	if str(cherry_model.get("capability", {}).get("support_level", "")) != "manual_guidance":
 		return _failure("Presenter should preserve legacy capability.kind as support_level when support_level is absent.")
 	if str(cherry_model.get("guidance_text", "")).find("Manual setup guidance") == -1:
 		return _failure("Manual guidance client summary should explain that it is not full one-click support.")
-	var windsurf_model: Dictionary = desktop_models[5]
+	var windsurf_model: Dictionary = desktop_models[6]
 	if str(windsurf_model.get("name_key", "")) != "config_client_windsurf":
 		return _failure("Presenter should include Windsurf in the desktop client list.")
 

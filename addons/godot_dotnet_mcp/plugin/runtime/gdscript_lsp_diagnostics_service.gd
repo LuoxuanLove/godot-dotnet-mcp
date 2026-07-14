@@ -145,7 +145,9 @@ func get_status_summary() -> Dictionary:
 
 
 func tick(delta: float) -> void:
-	MCPDebugBuffer.record("info", "gdscript_lsp_diagnostics_service",
+	if not has_active_request():
+		return
+	MCPDebugBuffer.record("debug", "gdscript_lsp_diagnostics_service",
 		"tick active=%s pending=%s state=%s" % [
 			str(has_active_request()),
 			str(not _pending_script_path.is_empty()),
@@ -188,6 +190,12 @@ func clear() -> void:
 		"error_count": 0,
 		"warning_count": 0
 	}
+
+
+func dispose() -> void:
+	clear()
+	if _singleton == self:
+		_singleton = null
 
 
 func _start_next_job() -> void:

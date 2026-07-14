@@ -62,6 +62,7 @@ func detect_all(force_refresh: bool = false, include_slow_checks: bool = false) 
 		"claude_code": _detect_claude_code(running_processes),
 		"cursor": _detect_cursor(running_processes),
 		"trae": _detect_trae(running_processes),
+		"antigravity": _detect_antigravity(running_processes),
 		"gemini": _detect_gemini(running_processes),
 		"codex_desktop": _detect_codex_desktop(running_processes),
 		"codex": _detect_codex(running_processes),
@@ -188,6 +189,44 @@ func _detect_trae(running_processes: PackedStringArray = PackedStringArray()) ->
 
 	var result = _build_common_result("trae", resolved, runtime_state, entry_state)
 	result["config_path"] = config_path
+	result["write_supported"] = config_supported
+	result["auto_add_supported"] = false
+	result["launch_supported"] = not str(resolved.get("path", "")).is_empty()
+	result["path_pick_supported"] = true
+	result["path_clear_supported"] = bool(resolved.get("has_manual_path", false))
+	if not str(resolved.get("path", "")).is_empty() and config_supported:
+		result["status"] = STATUS_READY
+	elif config_supported:
+		result["status"] = STATUS_CONFIG_ONLY
+	else:
+		result["status"] = STATUS_MISSING
+	return result
+
+
+func _detect_antigravity(running_processes: PackedStringArray = PackedStringArray()) -> Dictionary:
+	var config_path = ConfigPathsScript.get_antigravity_mcp_config_path()
+	var guidance_path = ConfigPathsScript.get_antigravity_config_hint_path()
+	var resolved = _resolve_executable_path(
+		"antigravity",
+		[
+			"%s/Programs/antigravity/Antigravity.exe" % _get_local_app_data_root(),
+			"%s/Antigravity/Antigravity.exe" % _get_local_app_data_root(),
+			"%s/Programs/Antigravity/Antigravity.exe" % _get_local_app_data_root(),
+			"%s/Google/Antigravity/Antigravity.exe" % _get_local_app_data_root(),
+			"%s/Antigravity/Antigravity.exe" % _get_program_files_root(),
+			"%s/Google/Antigravity/Antigravity.exe" % _get_program_files_root(),
+			"%s/Antigravity/Antigravity.exe" % _get_secondary_program_files_root(),
+			"%s/Google/Antigravity/Antigravity.exe" % _get_secondary_program_files_root()
+		],
+		["antigravity", "google-antigravity"]
+	)
+	var entry_state = _inspect_config_entry(config_path)
+	var runtime_state = _build_runtime_state(str(resolved.get("path", "")), ["antigravity.exe"], running_processes)
+	var config_supported = _can_prepare_file_path(config_path)
+
+	var result = _build_common_result("antigravity", resolved, runtime_state, entry_state)
+	result["config_path"] = config_path
+	result["guidance_path"] = guidance_path
 	result["write_supported"] = config_supported
 	result["auto_add_supported"] = false
 	result["launch_supported"] = not str(resolved.get("path", "")).is_empty()

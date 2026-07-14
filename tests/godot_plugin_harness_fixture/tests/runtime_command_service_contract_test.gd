@@ -29,6 +29,7 @@ class FakeViewport extends RefCounted:
 var _service = RuntimeCommandServiceScript.new()
 var _tree: SceneTree
 var _viewport: FakeViewport
+var _input_events: Array[InputEvent] = []
 
 
 func run_case(tree: SceneTree) -> Dictionary:
@@ -43,7 +44,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		Callable(self, "_get_current_scene_path"),
 		Callable(self, "_build_runtime_state"),
 		CUSTOM_CAPTURE_DIR,
-		24
+		24,
+		Callable(self, "_record_input_event")
 	)
 	_service._get_capture_availability = Callable(self, "_capture_available")
 
@@ -76,7 +78,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		Callable(self, "_get_current_scene_path"),
 		Callable(self, "_build_runtime_state"),
 		CUSTOM_CAPTURE_DIR,
-		24
+		24,
+		Callable(self, "_record_input_event")
 	)
 	_service._get_capture_availability = Callable(self, "_capture_headless_unavailable")
 	var skipped_result: Dictionary = await _service.execute_action_async(5, "capture", {
@@ -96,6 +99,110 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if int(_viewport.texture.get_image_call_count) != 0:
 		return _failure("Runtime command service should skip before reading viewport images when capture is unavailable.")
 
+	_input_events.clear()
+	var mouse_input_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [
+			{"kind": "mouse", "op": "move", "position": {"x": 24, "y": 36}},
+			{"kind": "mouse", "button": "left", "op": "click", "x": 24, "y": 36, "duration_ms": 1}
+		]
+	})
+	if not bool(mouse_input_result.get("success", false)):
+		return _failure("Runtime command service mouse input request failed: %s" % str(mouse_input_result))
+	if _input_events.size() != 3:
+		return _failure("Runtime mouse input should dispatch one motion event and two button events.")
+	if not (_input_events[0] is InputEventMouseMotion) or Vector2((_input_events[0] as InputEventMouseMotion).position) != Vector2(24, 36):
+		return _failure("Runtime mouse move should dispatch a motion event at the requested position.")
+	if not (_input_events[1] is InputEventMouseButton) or not bool((_input_events[1] as InputEventMouseButton).pressed):
+		return _failure("Runtime mouse click should dispatch a pressed mouse button event.")
+	if not (_input_events[2] is InputEventMouseButton) or bool((_input_events[2] as InputEventMouseButton).pressed):
+		return _failure("Runtime mouse click should dispatch a released mouse button event.")
+	if int((_input_events[1] as InputEventMouseButton).button_index) != MOUSE_BUTTON_LEFT:
+		return _failure("Runtime mouse click should preserve the requested mouse button.")
+	if int((_input_events[1] as InputEventMouseButton).button_mask) != (1 << (MOUSE_BUTTON_LEFT - 1)):
+		return _failure("Runtime mouse click should set the press button_mask for Input.parse_input_event.")
+	if int((_input_events[2] as InputEventMouseButton).button_mask) != 0:
+		return _failure("Runtime mouse click should clear the release button_mask.")
+	if Vector2((_input_events[1] as InputEventMouseButton).position) != Vector2(24, 36):
+		return _failure("Runtime mouse click should preserve the requested position.")
+	var mouse_input_data = mouse_input_result.get("data", {})
+	if not (mouse_input_data is Dictionary) or int(((mouse_input_data as Dictionary).get("inputs", []) as Array).size()) != 2:
+		return _failure("Runtime mouse input should report both executed entries.")
+
+	var missing_position_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [{"kind": "mouse", "target": "left", "op": "click"}]
+	})
+	if str(missing_position_result.get("error", "")) != "invalid_argument":
+		return _failure("Runtime mouse input should reject missing positions.")
+	var invalid_button_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [{"kind": "mouse", "button": "unknown", "op": "click", "x": 1, "y": 2}]
+	})
+	if str(invalid_button_result.get("error", "")) != "invalid_argument":
+		return _failure("Runtime mouse input should reject unknown mouse buttons.")
+	var partial_top_level_position_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [{"kind": "mouse", "button": "left", "op": "click", "x": 1}]
+	})
+	if str(partial_top_level_position_result.get("error", "")) != "invalid_argument":
+		return _failure("Runtime mouse input should reject partial top-level coordinates.")
+	var partial_dictionary_position_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [{"kind": "mouse", "button": "left", "op": "click", "position": {"x": 1}}]
+	})
+	if str(partial_dictionary_position_result.get("error", "")) != "invalid_argument":
+		return _failure("Runtime mouse input should reject partial position dictionaries.")
+	var non_numeric_position_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [{"kind": "mouse", "button": "left", "op": "click", "x": "left", "y": 2}]
+	})
+	if str(non_numeric_position_result.get("error", "")) != "invalid_argument":
+		return _failure("Runtime mouse input should reject non-numeric coordinates.")
+
+	var too_many_capture_frames: Dictionary = await _service.execute_action_async(5, "capture", {
+		"frame_count": 25
+	})
+	if str(too_many_capture_frames.get("error", "")) != "invalid_argument":
+		return _failure("Runtime capture should reject frame_count values above the bounded automation budget.")
+	if int((too_many_capture_frames.get("data", {}) as Dictionary).get("max_frame_count", 0)) != 24:
+		return _failure("Runtime capture frame_count rejection should expose the maximum budget.")
+	var too_many_interval_frames: Dictionary = await _service.execute_action_async(5, "capture", {
+		"frame_count": 2,
+		"interval_frames": 301
+	})
+	if str(too_many_interval_frames.get("error", "")) != "invalid_argument":
+		return _failure("Runtime capture should reject interval_frames values above the bounded automation budget.")
+	if int((too_many_interval_frames.get("data", {}) as Dictionary).get("max_interval_frames", 0)) != 300:
+		return _failure("Runtime capture interval_frames rejection should expose the maximum budget.")
+	var too_many_step_wait_frames: Dictionary = await _service.execute_action_async(5, "step", {
+		"wait_frames": 301,
+		"capture": false,
+		"inputs": [{"kind": "key", "target": "A", "op": "press"}]
+	})
+	if str(too_many_step_wait_frames.get("error", "")) != "invalid_argument":
+		return _failure("Runtime step should reject wait_frames values above the bounded automation budget.")
+	if int((too_many_step_wait_frames.get("data", {}) as Dictionary).get("max_wait_frames", 0)) != 300:
+		return _failure("Runtime step wait_frames rejection should expose the maximum budget.")
+	if _input_events.size() != 3:
+		return _failure("Runtime step should reject wait_frames budget violations before dispatching input side effects.")
+	var too_many_inputs := []
+	for index in range(65):
+		too_many_inputs.append({"kind": "key", "target": "A", "op": "press"})
+	var too_many_inputs_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": too_many_inputs
+	})
+	if str(too_many_inputs_result.get("error", "")) != "invalid_argument":
+		return _failure("Runtime input should reject requests above the bounded input count.")
+	if int((too_many_inputs_result.get("data", {}) as Dictionary).get("max_inputs", 0)) != 64:
+		return _failure("Runtime input count rejection should expose the maximum budget.")
+	var too_long_input_duration: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [{"kind": "key", "target": "A", "op": "hold", "duration_ms": 5001}]
+	})
+	if str(too_long_input_duration.get("error", "")) != "invalid_argument":
+		return _failure("Runtime input should reject hold/tap/click duration values above the bounded wait budget.")
+	if int((too_long_input_duration.get("data", {}) as Dictionary).get("max_duration_ms", 0)) != 5000:
+		return _failure("Runtime input duration rejection should expose the maximum budget.")
+	var large_press_duration_result: Dictionary = await _service.execute_action_async(5, "input", {
+		"inputs": [{"kind": "key", "target": "A", "op": "press", "duration_ms": 999999}]
+	})
+	if not bool(large_press_duration_result.get("success", false)):
+		return _failure("Runtime input should ignore large duration_ms on non-waiting press operations.")
+
 	return {
 		"name": "runtime_command_service_contracts",
 		"success": true,
@@ -104,6 +211,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 			"user_path": user_path,
 			"width": int(capture_data.get("width", 0)),
 			"height": int(capture_data.get("height", 0)),
+			"mouse_events": _input_events.size(),
 			"skip_reason": str((skipped_data as Dictionary).get("skip_reason", ""))
 		}
 	}
@@ -115,6 +223,7 @@ func cleanup_case(_tree_arg: SceneTree) -> void:
 	_cleanup_capture_dir()
 	_tree = null
 	_viewport = null
+	_input_events.clear()
 
 
 func _get_tree() -> SceneTree:
@@ -135,6 +244,10 @@ func _build_runtime_state(session_id: int) -> Dictionary:
 		"session_id": session_id,
 		"scene": _get_current_scene_path()
 	}
+
+
+func _record_input_event(event: InputEvent) -> void:
+	_input_events.append(event)
 
 
 func _capture_available() -> Dictionary:

@@ -5,7 +5,9 @@ class_name SettingsStore
 const PluginRuntimeState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_runtime_state.gd")
 const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/system_tree_catalog.gd")
 const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tree_collapse_state.gd")
+const FileWriteTransaction = preload("res://addons/godot_dotnet_mcp/plugin/config/file_write_transaction.gd")
 const TOOL_CONFIG_EXCHANGE_ROOT := "user://godot_dotnet_mcp/config_exchange"
+const UPDATE_COMMIT_HISTORY_CACHE_LIMIT := 8
 
 
 func load_plugin_settings(default_settings: Dictionary, settings_path: String, all_categories: Array, default_domains: Array) -> Dictionary:
@@ -59,12 +61,65 @@ func _normalize_update_source(source: String) -> String:
 
 
 func save_plugin_settings(settings_path: String, settings: Dictionary) -> void:
-	var settings_dir := settings_path.get_base_dir()
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(settings_dir))
-	var file = FileAccess.open(settings_path, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(settings, "\t"))
-		file.close()
+	var write_result := _write_json_file_atomically(settings_path, settings)
+	if not bool(write_result.get("success", false)):
+		push_warning("[MCP] Failed to persist plugin settings: %s" % str(write_result))
+
+
+func load_update_refs_cache(cache_path: String) -> Dictionary:
+	if not FileAccess.file_exists(cache_path):
+		return {}
+	var file := FileAccess.open(cache_path, FileAccess.READ)
+	if file == null:
+		return {}
+	var json := JSON.new()
+	var text := file.get_as_text()
+	file.close()
+	if json.parse(text) != OK:
+		return {}
+	var data = json.get_data()
+	if not (data is Dictionary):
+		return {}
+	return normalize_update_refs_cache(data as Dictionary)
+
+
+func save_update_refs_cache(cache_path: String, cache: Dictionary) -> void:
+	var normalized := normalize_update_refs_cache(cache)
+	if normalized.is_empty():
+		_remove_file_if_exists(cache_path)
+		return
+	var write_result := _write_json_file_atomically(cache_path, normalized)
+	if not bool(write_result.get("success", false)):
+		push_warning("[MCP] Failed to persist update refs cache: %s" % str(write_result))
+
+
+func normalize_update_refs_cache(cache: Dictionary) -> Dictionary:
+	var branches := _normalize_string_array(cache.get("branches", []))
+	var releases := _normalize_string_array(cache.get("releases", []))
+	var commits := _normalize_string_dictionary(cache.get("commits", {}))
+	var versions := _normalize_string_dictionary(cache.get("versions", {}))
+	var release_rows := _normalize_update_ref_rows(cache.get("release_rows", []))
+	var branch_commit_rows := _normalize_update_branch_commit_rows(cache.get("branch_commit_rows", {}))
+	var commit_histories := _normalize_update_commit_histories(cache.get("commit_histories", {}))
+	if branches.is_empty() and releases.is_empty() and commits.is_empty() and release_rows.is_empty() and branch_commit_rows.is_empty() and commit_histories.is_empty():
+		return {}
+	return {
+		"format_version": 3,
+		"saved_unix": int(cache.get("saved_unix", 0)),
+		"last_checked_unix": int(cache.get("last_checked_unix", 0)),
+		"last_trigger": str(cache.get("last_trigger", "")).strip_edges(),
+		"last_http_status": int(cache.get("last_http_status", 0)),
+		"branches": branches,
+		"releases": releases,
+		"latest_stable_release": str(cache.get("latest_stable_release", "")).strip_edges(),
+		"latest_release": str(cache.get("latest_release", "")).strip_edges(),
+		"release_source": str(cache.get("release_source", "")).strip_edges(),
+		"commits": commits,
+		"versions": versions,
+		"release_rows": release_rows,
+		"branch_commit_rows": branch_commit_rows,
+		"commit_histories": commit_histories
+	}
 
 
 func load_custom_profiles(profile_dir: String) -> Dictionary:
@@ -112,27 +167,14 @@ func load_custom_profiles(profile_dir: String) -> Dictionary:
 
 
 func save_custom_profile(profile_dir: String, profile_name: String, disabled_tools: Array) -> Dictionary:
-	var user_dir = DirAccess.open("user://")
-	if user_dir == null:
-		return {"success": false}
-
-	var relative_dir = profile_dir.trim_prefix("user://")
-	if not user_dir.dir_exists(relative_dir):
-		var dir_error = user_dir.make_dir_recursive(relative_dir)
-		if dir_error != OK:
-			return {"success": false}
-
 	var slug = _slugify_profile_name(profile_name)
 	var file_path = _build_profile_file_path(profile_dir, slug)
-	var file = FileAccess.open(file_path, FileAccess.WRITE)
-	if file == null:
-		return {"success": false}
-
-	file.store_string(JSON.stringify({
+	var write_result := _write_json_file_atomically(file_path, {
 		"name": profile_name,
 		"disabled_tools": disabled_tools
-	}, "\t"))
-	file.close()
+	})
+	if not bool(write_result.get("success", false)):
+		return {"success": false, "error_code": "profile_write_failed", "file_path": file_path}
 
 	return {
 		"success": true,
@@ -221,20 +263,13 @@ func export_tool_config(file_path: String, profile_id: String, disabled_tools: A
 	if normalized_path.is_empty():
 		return {"success": false, "error_code": "config_path_required"}
 
-	var ensure_result = _ensure_parent_dir(normalized_path)
-	if not bool(ensure_result.get("success", false)):
-		return ensure_result
-
-	var file = FileAccess.open(normalized_path, FileAccess.WRITE)
-	if file == null:
-		return {"success": false, "error_code": "config_write_failed", "file_path": normalized_path}
-
-	file.store_string(JSON.stringify({
+	var write_result := _write_json_file_atomically(normalized_path, {
 		"format_version": 1,
 		"profile_id": profile_id,
 		"disabled_tools": disabled_tools.duplicate()
-	}, "\t"))
-	file.close()
+	})
+	if not bool(write_result.get("success", false)):
+		return {"success": false, "error_code": "config_write_failed", "file_path": normalized_path}
 
 	return {"success": true, "file_path": normalized_path}
 
@@ -348,22 +383,99 @@ func _read_custom_profile_file(file_path: String) -> Dictionary:
 	return {"success": true, "data": data}
 
 
-func _ensure_parent_dir(file_path: String) -> Dictionary:
-	var dir_path = file_path.get_base_dir()
-	if dir_path.is_empty() or dir_path == ".":
-		return {"success": true}
+func _write_json_file_atomically(file_path: String, payload: Dictionary) -> Dictionary:
+	var text := JSON.stringify(payload, "\t")
+	return FileWriteTransaction.write_text_atomically(file_path, text)
 
-	var absolute_dir = ProjectSettings.globalize_path(dir_path)
-	if DirAccess.dir_exists_absolute(absolute_dir):
-		return {"success": true}
 
-	var error = DirAccess.make_dir_recursive_absolute(absolute_dir)
+func _remove_file_if_exists(file_path: String) -> void:
+	if not FileAccess.file_exists(file_path):
+		return
+	var error := DirAccess.remove_absolute(ProjectSettings.globalize_path(file_path))
 	if error != OK:
-		return {
-			"success": false,
-			"error_code": "config_dir_create_failed",
-			"dir_path": dir_path,
-			"file_path": file_path
-		}
+		push_warning("[MCP] Failed to remove stale update refs cache: %s" % error)
 
-	return {"success": true}
+
+func _normalize_string_array(raw_values) -> Array[String]:
+	var values: Array[String] = []
+	if not (raw_values is Array):
+		return values
+	for raw_value in raw_values:
+		var value := str(raw_value).strip_edges()
+		if value.is_empty() or values.has(value):
+			continue
+		values.append(value)
+	return values
+
+
+func _normalize_string_dictionary(raw_value) -> Dictionary:
+	var result := {}
+	if not (raw_value is Dictionary):
+		return result
+	for raw_key in (raw_value as Dictionary).keys():
+		var key := str(raw_key).strip_edges()
+		var value := str((raw_value as Dictionary).get(raw_key, "")).strip_edges()
+		if key.is_empty() or value.is_empty():
+			continue
+		result[key] = value
+	return result
+
+
+func _normalize_update_ref_rows(raw_rows) -> Array:
+	var rows: Array = []
+	if not (raw_rows is Array):
+		return rows
+	for raw_row in raw_rows as Array:
+		if not (raw_row is Dictionary):
+			continue
+		var row := raw_row as Dictionary
+		var target_ref := str(row.get("ref", "")).strip_edges()
+		if target_ref.is_empty():
+			continue
+		rows.append({
+			"kind": str(row.get("kind", "tag")).strip_edges(),
+			"ref": target_ref,
+			"commit": str(row.get("commit", "")).strip_edges(),
+			"title": str(row.get("title", target_ref)).strip_edges(),
+			"date": str(row.get("date", "")).strip_edges(),
+			"stable": bool(row.get("stable", false))
+		})
+	return rows
+
+
+func _normalize_update_branch_commit_rows(raw_rows) -> Dictionary:
+	var rows := {}
+	if not (raw_rows is Dictionary):
+		return rows
+	for raw_key in (raw_rows as Dictionary).keys():
+		var branch := str(raw_key).strip_edges()
+		if branch.is_empty():
+			continue
+		var branch_rows := _normalize_update_ref_rows((raw_rows as Dictionary).get(raw_key, []))
+		if not branch_rows.is_empty():
+			rows[branch] = branch_rows
+	return rows
+
+
+func _normalize_update_commit_histories(raw_histories) -> Dictionary:
+	var result := {}
+	if not (raw_histories is Dictionary):
+		return result
+	for raw_key in (raw_histories as Dictionary).keys():
+		if result.size() >= UPDATE_COMMIT_HISTORY_CACHE_LIMIT:
+			break
+		var value = (raw_histories as Dictionary).get(raw_key, {})
+		if not (value is Dictionary):
+			continue
+		var entry := value as Dictionary
+		var head_commit := str(entry.get("head_commit", raw_key)).strip_edges()
+		var commits := _normalize_string_array(entry.get("commits", []))
+		if head_commit.is_empty() or commits.is_empty() or not commits.has(head_commit) or not bool(entry.get("complete", false)):
+			continue
+		result[head_commit] = {
+			"head_commit": head_commit,
+			"commits": commits,
+			"complete": true,
+			"checked_unix": int(entry.get("checked_unix", 0))
+		}
+	return result

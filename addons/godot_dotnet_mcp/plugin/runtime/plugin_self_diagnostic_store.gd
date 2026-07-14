@@ -23,6 +23,7 @@ const OPERATION_KIND_THRESHOLDS := {
 
 static var _incidents: Array[Dictionary] = []
 static var _operations: Array[Dictionary] = []
+static var _incident_index_by_dedupe_key: Dictionary = {}
 static var _next_incident_id := 1
 static var _next_operation_id := 1
 
@@ -30,6 +31,7 @@ static var _next_operation_id := 1
 static func clear() -> void:
 	_incidents.clear()
 	_operations.clear()
+	_incident_index_by_dedupe_key.clear()
 	_next_incident_id = 1
 	_next_operation_id = 1
 
@@ -154,10 +156,9 @@ static func record_incident(
 	var now_unix = int(Time.get_unix_time_from_system())
 	var now_text = Time.get_datetime_string_from_system(true, true)
 
-	for index in range(_incidents.size() - 1, -1, -1):
-		var existing := _incidents[index]
-		if str(existing.get("dedupe_key", "")) != dedupe_key:
-			continue
+	var existing_index := _find_incident_index(dedupe_key)
+	if existing_index >= 0:
+		var existing := _incidents[existing_index]
 		existing["timestamp_unix"] = now_unix
 		existing["timestamp_text"] = now_text
 		existing["last_seen_unix"] = now_unix
@@ -175,7 +176,7 @@ static func record_incident(
 		existing["recoverable"] = recoverable
 		existing["suggested_action"] = suggested_action
 		existing["context"] = context.duplicate(true)
-		_incidents[index] = existing
+		_incidents[existing_index] = existing
 		return existing.duplicate(true)
 
 	var incident := {
@@ -204,6 +205,7 @@ static func record_incident(
 	}
 	_next_incident_id += 1
 	_incidents.append(incident)
+	_incident_index_by_dedupe_key[dedupe_key] = _incidents.size() - 1
 	_trim_incidents()
 	return incident.duplicate(true)
 
@@ -464,13 +466,39 @@ static func _apply_limit(items: Array[Dictionary], limit: int) -> Array[Dictiona
 
 
 static func _trim_incidents() -> void:
-	if _incidents.size() > MAX_INCIDENTS:
-		_incidents = _incidents.slice(_incidents.size() - MAX_INCIDENTS)
+	var trimmed := false
+	while _incidents.size() > MAX_INCIDENTS:
+		var removed = _incidents.pop_front()
+		if removed is Dictionary:
+			_incident_index_by_dedupe_key.erase(str((removed as Dictionary).get("dedupe_key", "")))
+		trimmed = true
+	if trimmed:
+		_rebuild_incident_index()
 
 
 static func _trim_operations() -> void:
-	if _operations.size() > MAX_OPERATIONS:
-		_operations = _operations.slice(_operations.size() - MAX_OPERATIONS)
+	while _operations.size() > MAX_OPERATIONS:
+		_operations.pop_front()
+
+
+static func _rebuild_incident_index() -> void:
+	_incident_index_by_dedupe_key.clear()
+	for index in range(_incidents.size()):
+		var incident := _incidents[index]
+		_incident_index_by_dedupe_key[str(incident.get("dedupe_key", ""))] = index
+
+
+static func _find_incident_index(dedupe_key: String) -> int:
+	if not _incident_index_by_dedupe_key.has(dedupe_key):
+		return -1
+	var index := int(_incident_index_by_dedupe_key.get(dedupe_key, -1))
+	if index >= 0 and index < _incidents.size() and str(_incidents[index].get("dedupe_key", "")) == dedupe_key:
+		return index
+	_rebuild_incident_index()
+	index = int(_incident_index_by_dedupe_key.get(dedupe_key, -1))
+	if index >= 0 and index < _incidents.size() and str(_incidents[index].get("dedupe_key", "")) == dedupe_key:
+		return index
+	return -1
 
 
 static func _sort_timeline_desc(a: Dictionary, b: Dictionary) -> bool:

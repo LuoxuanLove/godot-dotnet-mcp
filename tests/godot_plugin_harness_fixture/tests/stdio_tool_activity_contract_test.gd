@@ -3,6 +3,7 @@ extends RefCounted
 # {"name": "stdio_tool_activity_contracts"}
 
 const StdioServerScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_server.gd")
+const StdioContextBuilderScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_service_context_builder.gd")
 const ToolActivityRegistryScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_tool_activity_registry.gd")
 
 
@@ -21,7 +22,8 @@ class FakeToolLoader:
 		}, {
 			"name": "system_project_lifecycle",
 			"category": "system",
-			"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["start", "stop"]}}}
+			"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["start", "stop"]}}},
+			"outputSchema": {"type": "object", "properties": {"success": {"type": "boolean"}, "data": {"type": "object"}}}
 		}]
 
 	func get_exposed_tool_definitions() -> Array:
@@ -32,11 +34,15 @@ class FakeToolLoader:
 		}, {
 			"name": "system_project_lifecycle",
 			"category": "system",
-			"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["start", "stop"]}}}
+			"inputSchema": {"type": "object", "properties": {"action": {"type": "string", "enum": ["start", "stop"]}}},
+			"outputSchema": {"type": "object", "properties": {"success": {"type": "boolean"}, "data": {"type": "object"}}}
 		}]
 
 	func get_domain_states() -> Array:
 		return [{"category": "system", "status": "ready"}]
+
+	func is_tool_enabled(tool_name: String) -> bool:
+		return not disabled_tools.has(tool_name)
 
 	func is_tool_exposed(tool_name: String) -> bool:
 		if disabled_tools.has(tool_name):
@@ -68,6 +74,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var loader = FakeToolLoader.new()
 	var stdio_server = StdioServerScript.new()
 	stdio_server.initialize(loader, false)
+	stdio_server.call("set_stdout_writes_suppressed_for_testing", true)
 
 	var response: Dictionary = await stdio_server.call("_handle_tools_call", {
 		"name": "system_project_state",
@@ -93,6 +100,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var parsed_dict: Dictionary = parsed
 	if not bool(parsed_dict.get("success", false)):
 		return _failure("Stdio tools/call should preserve successful tool results.")
+	var structured = (result as Dictionary).get("structuredContent", {})
+	if not (structured is Dictionary):
+		return _failure("Stdio tools/call should expose structuredContent when tools/list advertises an outputSchema.")
+	if JSON.stringify((structured as Dictionary).get("data", {})) != JSON.stringify(parsed_dict.get("data", {})):
+		return _failure("Stdio tools/call structuredContent should mirror the text JSON data for advertised output schemas.")
 	if not (parsed_dict.get("activity", {}) is Dictionary) or str((parsed_dict.get("activity", {}) as Dictionary).get("call_id", "")).is_empty():
 		return _failure("Stdio tools/call should preserve loader activity summaries.")
 	if loader.executed_arguments.has("_mcp_context"):
@@ -118,9 +130,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var lifecycle_payload = JSON.parse_string(str(((lifecycle_content as Array)[0] as Dictionary).get("text", "")))
 	if not (lifecycle_payload is Dictionary):
 		return _failure("Stdio lifecycle call should serialize a JSON object payload.")
+	var lifecycle_structured = (lifecycle_result as Dictionary).get("structuredContent", {})
+	if not (lifecycle_structured is Dictionary):
+		return _failure("Stdio lifecycle call should expose structuredContent when tools/list advertises an outputSchema.")
 	var lifecycle_data = (lifecycle_payload as Dictionary).get("data", {})
 	if not (lifecycle_data is Dictionary) or str((lifecycle_data as Dictionary).get("tool", "")) != "project_lifecycle":
 		return _failure("Stdio lifecycle call should resolve system_project_lifecycle to project_lifecycle.")
+	var lifecycle_structured_data = (lifecycle_structured as Dictionary).get("data", {})
+	if not (lifecycle_structured_data is Dictionary) or str((lifecycle_structured_data as Dictionary).get("tool", "")) != "project_lifecycle":
+		return _failure("Stdio lifecycle structuredContent should preserve the resolved tool name.")
 
 	for removed_tool_name in ["system_project_run", "system_project_stop"]:
 		var removed_response: Dictionary = await stdio_server.call("_handle_tools_call", {
@@ -130,6 +148,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		var removed_result = removed_response.get("result", {})
 		if not (removed_result is Dictionary) or not bool((removed_result as Dictionary).get("isError", false)):
 			return _failure("Stdio tools/call should reject removed project lifecycle entry '%s'." % removed_tool_name)
+		if (removed_result as Dictionary).has("structuredContent"):
+			return _failure("Stdio removed tool errors without outputSchema should not expose structuredContent for '%s'." % removed_tool_name)
+		var removed_payload := _tool_result_payload(removed_result as Dictionary)
+		if bool(removed_payload.get("success", true)):
+			return _failure("Stdio removed tool errors should expose a failing text JSON payload for '%s'." % removed_tool_name)
 
 	loader.disabled_tools["system_project_lifecycle"] = true
 	var disabled_lifecycle_response: Dictionary = await stdio_server.call("_handle_tools_call", {
@@ -139,7 +162,33 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var disabled_lifecycle_result = disabled_lifecycle_response.get("result", {})
 	if not (disabled_lifecycle_result is Dictionary) or not bool((disabled_lifecycle_result as Dictionary).get("isError", false)):
 		return _failure("Stdio tools/call should reject system_project_lifecycle when disabled.")
+	var disabled_lifecycle_structured = (disabled_lifecycle_result as Dictionary).get("structuredContent", {})
+	if not (disabled_lifecycle_structured is Dictionary) or bool((disabled_lifecycle_structured as Dictionary).get("success", true)):
+		return _failure("Stdio disabled tool errors should expose failing structuredContent.")
+	if str((disabled_lifecycle_structured as Dictionary).get("error", "")).find("disabled") == -1:
+		return _failure("Stdio disabled tool errors should use loader enabled-state semantics before exposure checks.")
 	loader.disabled_tools.clear()
+
+	stdio_server.start()
+	stdio_server.set("_last_written_response", {})
+	await stdio_server._handle_request(JSON.stringify({
+		"jsonrpc": "2.0",
+		"id": 45,
+		"method": "tools/call",
+		"params": {
+			"name": "system_project_state",
+			"arguments": []
+		}
+	}))
+	var invalid_arguments_request_response = stdio_server.get("_last_written_response")
+	stdio_server.stop()
+	if not (invalid_arguments_request_response is Dictionary):
+		return _failure("Stdio full request path should record non-object tool arguments response.")
+	var invalid_arguments_request_error = (invalid_arguments_request_response as Dictionary).get("error", {})
+	if not (invalid_arguments_request_error is Dictionary):
+		return _failure("Stdio full request path should return JSON-RPC invalid params for non-object tool arguments.")
+	if int((invalid_arguments_request_error as Dictionary).get("code", 0)) != -32602:
+		return _failure("Stdio full request path should classify non-object tool arguments as -32602 Invalid params.")
 
 	var plain_activity_result: Dictionary = stdio_server.call("_normalize_tool_result", {
 		"success": true,
@@ -148,12 +197,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		},
 		"plain": "value"
 	})
-	stdio_server.free()
 	if plain_activity_result.has("activity"):
 		return _failure("Stdio normalizer should reserve top-level activity only for protocol activity summaries.")
 	var plain_activity_data = plain_activity_result.get("data", {})
 	if not (plain_activity_data is Dictionary) or not (((plain_activity_data as Dictionary).get("activity", {}) as Dictionary).get("user_supplied", false)):
 		return _failure("Stdio normalizer should move non-protocol tool activity fields into data.")
+
+	var context_guard := _verify_stdio_context_builder_guard(stdio_server)
+	stdio_server.free()
+	if not bool(context_guard.get("success", false)):
+		return context_guard
 
 	return {
 		"name": "stdio_tool_activity_contracts",
@@ -164,6 +217,121 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			"recent_count": int(status.get("recent_count", 0))
 		}
 	}
+
+
+func _verify_stdio_context_builder_guard(stdio_server) -> Dictionary:
+	var builder = StdioContextBuilderScript.new()
+	var router_context = builder.build_tool_rpc_router_context(stdio_server, stdio_server.call("_get_stdio_tool_activity_registry"))
+	if router_context == null or not router_context.get_tool_loader.is_valid():
+		return _failure("Stdio context builder should produce a tool router context with a loader callable.")
+	if router_context.tool_activity_registry == null:
+		return _failure("Stdio context builder should preserve the shared tool activity registry.")
+	var resources_context = builder.build_resources_service_context(stdio_server)
+	if resources_context == null or not resources_context.get_tool_loader_status.is_valid() or not resources_context.sanitize_for_json.is_valid():
+		return _failure("Stdio context builder should produce resource service status and sanitization callables.")
+	var prompts_context = builder.build_prompts_service_context(stdio_server)
+	if prompts_context == null or not prompts_context.get_tool_loader_status.is_valid():
+		return _failure("Stdio context builder should produce prompt service status callables.")
+	var stdio_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_server.gd")
+	for forbidden in [
+		"MCPResourcesServiceScript",
+		"MCPPromptsServiceScript",
+		"MCPToolRpcRouterScript",
+		"ToolPresentationService",
+		"MCPResourcesServiceContextScript",
+		"MCPPromptsServiceContextScript",
+		"MCPToolRpcRouterContextScript",
+		"func _create_tool_response",
+		"func _resolve_tool_call_name",
+		"_resources_service",
+		"_prompts_service",
+		"_tool_rpc_router",
+		"_context_builder",
+		".new()\n\tresources_context",
+		".new()\n\tprompts_context",
+		".new()\n\trouter_context"
+	]:
+		if stdio_source.find(forbidden) != -1:
+			return _failure("mcp_stdio_server.gd should delegate context construction to MCPStdioServiceContextBuilder, but still contains '%s'." % forbidden)
+	for required_server in [
+		"MCPStdioServiceBundleScript",
+		"_service_bundle.handle_request_async(",
+		"_service_bundle.handle_tools_call_async(",
+		"_service_bundle.handle_resources_read(",
+		"_service_bundle.handle_prompts_get("
+	]:
+		if stdio_source.find(required_server) == -1:
+			return _failure("mcp_stdio_server.gd should delegate stdio service handling to MCPStdioServiceBundle: missing '%s'." % required_server)
+	var builder_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_service_context_builder.gd")
+	for required in [
+		"MCPResourcesServiceContextScript",
+		"MCPPromptsServiceContextScript",
+		"MCPToolRpcRouterContextScript",
+		"func build_tool_rpc_router_context",
+		"func build_resources_service_context",
+		"func build_prompts_service_context"
+	]:
+		if builder_source.find(required) == -1:
+			return _failure("MCPStdioServiceContextBuilder should own stdio context construction: missing '%s'." % required)
+	var bundle_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_service_bundle.gd")
+	for required_bundle in [
+		"MCPResourcesServiceScript",
+		"MCPPromptsServiceScript",
+		"MCPToolRpcRouterScript",
+		"MCPStdioJsonRpcServiceScript",
+		"MCPJsonRpcRequestServiceScript",
+		"MCPJsonRpcRouterScript",
+		"MCPJsonRpcMethodServiceScript",
+		"func handle_request_async",
+		"func handle_tools_call_async",
+		"func get_stdio_tool_loader_status"
+	]:
+		if bundle_source.find(required_bundle) == -1:
+			return _failure("MCPStdioServiceBundle should own stdio service assembly: missing '%s'." % required_bundle)
+	var json_rpc_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_stdio_json_rpc_service.gd")
+	for required_json_rpc in [
+		"func handle_request_async",
+		"_json_rpc_request_service.handle_request_async",
+		"_json_rpc_router.route_request_async",
+		"_json_rpc_method_service.handle_tools_list",
+		"_json_rpc_method_service.handle_resources_read",
+		"_json_rpc_method_service.handle_prompts_get"
+	]:
+		if json_rpc_source.find(required_json_rpc) == -1:
+			return _failure("MCPStdioJsonRpcService should delegate stdio JSON-RPC semantics to the shared request/router/method stack: missing '%s'." % required_json_rpc)
+	for forbidden_json_rpc in [
+		"match method",
+		"\"initialize\":",
+		"\"resources/read\":",
+		"\"prompts/get\":"
+	]:
+		if json_rpc_source.find(forbidden_json_rpc) != -1:
+			return _failure("MCPStdioJsonRpcService should not own stdio JSON-RPC method dispatch anymore: found '%s'." % forbidden_json_rpc)
+	for retained_helper in [
+		"func handle_tools_list",
+		"func handle_tools_call_async",
+		"func handle_resources_read",
+		"func handle_prompts_get"
+	]:
+		if json_rpc_source.find(retained_helper) == -1:
+			return _failure("MCPStdioJsonRpcService should retain compatibility helper '%s' for focused stdio harness probes." % retained_helper)
+	return {"success": true, "error": ""}
+
+
+func _tool_result_payload(result: Dictionary) -> Dictionary:
+	var structured = result.get("structuredContent", null)
+	if structured is Dictionary:
+		return structured as Dictionary
+	var content = result.get("content", [])
+	if not (content is Array) or (content as Array).is_empty():
+		return {}
+	var first = (content as Array)[0]
+	if not (first is Dictionary):
+		return {}
+	var parsed = JSON.parse_string(str((first as Dictionary).get("text", "")))
+	if parsed is Dictionary:
+		return parsed as Dictionary
+	return {}
 
 
 func _failure(message: String) -> Dictionary:

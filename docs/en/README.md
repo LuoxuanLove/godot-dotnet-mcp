@@ -2,12 +2,12 @@
   <a href="#godot-net-mcp"><img src="../../asset_library/hero.svg" alt="GODOT .NET MCP - Editor-native MCP bridge for Godot .NET" width="960"></a>
 </div>
 
-<p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest"><img alt="Latest Stable" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%2Flatest&amp;query=%24.tag_name&amp;label=stable&amp;color=f59e0b&amp;style=flat-square&amp;labelColor=24292f"></a> <a href="https://godotengine.org/"><img alt="Godot 4.6+" src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?style=flat-square&amp;labelColor=24292f"></a> <a href="https://dotnet.microsoft.com/"><img alt=".NET 8" src="https://img.shields.io/badge/.NET-8-512bd4?style=flat-square&amp;labelColor=24292f"></a> <a href="https://godotengine.org/asset-library/asset/4923"><img alt="Godot Asset Library 4923" src="https://img.shields.io/badge/Godot%20Asset%20Library-4923-478cbf?style=flat-square&amp;labelColor=24292f"></a> <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square&amp;labelColor=24292f"></p>
+<p align="center"><a href="https://github.com/LuoxuanLove/godot-dotnet-mcp/releases/latest"><img alt="Latest Stable" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FLuoxuanLove%2Fgodot-dotnet-mcp%2Freleases%2Flatest&amp;query=%24.tag_name&amp;label=stable&amp;color=f59e0b&amp;style=flat-square&amp;labelColor=24292f"></a> <a href="https://godotengine.org/"><img alt="Godot 4.6+" src="https://img.shields.io/badge/Godot-4.6%2B-478cbf?style=flat-square&amp;labelColor=24292f"></a> <a href="https://dotnet.microsoft.com/"><img alt=".NET 8" src="https://img.shields.io/badge/.NET-8-512bd4?style=flat-square&amp;labelColor=24292f"></a> <a href="https://godotengine.org/asset-library/asset/4923"><img alt="Godot Asset Library 4923" src="https://img.shields.io/badge/Godot%20Asset%20Library-4923-478cbf?style=flat-square&amp;labelColor=24292f"></a> <img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-22c55e?style=flat-square&amp;labelColor=24292f"></p>
 
 
-| Home | Tools | Config |
-|---|---|---|
-| ![Home dashboard](../../asset_library/home-en.png) | ![Tools browser](../../asset_library/tools-en.png) | ![Client config](../../asset_library/config-en.png) |
+| Home | Tools | Resources | Prompts | Config | Settings |
+|---|---|---|---|---|---|
+| ![Home dashboard](../../asset_library/home-en.png) | ![Tools browser](../../asset_library/tools-en.png) | MCP resource catalog | MCP workflow prompts | ![Client config](../../asset_library/config-en.png) | Plugin settings |
 
 # Godot .NET MCP
 
@@ -70,6 +70,7 @@ Then enable the plugin in `Project Settings > Plugins`.
 - [Change Log](CHANGELOG.md)
 - [Roadmap](ROADMAP.md)
 - [Documentation Overview](overview.md)
+- [Dock UI Style Guide](interface/dock-ui-style-guide.md)
 - [Server and Config Pages](interface/server-and-config-pages.md)
 - [Tools Page](interface/tools-page.md)
 - [Release Runbook](process/release-runbook.md)
@@ -88,15 +89,6 @@ After reading this far, why not try Godot .NET MCP? I will keep studying the bes
 
 Does that sound arrogant? Maybe. If you have a better idea, send a PR. It is welcome.
 
-## Real Project Validation
-
-<table>
-  <tr>
-    <td width="38%" valign="top"><a href="https://github.com/LuoxuanLove/CoGDSex"><img src="https://github.com/LuoxuanLove/CoGDSex/blob/main/resources/godex-workbench.png?raw=1" alt="CoGDSex Godex workbench screenshot" width="420"></a></td>
-    <td valign="top"><a href="https://github.com/LuoxuanLove/CoGDSex">LuoxuanLove/CoGDSex</a> is a public Godot .NET game project that records its real development process. It also shows Godot .NET MCP being used against a substantial codebase and editor workflow, validating practical project capability and stability while feeding concrete improvement points back into future plugin features.</td>
-  </tr>
-</table>
-
 ## License
 
-MIT. See LICENSE.
+Apache-2.0. See LICENSE.

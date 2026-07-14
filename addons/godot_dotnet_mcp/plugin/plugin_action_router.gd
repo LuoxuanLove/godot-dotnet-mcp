@@ -27,8 +27,11 @@ func build_dock_signal_bindings() -> Array[Dictionary]:
 		{"signal": "language_changed", "callable": Callable(self, "language_changed")},
 		{"signal": "update_source_changed", "callable": Callable(self, "update_source_changed")},
 		{"signal": "update_custom_branch_changed", "callable": Callable(self, "update_custom_branch_changed")},
+		{"signal": "update_interaction_refresh_requested", "callable": Callable(self, "update_interaction_refresh_requested")},
 		{"signal": "update_check_requested", "callable": Callable(self, "update_check_requested")},
 		{"signal": "update_apply_requested", "callable": Callable(self, "update_apply_requested")},
+		{"signal": "update_compare_target_selected", "callable": Callable(self, "update_compare_target_selected")},
+		{"signal": "update_switch_requested", "callable": Callable(self, "update_switch_requested")},
 		{"signal": "start_requested", "callable": Callable(self, "start_requested")},
 		{"signal": "restart_requested", "callable": Callable(self, "restart_requested")},
 		{"signal": "stop_requested", "callable": Callable(self, "stop_requested")},
@@ -49,6 +52,7 @@ func build_dock_signal_bindings() -> Array[Dictionary]:
 		{"signal": "config_client_open_config_file_requested", "callable": Callable(self, "config_client_open_config_file_requested")},
 		{"signal": "config_write_requested", "callable": Callable(self, "config_write_requested")},
 		{"signal": "config_remove_requested", "callable": Callable(self, "config_remove_requested")},
+		{"signal": "mcp_catalog_preview_requested", "callable": Callable(self, "mcp_catalog_preview_requested")},
 		{"signal": "copy_requested", "callable": Callable(self, "copy_requested")}
 	]
 
@@ -77,6 +81,10 @@ func update_custom_branch_changed(branch: String) -> void:
 	_call_plugin_method("_on_update_custom_branch_changed", [branch])
 
 
+func update_interaction_refresh_requested() -> void:
+	_call_plugin_method("_on_update_interaction_refresh_requested")
+
+
 
 func update_check_requested() -> void:
 	_call_plugin_method("_on_update_check_requested")
@@ -84,6 +92,14 @@ func update_check_requested() -> void:
 
 func update_apply_requested() -> void:
 	_call_plugin_method("_on_update_sync_requested")
+
+
+func update_compare_target_selected(kind: String, target_ref: String, target_commit: String) -> void:
+	_call_plugin_method("_on_update_compare_target_selected", [kind, target_ref, target_commit])
+
+
+func update_switch_requested(kind: String, target_ref: String, target_commit: String) -> void:
+	_call_plugin_method("_on_update_switch_requested", [kind, target_ref, target_commit])
 
 
 func start_requested() -> void:
@@ -168,6 +184,10 @@ func config_remove_requested(config_type: String, filepath: String, client_name:
 
 func copy_requested(text: String, source: String) -> void:
 	_call_plugin_method("_on_copy_requested", [text, source])
+
+
+func mcp_catalog_preview_requested(kind: String, id: String, arguments: Dictionary) -> void:
+	_call_plugin_method("_on_mcp_catalog_preview_requested", [kind, id, arguments])
 
 
 func show_message(message: String) -> void:

@@ -1,0 +1,152 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/godot_dotnet_mcp/ui/mcp_catalog_tab.gd" id="1"]
+
+[node name="McpCatalogTab" type="VBoxContainer"]
+script = ExtResource("1")
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="HeaderCard" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="HeaderMargin" type="MarginContainer" parent="HeaderCard"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 10
+
+[node name="HeaderContent" type="VBoxContainer" parent="HeaderCard/HeaderMargin"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="HeaderCounts" type="Label" parent="HeaderCard/HeaderMargin/HeaderContent"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ContentSplit" type="VSplitContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+split_offsets = PackedInt32Array(-45)
+split_offset = -45
+
+[node name="TopPane" type="VBoxContainer" parent="ContentSplit"]
+clip_contents = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="SearchSeparator" type="HSeparator" parent="ContentSplit/TopPane"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SearchOuterMargin" type="MarginContainer" parent="ContentSplit/TopPane"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 6
+
+[node name="CatalogSearchEdit" type="LineEdit" parent="ContentSplit/TopPane/SearchOuterMargin"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="TreeOuterMargin" type="MarginContainer" parent="ContentSplit/TopPane"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 6
+
+[node name="CatalogTreePanel" type="PanelContainer" parent="ContentSplit/TopPane/TreeOuterMargin"]
+unique_name_in_owner = true
+clip_contents = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="CatalogTreeMargin" type="MarginContainer" parent="ContentSplit/TopPane/TreeOuterMargin/CatalogTreePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 0
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 0
+theme_override_constants/margin_bottom = 6
+
+[node name="CatalogTree" type="Tree" parent="ContentSplit/TopPane/TreeOuterMargin/CatalogTreePanel/CatalogTreeMargin"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+allow_reselect = true
+hide_root = true
+select_mode = 1
+
+[node name="PreviewSeparator" type="HSeparator" parent="ContentSplit/TopPane"]
+layout_mode = 2
+
+[node name="BottomPane" type="VBoxContainer" parent="ContentSplit"]
+clip_contents = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="PreviewOuterMargin" type="MarginContainer" parent="ContentSplit/BottomPane"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 6
+
+[node name="PreviewPanel" type="PanelContainer" parent="ContentSplit/BottomPane/PreviewOuterMargin"]
+unique_name_in_owner = true
+clip_contents = true
+custom_minimum_size = Vector2(0, 148)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="PreviewMargin" type="MarginContainer" parent="ContentSplit/BottomPane/PreviewOuterMargin/PreviewPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/margin_left = 0
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 0
+theme_override_constants/margin_bottom = 12
+
+[node name="PreviewContent" type="VBoxContainer" parent="ContentSplit/BottomPane/PreviewOuterMargin/PreviewPanel/PreviewMargin"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PreviewTitle" type="Label" parent="ContentSplit/BottomPane/PreviewOuterMargin/PreviewPanel/PreviewMargin/PreviewContent"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ArgumentInputs" type="VBoxContainer" parent="ContentSplit/BottomPane/PreviewOuterMargin/PreviewPanel/PreviewMargin/PreviewContent"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="PreviewText" type="TextEdit" parent="ContentSplit/BottomPane/PreviewOuterMargin/PreviewPanel/PreviewMargin/PreviewContent"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+editable = false
+wrap_mode = 1
+scroll_fit_content_width = true

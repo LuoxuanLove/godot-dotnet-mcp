@@ -3,9 +3,10 @@ extends RefCounted
 class_name PluginRuntimeState
 
 const ToolProfileCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_profile_catalog.gd")
-const MCPToolManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_manifest.gd")
+const ToolCatalogManifest = preload("res://addons/godot_dotnet_mcp/tools/tool_catalog_manifest.gd")
 
 const SETTINGS_PATH := "user://godot_dotnet_mcp/settings.json"
+const UPDATE_REFS_CACHE_PATH := "user://godot_dotnet_mcp/update_refs_cache.json"
 const TOOL_PROFILE_DIR := ToolProfileCatalog.PROFILE_STORAGE_DIR
 
 const DEFAULT_SETTINGS: Dictionary = {
@@ -26,21 +27,17 @@ const DEFAULT_SETTINGS: Dictionary = {
 	"update_release_tag": ""
 }
 
-const ALL_TOOL_CATEGORIES: Array[String] = MCPToolManifest.ALL_TOOL_CATEGORIES
+static var ALL_TOOL_CATEGORIES: Array[String] = ToolCatalogManifest.get_all_tool_categories()
 const DEFAULT_COLLAPSED_DOMAINS: Array[String] = []
 
 const BUILTIN_TOOL_PROFILES: Array[Dictionary] = ToolProfileCatalog.BUILTIN_TOOL_PROFILES
-const TOOL_DOMAIN_DEFS: Array[Dictionary] = MCPToolManifest.TOOL_DOMAIN_DEFS
+const TOOL_DOMAIN_DEFS: Array[Dictionary] = ToolCatalogManifest.TOOL_DOMAIN_DEFS
 const DEFAULT_COLLAPSED_SYSTEM_TOOLS: Array[String] = [
 	"system_bindings_audit",
-	"system_editor_log",
 	"system_editor_evidence",
 	"system_editor_state",
-	"system_help",
 	"system_inspector",
 	"system_plugin_maintenance",
-	"system_plugin_reload",
-	"system_plugin_update",
 	"system_project_configure",
 	"system_project_files",
 	"system_project_index_build",
@@ -50,12 +47,10 @@ const DEFAULT_COLLAPSED_SYSTEM_TOOLS: Array[String] = [
 	"system_runtime_control",
 	"system_runtime_diagnose",
 	"system_runtime_step",
-	"system_scene_analyze",
 	"system_scene_dependency_graph",
 	"system_scene_inspect",
 	"system_scene_patch",
 	"system_scene_tree",
-	"system_scene_validate",
 	"system_script_analyze",
 	"system_script_patch"
 ]
@@ -70,6 +65,10 @@ var needs_initial_tool_profile_apply := false
 var update_refs_state := "idle"
 var update_refs_status := ""
 var update_refs_error := ""
+var update_refs_refresh_state := "idle"
+var update_refs_refresh_error := ""
+var update_refs_last_checked_unix := 0
+var update_refs_refresh_serial := 0
 var update_ref_branches: Array[String] = []
 var update_ref_releases: Array[String] = []
 var update_ref_latest_stable_release := ""
@@ -77,18 +76,42 @@ var update_ref_latest_release := ""
 var update_refs_release_source := ""
 var update_ref_commits: Dictionary = {}
 var update_ref_versions: Dictionary = {}
+var update_ref_release_rows: Array = []
+var update_ref_branch_commit_rows: Dictionary = {}
+var update_commit_histories: Dictionary = {}
+var update_refs_last_trigger := ""
+var update_refs_last_requested_unix := 0
+var update_refs_last_http_status := 0
+var update_refs_rate_limit_remaining := ""
+var update_refs_rate_limit_reset_unix := 0
+var update_refs_rate_limit_retry_after := 0
+var update_refs_audit: Dictionary = {}
 var update_compare_state := "idle"
 var update_compare_error := ""
+var update_compare_refresh_state := "idle"
+var update_compare_refresh_error := ""
+var update_compare_last_checked_unix := 0
+var update_compare_refresh_serial := 0
 var update_compare_base_commit := ""
 var update_compare_target_ref := ""
 var update_compare_target_commit := ""
 var update_compare_ahead_by := -1
 var update_compare_behind_by := -1
+var update_selected_target_kind := ""
+var update_selected_target_ref := ""
+var update_selected_target_commit := ""
+var update_selection_refresh_pending := false
+var update_selection_refresh_pending_ref := ""
 var update_sync_state := "idle"
 var update_sync_status := ""
 var update_sync_error := ""
 var update_sync_target_ref := ""
 var update_sync_target_kind := ""
+var update_sync_progress := 0.0
+var client_action_state := "idle"
+var client_action_client_id := ""
+var client_action_status := ""
+var mcp_catalog_preview: Dictionary = {}
 
 
 func resolve_active_language(localization) -> String:

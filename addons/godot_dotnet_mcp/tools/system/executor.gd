@@ -4,9 +4,11 @@ extends RefCounted
 ## System layer dispatcher for built-in system tools.
 
 const MCPDebugBuffer = preload("res://addons/godot_dotnet_mcp/tools/mcp_debug_buffer.gd")
+const SystemImplHelperServiceScript = preload("res://addons/godot_dotnet_mcp/tools/system/system_impl_helper_service.gd")
 const _BASE = "res://addons/godot_dotnet_mcp/tools/system/"
 
 var _bridge
+var _impl_helpers = SystemImplHelperServiceScript.new()
 var _impls: Array = []
 var _runtime_context: Dictionary = {}
 
@@ -16,6 +18,7 @@ func _init() -> void:
 	if bridge_script == null:
 		return
 	_bridge = bridge_script.new()
+	_impl_helpers.configure(_bridge)
 
 	for impl_name in ["impl_help", "impl_catalog", "impl_activity", "impl_project", "impl_editor", "impl_evidence", "impl_inspector", "impl_settings_dialog", "impl_scene", "impl_script", "impl_index", "impl_runtime", "impl_dap"]:
 		var path = _BASE + impl_name + ".gd"
@@ -29,6 +32,8 @@ func _init() -> void:
 			MCPDebugBuffer.record("warning", "system", "Failed to instantiate impl: %s" % impl_name)
 			continue
 		impl.bridge = _bridge
+		if impl.has_method("configure_bridge_helpers"):
+			impl.configure_bridge_helpers(_impl_helpers)
 		if impl.has_method("configure_runtime"):
 			impl.configure_runtime(_runtime_context)
 		_impls.append(impl)

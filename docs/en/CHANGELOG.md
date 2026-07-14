@@ -1,20 +1,159 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] ([1.4.0])
+## [Unreleased]
 
-Target version: 1.4.0.
+### Changed
+
+- Simplified the Settings layout into compact general and update cards, removed redundant update-policy and repository text, moved the Development branch selector above the update actions, and now show stable and development version histories together in side-by-side panels on wide Docks (stacked on narrow Docks) instead of hiding one channel behind navigation controls.
+- Added a four-language Dock UI style guide covering information hierarchy, spacing, editor-native theme use, action priority, responsive behavior, accessibility, localization, and acceptance checks for every page.
+- Reworked the Settings update area into an integrated version manager with stable and development panels, cached release/tag and branch commit tables, independent source controls, explicit row-level Switch actions, and one-click update guards that refuse rollback or divergent targets unless the user switches manually.
+- Persisted version refs and complete local commit histories across editor restarts. Startup now restores cache only and never requests GitHub; an explicit Refresh List refreshes stable release/tag data, the selected development branch commit data, and the histories used for local one-click verification in the same request cycle.
+- Changed Refresh List to gather bounded, paginated commit histories for the installed source and selected target, calculate ahead/behind counts locally, and make one-click update rely on that refreshed local verification instead of GitHub's Compare endpoint.
+- Made version selection highlight the whole row and set that exact ref/commit as the comparison target without switching versions or making a network request.
+- Unified the Dock Resources and Prompts tabs around a single Tools-style tree, removing separate Catalog/Diagnostics view toggles while keeping protocol metadata in the selected-entry detail pane.
+- Matched the Dock Resources and Prompts catalog spacing, tree chrome, and row actions to the Tools tab by moving copy, preview, clear, and copy-preview actions into the tree context menu.
+
+### Fixed
+
+- Removed startup GitHub update-list and comparison requests, made each explicit list refresh cover both stable release/tag and development branch-commit endpoint families, and suppressed repeated unauthenticated retries while a known rate limit remains exhausted.
+- Removed the Settings update-details disclosure, kept actionable diagnostics in the wrapping primary status, and constrained refresh metadata with ellipsis plus a full-text tooltip so long failures and audit text cannot overflow the Dock.
+- Deferred Settings version-table Switch actions until after Tree mouse-selection events complete, preventing Godot from rejecting row rebuilds and flooding the Output panel with null item errors.
+- Fixed update verification after a hot reload: legacy runtime state now falls back safely while refreshed commit histories replace the removed remote comparison cache.
+
+## [2.0.0] - 2026-07-04
+
+### Added
+
+- Added framework-dependent Roslyn runtime files so Asset Library and prepared addon installs keep C# semantic read/patch workflows without compiling plugin Roslyn or bridge source files inside the host project; these workflows require a local .NET 8 runtime.
+- Added `cs_plugin_patch` to the .NET bridge capability catalog, made plugin patch writes dry-run by default, and hardened `dotnet_build` cancellation so timed-out child processes are terminated.
+- Added MCP 2025-11-25 Resources, Resource Templates, Prompts, and Tools metadata, including titles, icons, annotations, input schemas, output schemas, and JSON Schema 2020-12 declarations.
+- Added Dock Resources and Prompts tabs with protocol catalog counts, ID copy actions, resource previews, prompt argument inputs, generated prompt previews, and bounded icon rendering.
+- Added read-only editor log resources at `godot-dotnet-mcp://logs/editor/output` and `godot-dotnet-mcp://logs/editor/errors`.
+- Added mouse move and click support to `runtime_step(action=input)` with viewport coordinate fields in the tool schema.
+- Added structured User-tool recovery diagnostics with diagnostic codes, recommended actions, and follow-up tool hints.
+- Added idle-process and User-tool watch diagnostics so self diagnostics can report frame budgets, scan slices, and watcher progress without forcing heavy runtime queries on every Dock refresh.
+- Added Antigravity client support in the Config tab, including app detection, app launch, one-click `godot-mcp` write/remove actions for `.gemini/config/mcp_config.json`, copied MCP configuration, and supplemental setup-directory hints.
+- Added lightweight Godot `Performance` custom monitors for plugin process time, slow-frame counts, and one-second engine samples so editor stalls can be inspected from the Debugger Monitor and self diagnostics.
+
+### Changed
+
+- Changed the default MCP protocol baseline to `2025-11-25`, including initialize metadata, tool-name validation, schema dialect policy, and explicit optional-capability boundaries.
+- Changed the default stdio transport to newline-delimited JSON-RPC, with legacy `Content-Length` framing retained only as an explicit compatibility mode.
+- Changed the default HTTP endpoint at `127.0.0.1:3000/mcp` toward MCP Streamable HTTP semantics, including protocol/session headers, JSON and SSE `Accept` negotiation, Origin/CORS checks, GET SSE streams, resumable event history, finite POST SSE responses, heartbeat events, queued server-to-client delivery, and `DELETE /mcp` session termination.
+- Changed GET `/mcp` SSE metadata to include a legacy-compatible `endpoint` event and to publish connection metadata as `open` events instead of JSON-RPC `message` events, improving compatibility with strict SSE MCP clients.
+- Changed public discovery to be resource-first and prompt-first: passive help, activity, catalog, editor-log, plugin maintenance, and scene validation discovery now use Resources, Prompts, or canonical action tools instead of legacy public discovery tools.
+- Changed `tools/list` to return a flat callable tool list with schema, annotation, and output metadata while tree/group presentation data moves to catalog resources and shared Dock presentation snapshots.
+- Changed catalog snapshots, catalog resources, `/api/tools`, Dock model metadata, and Tools tab preview/search/schema-copy paths to use `ToolCatalogManifest` and `ToolCatalogSnapshotService` as the shared catalog fact path.
+- Changed Dock Tools rows, action previews, Resources, Prompts, and schema inspection to render shared protocol metadata rather than rebuilding private UI catalog facts.
+- Changed the Dock Tools tab to keep Agent Tools as the single call surface, remove the separate Internal and Diagnostics tool views, and show tool actions plus internal implementation details under each public tool row.
+- Changed Dock Resources and Prompts tabs to consume explicit presentation trees, grouping resource URIs, resource templates, workflow prompts, and prompt arguments by shared protocol metadata instead of Dock-side URI or name guesses.
+- Changed Dock Resources and Prompts tabs to expose separate Catalog and Diagnostics views so users can switch between readable protocol entries and source/visibility/callability/group metadata.
+- Changed Dock Resources and Prompts tabs into split catalog workbenches with searchable grouped trees, selected-entry detail panes, inline template/prompt argument inputs, preview/copy actions, and structured diagnostics metadata.
+- Changed editor startup and idle refresh to keep MCP server startup lightweight, defer auto-start outside `_enter_tree`, lazy-load non-active Dock tabs, load the HTTP service bundle and tool runtimes on demand, cache disabled-tool filters until runtime initialization, keep Resources/Prompts protocol list projections loaderless, build Dock catalog projections only for the active tab, and pace User-tool polling and scan slices more conservatively to reduce editor stalls in large projects.
+- Changed plugin freshness, health, Settings, and self-diagnostic snapshots to reuse short-lived disk fingerprint summaries instead of rescanning the whole addon tree for every adjacent status request.
+- Changed Dock Tools refresh checks and User-tool runtime definition comparisons to use reusable lightweight signatures instead of repeatedly serializing full presentation trees, metadata maps, or tool definition arrays during idle refresh.
+- Changed Dock catalog model refresh checks to use deterministic lightweight signatures instead of serializing every tool entry, reducing repeated Dock refresh work while still detecting nested schema and presentation metadata changes.
+- Changed shared tool presentation signatures to avoid JSON serialization of presentation nodes, groups, and metadata maps while preserving nested metadata invalidation.
+- Changed Config tab client-card refresh checks to use deterministic lightweight signatures instead of serializing nested card and localization payloads during client setup status updates.
+- Changed Dock Resources and Prompts catalog refresh checks to use deterministic lightweight signatures instead of serializing full protocol entry, presentation, preview, and argument-value payloads during tab refreshes.
+- Changed tools/list, tool catalog search, and tool catalog resources to request only the legacy catalog presentation view, avoiding unnecessary internal-executor, diagnostics, and Agent Tools tree construction on protocol catalog queries.
+- Changed C# semantic tooling to use the isolated Roslyn runtime process as the only production runtime path, so source-tree or direct-copy installs no longer auto-load the plugin's in-process C# facade inside the host project.
+- Changed User-tool polling to skip synchronous scans when runtime loading is disabled and to split large directory walks into budgeted slices so idle refresh stays responsive.
+- Changed User-tool watch and fallback runtime scanning to use a dedicated scan service, keeping file metadata traversal, slice budgets, and scan diagnostics separate from watch polling and reload coordination.
+- Changed User-tool runtime fallback rescans so the executor keeps fast explicit reload handling but no longer duplicates the watcher loop with 300 ms idle inventory scans.
+- Changed root domain implementations to split executors for audio, animation, signal, TileMap, UI, filesystem, node, project, resource, scene, group, geometry, material, lighting, navigation, particle, physics, shader, debug, and editor domains, with debug/editor kept as thin compatibility wrappers.
+- Changed AtomicBridge, `MCPToolLoader`, stdio routing, plugin lifecycle wiring, reload handling, runtime context wiring, status/query projections, and User-tool maintenance to use dedicated services while preserving their public facades.
+- Changed MCPToolLoader lifecycle tick budgeting, interval selection, and tick performance counters to use a dedicated budget service while keeping runtime tick side effects in the loader lifecycle path.
+- Changed MCPToolLoader service readiness checks so status, catalog, tick, and execution hot paths skip repeated service factory wiring while still rehydrating services after script reloads.
+- Changed MCPToolLoader initialization summaries to reuse already-scanned tool definitions instead of re-entering full public/exposed projection queries at the end of startup.
+- Changed plugin update state transitions for refs, sync, and compare workflows to use a dedicated transition service while preserving the Dock and MCP update status fields.
+- Changed plugin update endpoint, archive, timeout, marker, and addon-root facts to use a dedicated endpoint config service instead of keeping those GitHub/update constants in the plugin entrypoint.
+- Changed plugin update helper ownership so unused branch-ref, archive-ref, and ref-list wrappers stay in dedicated update services instead of the plugin entrypoint.
+- Changed the project and bundled plugin license from MIT to Apache-2.0 for the v2.0 line.
+
+### Fixed
+
+- Fixed Tools tree collapse persistence so same-frame expand/collapse bursts coalesce into one settings save.
+- Fixed Agent Tools group headings in the Dock Tools tab so localized interfaces no longer fall back to raw English labels such as `Project Context` or `Runtime Debugging`.
+- Fixed Dock Tools scene tree and scene patch action localization so labels like `Reorder Node` and `Update Property` no longer fall back to English in localized interfaces.
+- Fixed Settings update interactions so refs refresh only when the user clicks Check for Updates or calls the explicit maintenance refresh action; opening source or branch selectors no longer spends GitHub requests in the background.
+- Fixed Settings update ref discovery so a stuck manual GitHub refs request times out, reports the pending branch/release/tag leg in update status, and allows a later explicit Check for Updates retry instead of leaving the target commit stale indefinitely.
+- Fixed Config tab client detection so production registry paths come from the active user/profile roots instead of hard-coded test-user paths, and unknown desktop-only config paths stay empty until a real path is known.
+- Fixed plugin lifecycle context caching so server controller attach/recreate paths invalidate cached service references before later process ticks reuse them.
+- Fixed `.NET` bridge cancellation cleanup so timed-out `dotnet` child processes are terminated from one cancellation path instead of issuing duplicate process-tree kills.
+- Fixed disabled-tool updates so the MCP tool loader supervisor marks a disabled-tool signature current only after forwarding the normalized set to the loader.
+- Fixed Streamable HTTP session handling so non-initialize `POST /mcp` requests require an initialized `Mcp-Session-Id`, successful `DELETE /mcp` session termination returns HTTP 200 OK, and initialize keeps the internal tool schema version under `_meta`.
+- Fixed plugin settings, custom tool profiles, config exports, and fallback runtime event persistence to use verified temp-file replacement so failed writes do not silently clear pending data or truncate existing files.
+- Fixed Streamable HTTP Host validation so missing or blank Host headers are rejected before MCP requests reach the router.
+- Fixed the Dock Server overview so non-loopback and wildcard MCP listener hosts are flagged as external bind risks instead of appearing identical to the default loopback endpoint.
+- Fixed Streamable HTTP pending request buffering so TCP fragments stay byte-backed until decoding, reducing repeated UTF-8 conversions while preserving pipelined request handling.
+- Fixed isolated Roslyn runtime process calls so plugin C# inspect and patch paths await process-frame progress instead of synchronously polling the editor thread.
+- Hardened HTTP and stdio JSON-RPC envelope handling, malformed framing, duplicate/conflicting HTTP body headers, response-envelope handling, disabled-tool parity, and session validation so transport errors are deterministic across supported MCP transports.
+- Fixed Prompt and Resource validation so unknown or incorrectly typed prompt arguments are rejected with allowed-argument metadata and binary `.scn` / `.res` files are not read as text resources.
+- Fixed Dock catalog rendering so visible tool families are retained and invalid Resource/Prompt icons are bounded before SVG loading.
+- Fixed C# bridge patch/write actions to revalidate project-root and reparse-point boundaries before and after writes.
+- Fixed Roslyn bridge install hardening so raw source copies keep bridge sources under hidden non-compiling directories, runtime temp JSON files use scoped cleanup roots, bridge capabilities reject version mismatches, and response JSON files cannot be written outside allowed roots.
+- Fixed clean Asset Library validation so exported addon installs prove isolated Roslyn runtime availability, exclude plugin bridge/Roslyn source files, and reject dirty addon/archive inputs.
+- Fixed PR policy validation so BOM-prefixed titles/headings are recognized and policy/version workflows run on merge queue events.
+- Fixed startup stability for upgraded addon copies by preventing split tool executors from registering legacy global `MCP*Tools` class names and by removing Dock scene script reloads during Dock creation that could stall the editor or emit `Cannot reload script while instances exist`.
+- Fixed Dock update sync so branch/tag archive installs mirror the addon directory with the existing safe preserve list, removing stale plugin files such as old root tool monolith scripts instead of only overwriting files.
+- Fixed plugin update mirror writes so failed archive syncs roll back files written earlier in the same attempt and report whether the addon tree was recovered cleanly.
+- Fixed upgraded addon self-update recovery so new plugin instances remove known stale root tool monolith leftovers left by older overwrite-only updaters, and aligned Dock and MCP plugin update requests on the same archive-sync entry path while preserving `.import` and `dotnet_bridge/obj` cache files.
+- Fixed plugin update sync feedback so the Settings tab shows staged progress while resolving, downloading, writing, and refreshing plugin files instead of appearing idle during longer sync operations.
+- Fixed plugin update sync from MCP tools so custom branches with slash-separated names resolve their commit before archive download, retry through commit/ref archive fallbacks, and trigger ref discovery for release-derived targets instead of failing while the Dock path can still recover.
+- Fixed plugin update sync request planning so Dock and MCP update actions share target resolution, branch-ref URL encoding, archive retry decisions, and sync marker payload construction instead of duplicating those rules in the plugin entrypoint.
+- Fixed Config tab one-click CLI setup actions so they run through a non-blocking process path with immediate in-panel status instead of freezing the editor until the client command exits.
+- Fixed Config tab direct config write/remove actions so file preflight and writeback work starts after the panel enters a visible running state, avoiding click-to-dialog stalls on slower configuration paths.
+- Fixed first-open responsiveness of the Dock Tools tab by building only the active tool presentation view up front and deferring Internal Executors / Diagnostics trees until those views are selected.
+- Fixed repeated Dock Tools refreshes so unchanged tool catalogs reuse the last presentation model through a lightweight catalog revision instead of rebuilding the full tool snapshot on every active-tab refresh.
+- Fixed Dock Tools tab search responsiveness so same-frame query bursts coalesce into one deferred tree render instead of clearing and rebuilding the catalog on every keystroke.
+- Fixed Dock Tools tab refresh signatures so disabled-tool lists, collapsed nodes, and tool-load errors are compared with lightweight deterministic strings instead of JSON serialization during tab switches.
+- Fixed Dock status snapshots so lightweight views reuse cached lifecycle context and avoid calling heavy server diagnostics unless the active tab explicitly needs them.
+- Fixed MCP tool discovery recovery after update or hot reload so `tools/list` / `tools/call` lazily reinitialize empty registries, overlapping editor automation calls fail fast with `editor_automation_busy`, and idle GDScript LSP tick logs no longer make the editor or MCP clients appear stuck.
+- Fixed MCP tool-call result payloads so `structuredContent` is emitted only when `tools/list` advertises an output schema for the tool, while every result still includes text JSON content for clients that do not use structured output.
+- Fixed long-running MCP tool calls and editor automation watchdog cleanup so non-editor tools return deterministic `tool_call_timeout` errors and completed watchdogs or background tasks do not linger after calls are released.
+- Fixed debug `dotnet build` diagnostics so build servers are disabled during plugin-triggered builds, preventing headless validation or editor sessions from staying alive after the build result is returned.
+- Fixed Streamable HTTP replay and deployment hardening so GET SSE `open` metadata is observable but not stored in the resumable event log, proxy headers are trusted only when explicitly enabled, allowed hosts load from `GODOT_DOTNET_MCP_ALLOWED_HOSTS`, and generated session IDs include random entropy.
+- Fixed JSON-RPC cancellation notifications so in-flight request IDs can be marked cancelled and return the MCP cancellation error instead of reporting a stale completion.
+- Fixed idle runtime ticking so HTTP/stdio transports no longer drive loaded tool executors and GDScript LSP diagnostics every editor frame, while exposing lifecycle tick timing in performance diagnostics.
+- Fixed long-running stability gaps by refreshing User-tool definitions only after explicit invalidation, closing partial idle HTTP requests after the timeout window, and clearing stopped debugger sessions from the live bridge map immediately.
+- Fixed plugin disable lifecycle cleanup so runtime-owned services, watcher polling, client dialogs, debugger hooks, performance monitors, and static self-diagnostic state are released when the plugin is disabled without uninstalling the runtime bridge autoload.
+- Fixed User-tool runtime definition comparison so nested schema, presentation, and icon metadata are compared directly instead of serializing full definitions into JSON signatures during idle runtime checks.
+- Fixed runtime automation budget validation so oversized frame captures, wait-frame counts, input batches, and held input durations are rejected before they can keep the editor waiting for excessive runtime work.
 
 ### Documentation
 
-- Added README and localized documentation entry-page Real Project Validation sections with a public Godot .NET project example link and screenshot.
-- Initialized v1.4.0 release-note sources and updated localized release-note navigation and validation maps.
+- Updated the v2.0 protocol refactor plan and progress tracker to reflect the completed MCP 2025-11-25 target, Streamable HTTP endpoint shape, newline stdio default, schema metadata policy, optional capability boundaries, public-tool cleanup, and UI metadata adaptation.
+- Updated release-facing README and localized entry pages so installation and migration guidance stays focused on plugin-owned install surfaces, Resources, Prompts, Tools, and reproducible validation.
+- Added and finalized v2.0 release-note sources and localized navigation for the protocol refactor line.
+- Clarified legacy `system_help` guidance so clients start from MCP Resources for passive context, Prompts for planning, and Tools for actions or computed workflow results.
 
 ### Internal
 
+- Normalized disabled-tool sets in the MCP tool loader supervisor so unchanged profile/tool-filter writes skip redundant loader forwarding and status refresh work.
+
+- Added aggregate v2.0 conformance and guardrail coverage for lifecycle, JSON-RPC, Tools, Resources, Prompts, schema metadata, Streamable HTTP, stdio, Dock metadata, public-tool removals, root monolith closure, catalog facts, optional capabilities, release-facing install guidance, changelog section order, and Roslyn runtime bundle shape.
+- Moved plugin config/reload callback context construction into a dedicated context service so the plugin entrypoint keeps less wiring state while preserving existing reload, client setup, and User-tool watcher behavior.
+- Moved plugin update archive mirror safety, stale-file cleanup, path normalization, and link guards into a dedicated sync mirror service while preserving the existing Dock and MCP update entrypoints.
+- Moved plugin update tool status snapshots and maintenance response enrichment into a dedicated facade service, keeping archive download and file sync operations in the plugin runtime while reducing plugin entrypoint response-shaping debt.
+- Moved plugin runtime, evolution, and developer usage guides into a dedicated usage guide service so the plugin entrypoint no longer owns static guide payloads.
+- Moved plugin self-diagnostic health, error, timeline, and clear responses into a dedicated diagnostics service while preserving existing diagnostic store and Dock integration behavior.
+- Moved plugin tool-profile and config import/export tool responses into a dedicated profile config service while preserving existing settings storage, profile CRUD, and Dock refresh behavior.
+- Moved plugin developer settings, language listing, language validation, and profile-list responses into a dedicated developer settings service while keeping the existing mutation entrypoints intact.
+- Moved plugin client install detection state and executable picker dialog ownership into a dedicated client config state service while preserving Config tab action behavior.
+- Moved plugin runtime restart, soft reload, full reload, and Dock focus restore completion into a dedicated runtime reload completion service while keeping the existing deferred reload entrypoints intact.
+- Moved plugin update refs discovery parsing, pagination, commit aggregation, and release/tag snapshot construction into a dedicated refs discovery service while preserving existing Settings and MCP update behavior.
+- Removed the legacy `tool_manifest.gd` and `tool_registry.gd` shim scripts so catalog consumers use `ToolCatalogManifest` directly.
+- Moved plugin update compare target selection, target-version URL construction, plugin.cfg version parsing, current-commit resolution, and GitHub compare response parsing into a dedicated compare service while preserving existing Settings update status behavior.
+- Moved plugin update HTTP request startup, timeout/body/download configuration, and request-node cleanup into a dedicated request service while preserving Dock and MCP update workflow callbacks.
+- Moved MCPToolLoader service construction into a dedicated factory so the loader facade no longer owns the service preload/new chain while preserving existing runtime wiring.
+- Added release-policy, PR-policy, and merge-queue validation coverage for v2.0 branch integration, trusted `refactor/v2.0.0` to `dev` version metadata handoff, version metadata changes, BOM-prefixed PR headings, and formal changelog section requirements.
+- Hardened tag-triggered plugin verification so manual branch runs cannot skip release preflight, release-note rendering, or release-note artifact validation.
+- Added safe-write and clean-install validation scripts for the DotnetBridge write surface, isolated Roslyn runtime bundle, and exported Asset Library addon shape.
 - Updated PR policy and version-policy CI to validate pull requests targeting the v1.4 refactor integration branch while keeping release version metadata changes limited to release branches targeting `dev`.
 - Updated version-policy CI so v2.0 predevelopment pull requests can validate against trusted v2 policy scripts while release version metadata remains limited to release branches targeting `dev` or `v2.0`.
 
@@ -34,10 +173,12 @@ Target version: 1.4.0.
 - Added `system_tool_activity` query filters and slow/failure diagnostics so clients can inspect running or recent calls by state, tool, and slow-call threshold without fetching unrelated activity records.
 - Added User-tool naming diagnostics that expose declared, normalized, and public MCP tool names in User-tool listings, scaffold previews, and compatibility reports.
 - Added `system_scene_inspect` as a unified read-only scene inspection entry with `validate`, `analyze`, and `full` actions while preserving the existing scene validation and analysis tools.
-- Added `system_plugin_maintenance`, a grouped high-level plugin maintenance entry for status, reload, update-status, update-source selection, and update-start workflows while preserving the dedicated reload and update tools.
+- Added `system_plugin_maintenance`, the canonical high-level plugin maintenance entry for status, reload, update-status, update-reference refresh, update-source selection, and update-start workflows.
 - Added project configuration inspection for export presets and individual input actions, including redaction for sensitive export option keys and absolute local export paths.
 - Added localized MCP resource and resource-template metadata so `resources/list` and `resources/templates/list` follow the active plugin language instead of hard-coded English.
+- Added canonical v1.4 MCP resources for guide discovery, project and editor state, activity status/recent reads, and exposed/visible tool catalogs while preserving the existing compatibility resource URIs.
 - Added a stable Config client capability matrix for client cards, including support levels, available action metadata, and note keys.
+- Added `structuredContent` to every `tools/call` result while preserving the text JSON content for existing clients.
 
 ### Changed
 
@@ -45,6 +186,7 @@ Target version: 1.4.0.
 - Changed `system_settings_dialog(action="capture")` to prefer visible settings popup/window bounds, then dialog control bounds, before falling back to full-editor screenshots, with `capture_backend` and `capture_target_path` evidence metadata.
 - Changed project runtime control to use `system_project_lifecycle(action=start|stop)` as the public surface and removed compatibility aliases for the older project run/stop tool names.
 - Changed generated User-tool scaffolds to extend the base tool script by resource path, reducing headless catalog-scan dependence on global script-class registration.
+- Updated protocol facts to schema version `2026-06-08.27` for structured tool result payloads.
 
 ### Fixed
 
@@ -58,12 +200,15 @@ Target version: 1.4.0.
 
 ### Documentation
 
+- Added a localized v1.4.0 protocol refactor plan and linked it from the four localized roadmaps.
 - Refreshed README Highlights to align the top-level feature story with the v1.2.0 and v1.3.0 release lines, grouping overlapping entries into consistent editor-native service, semantic automation, evidence, diagnostics, runtime, workflow discovery, and User-tool extension themes.
 - Reframed the v1.3.0 release documentation around semantic editor automation and evidence-backed workflows.
 - Updated localized overview links and release-note validation maps so English, Simplified Chinese, Japanese, and Korean docs point at the v1.3.0 release-note sources.
 
 ### Internal
 
+- Added documentation localization validation coverage for the localized v1.4.0 protocol plan page.
+- Added a v1.4.0 contract case manifest and made the plugin harness required-case selection derive from manifest labels.
 - Added editor UI and Settings Dialog contract coverage for guarded write refusal paths.
 - Added filesystem executor contract coverage for unsafe path rejection across directory, file, JSON, and search entry points.
 - Updated editor UI prompt, help, localization, schema facts, tool tree, Tools tab rendering, catalog discovery, and harness contracts for the v1.3.0 semantic-control priority model.
@@ -72,6 +217,7 @@ Target version: 1.4.0.
 - Added editor evidence surface contracts for exact/fallback/degraded capture behavior, visible-popup metadata, localized tool metadata, prompt/help guidance, and Tools tab rendering.
 - Added project lifecycle contracts for explicit lifecycle actions, marker validation, foreground-window fallback behavior, and removed run/stop compatibility names.
 - Added tool catalog, tool activity, User-tool naming, scene inspect, plugin maintenance, project configuration, and userdata maintenance contract coverage across loader, router, Tools tab, localization inventory, and protocol facts.
+- Added resource contract coverage for canonical guide, state, activity, and tool-catalog resources plus the activity-call resource template, and bumped the tool schema facts to `2026-06-08.26`.
 - Extended editor/system control harness coverage for wait conditions, popup capture, hover/leave pointer fallback, click input dispatch, Button-like target observation, activation-signal separation, and input-only Button diagnostics.
 
 ## [1.2.0] - 2026-06-06
@@ -537,7 +683,8 @@ Target version: 1.4.0.
 
 - `/root/...` path compatibility has been patched, but the final black-box behavior still depends on plugin reload timing.
 
-[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.3.0...v2.0.0
 [1.3.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/LuoxuanLove/godot-dotnet-mcp/compare/v1.1.1...v1.1.2

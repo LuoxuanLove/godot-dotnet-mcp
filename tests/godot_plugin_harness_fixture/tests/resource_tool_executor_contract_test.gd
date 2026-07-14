@@ -18,6 +18,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 
 	if ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/resource_tools.gd"):
 		return _failure("resource_tools.gd should be removed once the split executor becomes the only stable entry.")
+	if FileAccess.file_exists("res://addons/godot_dotnet_mcp/tools/resource_tools.gd.uid"):
+		return _failure("resource_tools.gd.uid should be removed with the legacy resource monolith.")
 
 	_remove_tree(TEMP_ROOT)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(TEMP_ROOT))
@@ -89,17 +91,17 @@ func run_case(tree: SceneTree) -> Dictionary:
 
 	var reload_result: Dictionary = executor.execute("file_ops", {
 		"action": "reload",
-		"path": MATERIAL_MOVED_PATH
+		"source": MATERIAL_MOVED_PATH
 	})
 	if not bool(reload_result.get("success", false)):
-		return _failure("Resource reload failed through the split file ops service.")
+		return _failure("Resource reload failed through the split file ops service with schema-advertised source.")
 
 	var delete_result: Dictionary = executor.execute("file_ops", {
 		"action": "delete",
-		"path": MATERIAL_MOVED_PATH
+		"source": MATERIAL_MOVED_PATH
 	})
 	if not bool(delete_result.get("success", false)):
-		return _failure("Resource delete failed through the split file ops service.")
+		return _failure("Resource delete failed through the split file ops service with schema-advertised source.")
 
 	if not _create_test_texture(TEXTURE_PATH):
 		return _failure("Failed to create a texture fixture for the split texture service.")
@@ -134,6 +136,33 @@ func run_case(tree: SceneTree) -> Dictionary:
 	})
 	if bool(invalid_assign_result.get("success", false)):
 		return _failure("Texture assign_to_node should fail for an invalid property.")
+
+	var unsafe_create_result: Dictionary = executor.execute("create", {
+		"type": "Resource",
+		"path": "user://outside.tres"
+	})
+	if bool(unsafe_create_result.get("success", false)):
+		return _failure("Resource create should reject paths outside res://.")
+	if str(unsafe_create_result.get("error_code", "")) != "project_path_outside_project":
+		return _failure("Resource create unsafe path rejection should include project_path_outside_project.")
+
+	var unsafe_copy_result: Dictionary = executor.execute("file_ops", {
+		"action": "copy",
+		"source": MATERIAL_PATH,
+		"dest": "/tmp/godot_dotnet_mcp_resource_escape.tres"
+	})
+	if bool(unsafe_copy_result.get("success", false)):
+		return _failure("Resource copy should reject absolute destination paths.")
+	if str(unsafe_copy_result.get("error_code", "")) != "project_path_outside_project":
+		return _failure("Resource copy unsafe path rejection should include project_path_outside_project.")
+
+	var protected_copy_result: Dictionary = executor.execute("file_ops", {
+		"action": "copy",
+		"source": MATERIAL_PATH,
+		"dest": "res://addons/godot_dotnet_mcp/unsafe_resource_copy.tres"
+	})
+	if bool(protected_copy_result.get("success", false)):
+		return _failure("Resource copy should reject writes into the plugin implementation directory.")
 
 	return {
 		"name": "resource_tool_executor_contracts",

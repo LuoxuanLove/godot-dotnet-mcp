@@ -24,14 +24,11 @@ class FakeEditorInterface extends RefCounted:
 
 class FakeServerController extends "res://addons/godot_dotnet_mcp/plugin/runtime/server_runtime_controller.gd":
 
-	var _fake_server: Node = Node.new()
+	var _fake_server: Node = null
 	var _attached_plugin = null
 	var _attached_settings: Dictionary = {}
+	var disabled_tool_snapshots: Array = []
 	var _running := false
-
-
-	func _init() -> void:
-		_fake_server.name = "FakeServerControllerServer"
 
 
 	func attach(plugin, settings: Dictionary) -> void:
@@ -50,11 +47,30 @@ class FakeServerController extends "res://addons/godot_dotnet_mcp/plugin/runtime
 
 	func start(_settings: Dictionary, _reason: String = "manual") -> bool:
 		_running = true
+		if _fake_server == null:
+			_fake_server = Node.new()
+			_fake_server.name = "FakeServerControllerServer"
 		return true
 
 
 	func get_server() -> Node:
 		return _fake_server
+
+
+	func get_all_tools_by_category() -> Dictionary:
+		return {
+			"system": [
+				{"name": "project_state"},
+				{"name": "runtime_control"}
+			],
+			"user": [
+				{"name": "sample_tool"}
+			]
+		}
+
+
+	func set_disabled_tools(disabled_tools: Array) -> void:
+		disabled_tool_snapshots.append(disabled_tools.duplicate())
 
 
 var base_control: Control
@@ -67,6 +83,7 @@ var dock_add_calls: Array[Dictionary] = []
 var dock_remove_calls: Array[Control] = []
 var scheduled_runtime_reloads: Array[Dictionary] = []
 var plugin_reenable_schedule_count := 0
+var save_settings_calls := 0
 
 
 func _init(base_control_in: Control) -> void:
@@ -93,6 +110,11 @@ func _restore_pending_focus_snapshot_if_needed() -> void:
 @warning_ignore("native_method_override")
 func _schedule_runtime_reload(method_name: String, bound_args: Array = []) -> void:
 	scheduled_runtime_reloads.append({"method_name": method_name, "bound_args": bound_args.duplicate(true)})
+
+
+func _save_settings() -> void:
+	save_settings_calls += 1
+	super._save_settings()
 
 
 @warning_ignore("native_method_override")

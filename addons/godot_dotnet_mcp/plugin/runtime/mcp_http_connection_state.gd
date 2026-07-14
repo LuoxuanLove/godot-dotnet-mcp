@@ -21,7 +21,7 @@ const MAX_RECENT_REQUESTS_PER_CLIENT := 5
 
 func add_client(client: StreamPeerTCP) -> void:
 	_clients.append(client)
-	_pending_data[client] = ""
+	_pending_data[client] = PackedByteArray()
 	_total_connections += 1
 	var now := _now_unix()
 	_client_states[client] = {
@@ -36,6 +36,10 @@ func add_client(client: StreamPeerTCP) -> void:
 		"last_request_path": "",
 		"last_request_at_unix": 0,
 		"last_json_rpc_method": "",
+		"transport_mode": "http",
+		"sse_session_id": "",
+		"sse_next_event_index": 0,
+		"sse_last_heartbeat_at_unix": 0,
 		"client_summary": _build_initial_client_summary(client),
 		"recent_requests": []
 	}
@@ -62,15 +66,122 @@ func clear_processing(client: StreamPeerTCP) -> void:
 
 
 func get_pending_data(client: StreamPeerTCP) -> String:
-	return str(_pending_data.get(client, ""))
+	var pending = _pending_data.get(client, PackedByteArray())
+	if pending is PackedByteArray:
+		return (pending as PackedByteArray).get_string_from_utf8()
+	return str(pending)
 
 
 func set_pending_data(client: StreamPeerTCP, data: String) -> void:
-	_pending_data[client] = data
+	_pending_data[client] = data.to_utf8_buffer()
+
+
+func get_pending_bytes(client: StreamPeerTCP) -> PackedByteArray:
+	var pending = _pending_data.get(client, PackedByteArray())
+	if pending is PackedByteArray:
+		return (pending as PackedByteArray).duplicate()
+	return str(pending).to_utf8_buffer()
+
+
+func set_pending_bytes(client: StreamPeerTCP, data: PackedByteArray) -> void:
+	_pending_data[client] = data.duplicate()
+
+
+func append_pending_bytes(client: StreamPeerTCP, data: PackedByteArray) -> int:
+	var pending = _pending_data.get(client, PackedByteArray())
+	if pending is PackedByteArray:
+		pending = pending as PackedByteArray
+	else:
+		pending = str(pending).to_utf8_buffer()
+	pending.append_array(data)
+	_pending_data[client] = pending
+	if _client_states.has(client):
+		var state: Dictionary = _client_states.get(client, {})
+		state["last_seen_at_unix"] = _now_unix()
+		_client_states[client] = state
+	return pending.size()
+
+
+func is_pending_empty(client: StreamPeerTCP) -> bool:
+	return get_pending_byte_size(client) == 0
+
+
+func get_pending_byte_size(client: StreamPeerTCP) -> int:
+	var pending = _pending_data.get(client, PackedByteArray())
+	if pending is PackedByteArray:
+		return (pending as PackedByteArray).size()
+	return str(pending).to_utf8_buffer().size()
 
 
 func clear_pending_data(client: StreamPeerTCP) -> void:
 	_pending_data.erase(client)
+
+
+func mark_sse_streaming(client: StreamPeerTCP, session_id: String = "", next_event_index: int = 0) -> void:
+	if not _client_states.has(client):
+		return
+	var state: Dictionary = _client_states.get(client, {})
+	var now := _now_unix()
+	state["transport_mode"] = "sse"
+	state["sse_session_id"] = session_id.strip_edges()
+	state["sse_next_event_index"] = max(next_event_index, 0)
+	state["last_seen_at_unix"] = now
+	state["sse_last_heartbeat_at_unix"] = 0
+	_client_states[client] = state
+
+
+func is_sse_streaming(client: StreamPeerTCP) -> bool:
+	if not _client_states.has(client):
+		return false
+	var state: Dictionary = _client_states.get(client, {})
+	return str(state.get("transport_mode", "http")) == "sse"
+
+
+func get_sse_last_heartbeat_at_unix(client: StreamPeerTCP) -> int:
+	if not _client_states.has(client):
+		return 0
+	var state: Dictionary = _client_states.get(client, {})
+	return int(state.get("sse_last_heartbeat_at_unix", 0))
+
+
+func get_last_seen_at_unix(client: StreamPeerTCP) -> int:
+	if not _client_states.has(client):
+		return 0
+	var state: Dictionary = _client_states.get(client, {})
+	return int(state.get("last_seen_at_unix", 0))
+
+
+func get_sse_session_id(client: StreamPeerTCP) -> String:
+	if not _client_states.has(client):
+		return ""
+	var state: Dictionary = _client_states.get(client, {})
+	return str(state.get("sse_session_id", ""))
+
+
+func get_sse_next_event_index(client: StreamPeerTCP) -> int:
+	if not _client_states.has(client):
+		return 0
+	var state: Dictionary = _client_states.get(client, {})
+	return int(state.get("sse_next_event_index", 0))
+
+
+func mark_sse_events_sent(client: StreamPeerTCP, next_event_index: int) -> void:
+	if not _client_states.has(client):
+		return
+	var state: Dictionary = _client_states.get(client, {})
+	state["sse_next_event_index"] = max(next_event_index, 0)
+	state["last_seen_at_unix"] = _now_unix()
+	_client_states[client] = state
+
+
+func mark_sse_heartbeat(client: StreamPeerTCP) -> void:
+	if not _client_states.has(client):
+		return
+	var state: Dictionary = _client_states.get(client, {})
+	var now := _now_unix()
+	state["last_seen_at_unix"] = now
+	state["sse_last_heartbeat_at_unix"] = now
+	_client_states[client] = state
 
 
 func remove_client(client: StreamPeerTCP) -> void:
@@ -79,6 +190,30 @@ func remove_client(client: StreamPeerTCP) -> void:
 	_pending_data.erase(client)
 	_processing_clients.erase(client)
 	_client_states.erase(client)
+
+
+func disconnect_sse_session(session_id: String) -> int:
+	var normalized_session := session_id.strip_edges()
+	if normalized_session.is_empty():
+		return 0
+	var disconnected_count := 0
+	for client in _clients.duplicate():
+		if not _client_states.has(client):
+			continue
+		var state: Dictionary = _client_states.get(client, {})
+		if str(state.get("transport_mode", "http")) != "sse":
+			continue
+		if str(state.get("sse_session_id", "")) != normalized_session:
+			continue
+		if client != null:
+			_archive_client_session(client)
+			client.disconnect_from_host()
+		_clients.erase(client)
+		_pending_data.erase(client)
+		_processing_clients.erase(client)
+		_client_states.erase(client)
+		disconnected_count += 1
+	return disconnected_count
 
 
 func disconnect_all_clients() -> void:
@@ -116,10 +251,13 @@ func record_request(method: String, client: StreamPeerTCP = null, path: String =
 		"path": path,
 		"at_unix": _last_request_at_unix,
 		"content_type": str(headers.get("content-type", "")),
+		"mcp_protocol_version": str(headers.get("mcp-protocol-version", "")),
 		"body_byte_size": body_byte_size,
 		"json_rpc_method": str(json_rpc_summary.get("method", "")),
 		"json_rpc_id": json_rpc_summary.get("id", null)
 	}
+	if not str(headers.get("mcp-session-id", "")).strip_edges().is_empty():
+		request_summary["mcp_session_present"] = true
 	var recent_requests: Array = []
 	if state.get("recent_requests", []) is Array:
 		recent_requests = (state.get("recent_requests", []) as Array).duplicate(true)
@@ -193,6 +331,10 @@ func _build_client_session_snapshot(state: Dictionary, active: bool) -> Dictiona
 		"last_request_path": str(state.get("last_request_path", "")),
 		"last_request_at_unix": int(state.get("last_request_at_unix", 0)),
 		"last_json_rpc_method": str(state.get("last_json_rpc_method", "")),
+		"transport_mode": str(state.get("transport_mode", "http")),
+		"sse_session_id": str(state.get("sse_session_id", "")),
+		"sse_next_event_index": int(state.get("sse_next_event_index", 0)),
+		"sse_last_heartbeat_at_unix": int(state.get("sse_last_heartbeat_at_unix", 0)),
 		"client_summary": {},
 		"recent_requests": []
 	}
@@ -217,10 +359,12 @@ func _build_client_summary(client: StreamPeerTCP, headers: Dictionary, previous_
 		summary["remote_address"] = remote_address
 	if remote_port > 0:
 		summary["remote_port"] = remote_port
-	for key in ["host", "origin", "user-agent", "accept", "content-type"]:
+	for key in ["host", "origin", "user-agent", "accept", "content-type", "mcp-protocol-version"]:
 		var value := str(headers.get(key, "")).strip_edges()
 		if not value.is_empty():
 			summary[_summary_key_for_header(key)] = value
+	if not str(headers.get("mcp-session-id", "")).strip_edges().is_empty():
+		summary["mcp_session_present"] = true
 	if headers.has("authorization"):
 		summary["authorization_present"] = true
 	return summary
@@ -232,6 +376,8 @@ func _summary_key_for_header(header_name: String) -> String:
 			return "user_agent"
 		"content-type":
 			return "content_type"
+		"mcp-protocol-version":
+			return "mcp_protocol_version"
 		_:
 			return header_name
 

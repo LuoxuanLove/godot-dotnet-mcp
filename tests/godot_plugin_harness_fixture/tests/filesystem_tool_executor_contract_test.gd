@@ -9,22 +9,27 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var executor = FilesystemExecutorScript.new()
 
 	_remove_tree(TEMP_ROOT)
+	if ResourceLoader.exists("res://addons/godot_dotnet_mcp/tools/filesystem_tools.gd"):
+		return _failure("filesystem_tools.gd should be removed once the split executor becomes the only stable entry.")
+	if FileAccess.file_exists("res://addons/godot_dotnet_mcp/tools/filesystem_tools.gd.uid"):
+		return _failure("filesystem_tools.gd.uid should be removed with the legacy filesystem monolith.")
 
 	var tool_defs: Array[Dictionary] = executor.get_tools()
-	# Migration note: the "file" compatibility alias (line 15) and expected tool count (currently 7)
-	# reflect the pre-split state. Once the filesystem_tools.gd monolith is fully retired and all
-	# callers use the split executor, the compatibility alias should be removed and the count should
-	# decrease to 6, with "file" dropped from expected_names.
-	if tool_defs.size() != 7:
-		return _failure("Filesystem executor should expose 7 tool definitions including the compatibility file alias.")
+	if tool_defs.size() != 6:
+		return _failure("Filesystem executor should expose 6 canonical tool definitions after retiring the file compatibility alias.")
 
-	var expected_names := ["directory", "file", "file_read", "file_write", "file_manage", "json", "search"]
+	var expected_names := ["directory", "file_read", "file_write", "file_manage", "json", "search"]
 	var actual_names: Array[String] = []
 	for tool_def in tool_defs:
 		actual_names.append(str(tool_def.get("name", "")))
 	for expected_name in expected_names:
 		if not actual_names.has(expected_name):
 			return _failure("Filesystem executor is missing tool definition '%s'." % expected_name)
+	if actual_names.has("file"):
+		return _failure("Filesystem executor should not expose the retired file compatibility alias.")
+	var removed_alias_result: Dictionary = executor.execute("file", {"action": "read", "path": "res://project.godot"})
+	if bool(removed_alias_result.get("success", false)):
+		return _failure("Filesystem executor should not execute the retired file compatibility alias.")
 
 	var directory_create_result: Dictionary = executor.execute("directory", {
 		"action": "create",
@@ -123,6 +128,35 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("File read failed after search find_and_replace.")
 	if str(replaced_read_result.get("data", {}).get("content", "")) != "current architecture only":
 		return _failure("Search find_and_replace returned success without updating file content.")
+
+	var binary_write_result: Dictionary = executor.execute("file_write", {
+		"action": "write",
+		"path": TEMP_ROOT.path_join("data").path_join("image.png"),
+		"content": "not really a png"
+	})
+	if bool(binary_write_result.get("success", false)):
+		return _failure("File write should reject binary/image extensions for text writes.")
+	if str(binary_write_result.get("error_code", "")) != "project_text_file_required":
+		return _failure("File write binary-extension rejection should include project_text_file_required.")
+
+	var binary_fixture_path := TEMP_ROOT.path_join("data").path_join("asset.png")
+	var image := Image.create(2, 2, false, Image.FORMAT_RGBA8)
+	image.fill(Color(1.0, 0.0, 0.0, 1.0))
+	image.save_png(ProjectSettings.globalize_path(binary_fixture_path))
+	var binary_replace_result: Dictionary = executor.execute("search", {
+		"action": "find_and_replace",
+		"find": "PNG",
+		"replace": "TXT",
+		"path": TEMP_ROOT.path_join("data"),
+		"filter": "*.png",
+		"recursive": false
+	})
+	if not bool(binary_replace_result.get("success", false)):
+		return _failure("Search find_and_replace should succeed while skipping binary candidates.")
+	if int(binary_replace_result.get("data", {}).get("files_modified", -1)) != 0:
+		return _failure("Search find_and_replace should not modify binary candidates.")
+	if int(binary_replace_result.get("data", {}).get("skipped_file_count", -1)) < 1:
+		return _failure("Search find_and_replace should report skipped binary candidates.")
 
 	var plugin_cfg_content := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin.cfg")
 	var protected_replace_result: Dictionary = executor.execute("search", {

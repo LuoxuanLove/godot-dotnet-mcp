@@ -26,6 +26,29 @@ function Read-Utf8Text {
   return Get-Content -LiteralPath $Path -Raw -Encoding UTF8
 }
 
+function Test-ReleaseNotesFinishedWording {
+  param(
+    [Parameter(Mandatory = $true)][string]$Content,
+    [Parameter(Mandatory = $true)][string]$Path
+  )
+
+  $unfinishedPatterns = @(
+    '(?i)final notes will be completed',
+    '(?i)final highlights will be written',
+    '(?i)compatibility and upgrade notes will be finalized',
+    '(?i)will be completed from the actual',
+    '(?i)release theme pending',
+    '(?i)placeholder',
+    '(?i)\btbd\b',
+    '(?i)\btodo\b'
+  )
+  foreach ($pattern in $unfinishedPatterns) {
+    if ($Content -match $pattern) {
+      throw "Manual release notes $Path contain unfinished release wording."
+    }
+  }
+}
+
 function Get-ChangelogSection {
   param(
     [Parameter(Mandatory = $true)][string]$Path,
@@ -251,6 +274,7 @@ $manualVersionPattern = "(?<![0-9A-Za-z.-])(?:[vV])?$([regex]::Escape($Version))
 if ($manualNotes -notmatch $manualVersionPattern) {
   throw "Manual release notes $ManualNotesPath must mention version $Version"
 }
+Test-ReleaseNotesFinishedWording -Content $manualNotes -Path $ManualNotesPath
 
 $null = Get-ChangelogSection -Path $ChangelogPath -Version $Version -PreferUnreleased:$PreferUnreleased
 $commitSummary = Get-CommitSummary -TagName $TagName -Version $Version -CommitLimit $CommitLimit

@@ -2,7 +2,8 @@
 extends RefCounted
 class_name ToolCatalogSearchService
 
-const ToolPresentationServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
+const ToolCatalogSnapshotServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_catalog_snapshot_service.gd")
+const ToolPresentationService = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tool_presentation_service.gd")
 
 const DEFAULT_LIMIT := 25
 const MAX_LIMIT := 100
@@ -24,7 +25,21 @@ static func search(loader, args: Dictionary) -> Dictionary:
 	var category_filters := _string_filter_set(args.get("category", ""))
 	var include_schema := bool(args.get("include_schema", false))
 
-	var catalog := _build_catalog(loader, visibility == "visible", include_schema)
+	var snapshot := ToolCatalogSnapshotServiceScript.build_snapshot(loader, {
+		"presentation_views": ["legacy"]
+	})
+	if not bool(snapshot.get("success", false)):
+		return {
+			"success": false,
+			"error": str(snapshot.get("error", "tool_loader_unavailable")),
+			"message": str(snapshot.get("message", "Tool loader is unavailable"))
+		}
+
+	var catalog := _build_catalog(snapshot, visibility == "visible", include_schema)
+	var catalog_filter_index := _build_filter_index(catalog)
+	var loader_status: Dictionary = snapshot.get("tool_loader_status", {})
+	if loader_status.is_empty():
+		loader_status = _get_loader_status(loader)
 	var matches: Array[Dictionary] = []
 	var total_matched := 0
 	for tool in catalog:
@@ -41,6 +56,14 @@ static func search(loader, args: Dictionary) -> Dictionary:
 			var item := tool_dict.duplicate(true)
 			item["match_reasons"] = match_reasons
 			matches.append(item)
+	var diagnostics := _build_search_diagnostics(
+		query,
+		visibility,
+		domain_filters,
+		category_filters,
+		catalog_filter_index,
+		total_matched
+	)
 
 	return {
 		"success": true,
@@ -57,25 +80,36 @@ static func search(loader, args: Dictionary) -> Dictionary:
 				"filters": {
 					"domain": domain_filters.keys(),
 					"category": category_filters.keys()
-				}
+				},
+				"available_filters": {
+					"domain": catalog_filter_index.get("domain", []),
+					"category": catalog_filter_index.get("category", [])
+				},
+				"filter_warnings": diagnostics.get("filter_warnings", []),
+				"suggested_next_queries": diagnostics.get("suggested_next_queries", [])
 			},
 			"matches": matches,
-			"tool_loader_status": _get_loader_status(loader)
+			"tool_loader_status": loader_status
 		},
 		"message": "Tool catalog search complete"
 	}
 
 
-static func _build_catalog(loader, include_internal: bool, include_schema: bool) -> Array[Dictionary]:
-	var exposed_tools: Array = loader.get_exposed_tool_definitions()
-	var all_tools_by_category := _get_all_tools_by_category(loader)
-	var domain_states := _get_domain_states(loader)
-	var presentation := ToolPresentationServiceScript.build_tool_presentation(exposed_tools, all_tools_by_category, domain_states)
+static func _get_loader_status(loader) -> Dictionary:
+	if loader != null and loader.has_method("get_tool_loader_status"):
+		var status = loader.get_tool_loader_status()
+		if status is Dictionary:
+			return (status as Dictionary).duplicate(true)
+	return {}
+
+
+static func _build_catalog(snapshot: Dictionary, include_internal: bool, include_schema: bool) -> Array[Dictionary]:
+	var exposed_tools: Array = snapshot.get("exposed_tools", [])
+	var presentation: Dictionary = snapshot.get("presentation", {})
 	var metadata_by_name: Dictionary = presentation.get("toolMetadataByName", {})
 	var source_tools: Array = exposed_tools
 	if include_internal:
-		if loader.has_method("get_tool_definitions"):
-			source_tools = loader.get_tool_definitions()
+		source_tools = snapshot.get("visible_tools", exposed_tools)
 	var exposed_lookup := {}
 	for exposed in exposed_tools:
 		if exposed is Dictionary:
@@ -92,7 +126,8 @@ static func _build_catalog(loader, include_internal: bool, include_schema: bool)
 			continue
 		seen[full_name] = true
 		var metadata: Dictionary = metadata_by_name.get(full_name, {})
-		var input_schema: Dictionary = tool.get("inputSchema", {"type": "object", "properties": {}})
+		var input_schema: Dictionary = ToolPresentationService.build_tool_input_schema(tool)
+		var output_schema := ToolPresentationService.build_tool_output_schema(tool)
 		var item := {
 			"name": full_name,
 			"kind": "tool",
@@ -109,28 +144,9 @@ static func _build_catalog(loader, include_internal: bool, include_schema: bool)
 		}
 		if include_schema:
 			item["input_schema"] = input_schema.duplicate(true)
+			item["output_schema"] = output_schema
 		out.append(item)
 	return out
-
-
-static func _get_all_tools_by_category(loader) -> Dictionary:
-	if loader.has_method("get_all_tools_by_category"):
-		return loader.get_all_tools_by_category()
-	if loader.has_method("get_tools_by_category"):
-		return loader.get_tools_by_category()
-	return {}
-
-
-static func _get_domain_states(loader) -> Array:
-	if loader.has_method("get_domain_states"):
-		return loader.get_domain_states()
-	return []
-
-
-static func _get_loader_status(loader) -> Dictionary:
-	if loader.has_method("get_tool_loader_status"):
-		return loader.get_tool_loader_status()
-	return {}
 
 
 static func _extract_actions(input_schema: Dictionary) -> Array[String]:
@@ -211,6 +227,141 @@ static func _match_reasons(tool: Dictionary, query: String) -> Array[String]:
 		for enum_value in param.get("enum", []):
 			_add_match_reason(reasons, "param_enum", str(enum_value), needle)
 	return reasons
+
+
+static func _build_filter_index(catalog: Array[Dictionary]) -> Dictionary:
+	var domains := {}
+	var categories := {}
+	for tool in catalog:
+		var domain := str(tool.get("domain_key", "")).strip_edges().to_lower()
+		var category := str(tool.get("category", "")).strip_edges().to_lower()
+		if not domain.is_empty():
+			domains[domain] = true
+		if not category.is_empty():
+			categories[category] = true
+	return {
+		"domain": _sorted_keys(domains),
+		"category": _sorted_keys(categories)
+	}
+
+
+static func _build_search_diagnostics(
+	query: String,
+	visibility: String,
+	domain_filters: Dictionary,
+	category_filters: Dictionary,
+	filter_index: Dictionary,
+	total_matched: int
+) -> Dictionary:
+	var warnings: Array[Dictionary] = []
+	var suggestions: Array[Dictionary] = []
+	var available_domains: Array = filter_index.get("domain", [])
+	var available_categories: Array = filter_index.get("category", [])
+	_append_filter_warnings(warnings, suggestions, "domain", domain_filters.keys(), category_filters.keys(), available_domains, available_categories, query, visibility)
+	_append_filter_warnings(warnings, suggestions, "category", category_filters.keys(), domain_filters.keys(), available_categories, available_domains, query, visibility)
+	if total_matched == 0 and warnings.is_empty() and (not domain_filters.is_empty() or not category_filters.is_empty()):
+		suggestions.append({
+			"query": query,
+			"visibility": visibility,
+			"domain": [],
+			"category": [],
+			"reason": "Remove filters to check whether the query matches another tool group."
+		})
+	if total_matched == 0 and suggestions.is_empty() and not query.is_empty():
+		suggestions.append({
+			"query": "",
+			"visibility": visibility,
+			"domain": domain_filters.keys(),
+			"category": category_filters.keys(),
+			"reason": "Clear the query to inspect tools available under the current filters."
+		})
+	return {
+		"filter_warnings": warnings,
+		"suggested_next_queries": suggestions
+	}
+
+
+static func _append_filter_warnings(
+	warnings: Array[Dictionary],
+	suggestions: Array[Dictionary],
+	filter_name: String,
+	requested_values: Array,
+	paired_values: Array,
+	available_values: Array,
+	alternate_values: Array,
+	query: String,
+	visibility: String
+) -> void:
+	for raw_value in requested_values:
+		var value := str(raw_value).strip_edges().to_lower()
+		if value.is_empty() or available_values.has(value):
+			continue
+		var warning := {
+			"filter": filter_name,
+			"value": value,
+			"available": available_values,
+			"message": "%s filter '%s' is not available in %s tool catalog results." % [filter_name, value, visibility]
+		}
+		if alternate_values.has(value):
+			warning["hint"] = "'%s' is available as the other filter type." % value
+		warnings.append(warning)
+		suggestions.append(_suggest_filter_removal(filter_name, value, requested_values, paired_values, query, visibility))
+		if alternate_values.has(value):
+			suggestions.append(_suggest_filter_transfer(filter_name, value, query, visibility))
+
+
+static func _suggest_filter_removal(filter_name: String, value: String, requested_values: Array, paired_values: Array, query: String, visibility: String) -> Dictionary:
+	var suggestion := {
+		"query": query,
+		"visibility": visibility,
+		"reason": "Remove unavailable %s filter '%s'." % [filter_name, value]
+	}
+	var retained_values := _filter_values_except(requested_values, value)
+	if filter_name == "domain":
+		suggestion["domain"] = retained_values
+		suggestion["category"] = paired_values
+	else:
+		suggestion["domain"] = paired_values
+		suggestion["category"] = retained_values
+	return suggestion
+
+
+static func _filter_values_except(values: Array, excluded_value: String) -> Array[String]:
+	var retained: Array[String] = []
+	for raw_value in values:
+		var value := str(raw_value).strip_edges().to_lower()
+		if value.is_empty() or value == excluded_value:
+			continue
+		if not retained.has(value):
+			retained.append(value)
+	retained.sort()
+	return retained
+
+
+static func _suggest_filter_transfer(filter_name: String, value: String, query: String, visibility: String) -> Dictionary:
+	if filter_name == "domain":
+		return {
+			"query": query,
+			"visibility": visibility,
+			"domain": [],
+			"category": [value],
+			"reason": "Use '%s' as a category filter instead of a domain filter." % value
+		}
+	return {
+		"query": query,
+		"visibility": visibility,
+		"domain": [value],
+		"category": [],
+		"reason": "Use '%s' as a domain filter instead of a category filter." % value
+	}
+
+
+static func _sorted_keys(values: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for key in values.keys():
+		out.append(str(key))
+	out.sort()
+	return out
 
 
 static func _add_match_reason(reasons: Array[String], field: String, value: String, needle: String) -> void:

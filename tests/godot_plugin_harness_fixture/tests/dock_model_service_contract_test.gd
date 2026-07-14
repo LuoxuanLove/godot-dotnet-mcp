@@ -3,6 +3,9 @@ extends RefCounted
 # {"name": "dock_model_service_contracts"}
 
 const DockModelService = preload("res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd")
+const ServerRuntimeController = preload("res://addons/godot_dotnet_mcp/plugin/runtime/server_runtime_controller.gd")
+
+var _controllers: Array = []
 
 
 class FakeState extends RefCounted:
@@ -33,14 +36,141 @@ class FakeState extends RefCounted:
 	var update_sync_error := ""
 	var update_sync_target_ref := ""
 	var update_sync_target_kind := ""
+	var mcp_catalog_preview: Dictionary = {}
 
 
-class FakeServerController extends RefCounted:
+class FakeServerController extends ServerRuntimeController:
+	var all_tools_request_count := 0
+	var heavy_status_request_count := 0
+	var tool_loader_request_count := 0
+
+	func _init() -> void:
+		_server = FakeServer.new()
+
+	func get_tool_loader():
+		tool_loader_request_count += 1
+		return (_server as FakeServer).get_tool_loader()
+
+	func get_exposed_tool_definitions() -> Array:
+		return (_server as FakeServer).get_exposed_tool_definitions()
+
+	func get_tool_definitions() -> Array:
+		return (_server as FakeServer).get_tool_definitions()
+
+	func get_all_tools_by_category() -> Dictionary:
+		all_tools_request_count += 1
+		return (_server as FakeServer).get_all_tools_by_category()
+
+	func is_running() -> bool:
+		return true
+
+	func get_connection_stats() -> Dictionary:
+		return {"connections": 1}
+
+	func get_domain_states() -> Array:
+		heavy_status_request_count += 1
+		return (_server as FakeServer).get_domain_states()
+
+	func get_reload_status() -> Dictionary:
+		heavy_status_request_count += 1
+		return {}
+
+	func get_performance_summary() -> Dictionary:
+		heavy_status_request_count += 1
+		return (_server as FakeServer).get_performance_summary()
+
+	func get_tool_load_errors() -> Array:
+		heavy_status_request_count += 1
+		return []
+
+	func is_public_removed_tool(tool_name: String) -> bool:
+		return (_server as FakeServer).is_public_removed_tool(tool_name)
+
+
+class FakeServer extends Node:
+	var project_state_script_path := "res://addons/godot_dotnet_mcp/tools/system/project_state.gd"
+	var catalog_revision := 1
+
+	func get_tool_loader():
+		return self
+
+	func get_tool_loader_status() -> Dictionary:
+		return {
+			"initialized": true,
+			"healthy": true,
+			"status": "ready",
+			"tool_count": 6,
+			"exposed_tool_count": 4,
+			"category_count": 9,
+			"tool_load_error_count": 0,
+			"catalog_revision": catalog_revision
+		}
+
+	func get_tool_activity_registry():
+		return FakeActivityRegistry.new()
+
+	func get_exposed_tool_definitions() -> Array:
+		return [{
+			"name": "system_project_state",
+			"category": "system",
+			"source": "builtin",
+			"load_state": "loaded",
+			"script_path": project_state_script_path
+		}, {
+			"name": "system_tool_activity",
+			"category": "system",
+			"source": "builtin",
+			"load_state": "loaded",
+			"script_path": "res://addons/godot_dotnet_mcp/tools/system/tool_activity.gd"
+		}, {
+			"name": "plugin_runtime_state",
+			"category": "plugin_runtime",
+			"source": "builtin",
+			"load_state": "loaded",
+			"script_path": "res://addons/godot_dotnet_mcp/tools/plugin/runtime.gd"
+		}, {
+			"name": "material_inspect",
+			"category": "material",
+			"source": "builtin",
+			"load_state": "loaded",
+			"script_path": "res://addons/godot_dotnet_mcp/tools/material/inspect.gd"
+		}]
+
+	func get_tool_definitions() -> Array:
+		var tools := get_exposed_tool_definitions()
+		tools.append({
+			"name": "user_sample_tool",
+			"category": "user",
+			"source": "user_tool",
+			"load_state": "loaded",
+			"script_path": "res://addons/godot_dotnet_mcp/custom_tools/sample_tool.gd"
+		})
+		return tools
+
 	func get_all_tools_by_category() -> Dictionary:
 		return {
 			"system": [
-				{"name": "project_state"},
+				{"name": "project_state", "source": "builtin", "load_state": "loaded", "script_path": project_state_script_path},
+				{"name": "tool_activity", "source": "builtin", "load_state": "loaded", "script_path": "res://addons/godot_dotnet_mcp/tools/system/tool_activity.gd"},
 				{"name": "runtime_diagnose"}
+			],
+			"plugin_runtime": [
+				{"name": "state"}
+			],
+			"plugin_evolution": [
+				{"name": "update_status"}
+			],
+			"plugin_developer": [
+				{"name": "self_test"}
+			],
+			"material": [
+				{"name": "inspect"}
+			],
+			"physics": [
+				{"name": "inspect"}
+			],
+			"ui": [
+				{"name": "control"}
 			],
 			"scene": [
 				{"name": "scene_validate"}
@@ -50,23 +180,14 @@ class FakeServerController extends RefCounted:
 			]
 		}
 
-	func is_running() -> bool:
-		return true
-
-	func get_connection_stats() -> Dictionary:
-		return {"connections": 1}
-
 	func get_domain_states() -> Array:
-		return []
-
-	func get_reload_status() -> Dictionary:
-		return {}
+		return [{"category": "system", "domain_key": "core", "loaded": true, "tool_count": 3, "enabled_tool_count": 3}]
 
 	func get_performance_summary() -> Dictionary:
 		return {}
 
-	func get_tool_load_errors() -> Array:
-		return []
+	func is_public_removed_tool(tool_name: String) -> bool:
+		return tool_name == "system_tool_activity"
 
 
 class FakeLocalization extends RefCounted:
@@ -78,6 +199,19 @@ class FakeLocalization extends RefCounted:
 
 	func get_text(_key: String) -> String:
 		return ""
+
+
+class FakeActivityRegistry extends RefCounted:
+	func get_status() -> Dictionary:
+		return {"running": false, "recent_count": 2}
+
+	func get_recent(_limit: int = 20) -> Dictionary:
+		return {"recent": [{"id": "call-1", "tool": "system_project_state"}], "recent_count": 1}
+
+
+class FakeUserToolService extends RefCounted:
+	func list_user_tools() -> Array:
+		return []
 
 
 class FakeToolCatalog extends RefCounted:
@@ -117,8 +251,15 @@ class FakeContext extends RefCounted:
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
+	var source_guard := _assert_dock_model_signature_avoids_json_sort_comparators()
+	if not source_guard.is_empty():
+		return _failure(source_guard)
+	var lightweight_signature_guard := _assert_dock_model_uses_lightweight_signatures()
+	if not lightweight_signature_guard.is_empty():
+		return _failure(lightweight_signature_guard)
 	var service = DockModelService.new()
 	var state = FakeState.new()
+	state.mcp_catalog_preview = {"kind": "prompt", "id": "godot.project_orientation", "success": true, "text": "Preview text"}
 	state.settings = {
 		"disabled_tools": [],
 		"language": "en",
@@ -127,6 +268,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"tool_profile_id": "default"
 	}
 	var server_controller = FakeServerController.new()
+	_controllers.append(server_controller)
 	var context = FakeContext.new()
 	context.state = state
 	context.localization = FakeLocalization.new()
@@ -134,7 +276,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	context.tool_catalog = FakeToolCatalog.new()
 	context.config_service = RefCounted.new()
 	context.dock_presenter = null
-	context.user_tool_service = RefCounted.new()
+	context.user_tool_service = FakeUserToolService.new()
 	context.client_install_detection_service = null
 	context.central_server_attach_service = null
 	context.runtime_process_service = null
@@ -144,7 +286,21 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	context.get_editor_scale = Callable()
 	service.configure(context)
 
+	state.current_tab = 0
+	var home_model: Dictionary = service.build_model()
+	if server_controller.all_tools_request_count != 0:
+		return _failure("Dock home model should not request the full tool catalog.")
+	if server_controller.heavy_status_request_count != 0:
+		return _failure("Dock home model should not request heavy runtime diagnostics.")
+	if not (home_model.get("toolTree", []) as Array).is_empty():
+		return _failure("Dock home model should not build the heavy tools tree.")
+
+	state.current_tab = 1
 	var model: Dictionary = service.build_model()
+	if server_controller.all_tools_request_count <= 0:
+		return _failure("Dock Tools tab model should request the tool catalog on demand.")
+	if server_controller.heavy_status_request_count <= 0:
+		return _failure("Dock Tools tab model should request runtime diagnostics only when the Tools view needs them.")
 	var tools_by_category: Dictionary = model.get("tools_by_category", {})
 	if not tools_by_category.has("scene"):
 		return _failure("Dock model should keep non-root atomic categories available for system tool tree lookup.")
@@ -156,11 +312,101 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Dock model should still keep the full tool set for profile and filtering logic.")
 	if model.get("all_tools_by_category", {}).has("user") == false:
 		return _failure("Dock model should still keep hidden categories in all_tools_by_category for profile logic.")
-	var presentation: Dictionary = model.get("tool_presentation", {})
+	var presentation: Dictionary = model.get("active_tool_presentation", {})
 	if presentation.is_empty() or not (presentation.get("toolTree", []) is Array):
-		return _failure("Dock model should include the unified tool presentation model.")
-	if _contains_presentation_category(presentation.get("toolTree", []), "user"):
-		return _failure("Dock presentation should not expose categories filtered by tool access visibility.")
+		return _failure("Dock model should include the active tool presentation model.")
+	var metadata_by_name: Dictionary = presentation.get("toolMetadataByName", {})
+	var project_metadata: Dictionary = metadata_by_name.get("system_project_state", {})
+	if project_metadata.is_empty():
+		return _failure("Dock model should reuse snapshot presentation metadata for visible tools.")
+	if str(project_metadata.get("group", "")).is_empty() or str(project_metadata.get("source", "")) != "builtin":
+		return _failure("Dock snapshot metadata should preserve Agent Tools grouping and source.")
+	if str(project_metadata.get("scriptPath", "")).is_empty():
+		return _failure("Dock snapshot metadata should preserve scriptPath.")
+	if str(project_metadata.get("title", "")) != "System Project State":
+		return _failure("Dock snapshot metadata should preserve presentation titles for Tools UI consumers.")
+	var project_annotations = project_metadata.get("annotations", {})
+	if not (project_annotations is Dictionary) or bool((project_annotations as Dictionary).get("readOnlyHint", false)) != true:
+		return _failure("Dock snapshot metadata should preserve MCP annotations for Tools UI consumers.")
+	var project_input_schema = project_metadata.get("inputSchema", {})
+	if not (project_input_schema is Dictionary) or str((project_input_schema as Dictionary).get("$schema", "")) != "https://json-schema.org/draft/2020-12/schema":
+		return _failure("Dock snapshot metadata should preserve normalized input schemas for Tools UI consumers.")
+	var project_output_schema = project_metadata.get("outputSchema", {})
+	if not (project_output_schema is Dictionary) or str((project_output_schema as Dictionary).get("$schema", "")) != "https://json-schema.org/draft/2020-12/schema":
+		return _failure("Dock snapshot metadata should preserve normalized output schemas for Tools UI consumers.")
+	if metadata_by_name.has("system_tool_activity"):
+		return _failure("Dock presentation should filter removed public tools through the snapshot service.")
+	var agent_presentation: Dictionary = model.get("agent_tool_presentation", {})
+	var active_presentation: Dictionary = model.get("active_tool_presentation", {})
+	if agent_presentation.is_empty() or active_presentation.is_empty():
+		return _failure("Dock model should expose Agent Tools as the default active presentation.")
+	if model.get("toolTree", []) != agent_presentation.get("toolTree", []):
+		return _failure("Dock model should feed the Tools tab from Agent Tools by default.")
+	if _contains_presentation_category(model.get("toolTree", []), "plugin_runtime"):
+		return _failure("Dock default Tools tab tree should not expose internal executor categories.")
+	if not _contains_kind_key(model.get("toolTree", []), "public_tool", "system_project_state"):
+		return _failure("Dock default Tools tab tree should include canonical public tools.")
+	if model.has("internal_executor_presentation") or model.has("tool_diagnostics_presentation"):
+		return _failure("Dock model should not expose removed Internal or Diagnostics Tools views.")
+	if not (model.get("mcp_resources", []) as Array).is_empty() or not (model.get("mcp_prompts", []) as Array).is_empty():
+		return _failure("Dock Tools tab should not build the Resources/Prompts protocol projection.")
+
+	var catalog_requests_after_first_tools_model: int = server_controller.all_tools_request_count
+	var cached_tools_model: Dictionary = service.build_model()
+	if server_controller.all_tools_request_count != catalog_requests_after_first_tools_model:
+		return _failure("Dock Tools tab model should reuse cached catalog projection when the loader revision is unchanged.")
+	if cached_tools_model.get("active_tool_presentation", {}) != model.get("active_tool_presentation", {}):
+		return _failure("Dock Tools tab catalog cache should preserve the active presentation model.")
+
+	var changed_script_path := "res://addons/godot_dotnet_mcp/tools/system/project_state_v2.gd"
+	(server_controller._server as FakeServer).project_state_script_path = changed_script_path
+	(server_controller._server as FakeServer).catalog_revision += 1
+	var refreshed_model: Dictionary = service.build_model()
+	var refreshed_presentation: Dictionary = refreshed_model.get("active_tool_presentation", {})
+	var refreshed_metadata_by_name: Dictionary = refreshed_presentation.get("toolMetadataByName", {})
+	var refreshed_project_metadata: Dictionary = refreshed_metadata_by_name.get("system_project_state", {})
+	if str(refreshed_project_metadata.get("scriptPath", "")) != changed_script_path:
+		return _failure("Dock catalog snapshot cache should invalidate when tool metadata changes without a count change.")
+	var signature_before_nested_schema_change: String = service.call("_build_tool_signature_entry", "system", {
+		"name": "project_state",
+		"inputSchema": {"properties": {"flags": {"items": {"enum": ["a", "b"]}}}},
+		"presentation": {"group": "Project", "rank": 1}
+	})
+	var signature_after_nested_schema_change: String = service.call("_build_tool_signature_entry", "system", {
+		"name": "project_state",
+		"inputSchema": {"properties": {"flags": {"items": {"enum": ["a", "c"]}}}},
+		"presentation": {"rank": 1, "group": "Project"}
+	})
+	if signature_before_nested_schema_change == signature_after_nested_schema_change:
+		return _failure("Dock model lightweight tool signatures should still detect nested schema metadata changes.")
+	var signature_with_reordered_keys: String = service.call("_build_tool_signature_entry", "system", {
+		"presentation": {"rank": 1, "group": "Project"},
+		"inputSchema": {"properties": {"flags": {"items": {"enum": ["a", "b"]}}}},
+		"name": "project_state"
+	})
+	if signature_before_nested_schema_change != signature_with_reordered_keys:
+		return _failure("Dock model lightweight tool signatures should be stable for reordered dictionary keys.")
+
+	state.current_tab = 2
+	server_controller.heavy_status_request_count = 0
+	var tool_loader_requests_before_protocol_catalog: int = server_controller.tool_loader_request_count
+	var resources_model: Dictionary = service.build_model()
+	if server_controller.heavy_status_request_count != 0:
+		return _failure("Dock Resources tab model should not request heavy runtime diagnostics.")
+	if server_controller.tool_loader_request_count != tool_loader_requests_before_protocol_catalog:
+		return _failure("Dock Resources tab model should not request the tool loader for protocol list projection.")
+	var protocol_projection_result := _verify_mcp_protocol_projection(resources_model)
+	if not bool(protocol_projection_result.get("success", false)):
+		return protocol_projection_result
+	if str((resources_model.get("mcp_catalog_preview", {}) as Dictionary).get("text", "")) != "Preview text":
+		return _failure("Dock model should expose the current MCP catalog preview result to Resources/Prompts tabs.")
+	state.current_tab = 3
+	var prompt_loader_requests_before_protocol_catalog: int = server_controller.tool_loader_request_count
+	var prompts_model: Dictionary = service.build_model()
+	if server_controller.tool_loader_request_count != prompt_loader_requests_before_protocol_catalog:
+		return _failure("Dock Prompts tab model should not request the tool loader for protocol list projection.")
+	if (prompts_model.get("mcp_prompts", []) as Array).is_empty():
+		return _failure("Dock Prompts tab model should project MCP prompts without loading the tool runtime.")
 	if not model.has("plugin_freshness") or not (model.get("plugin_freshness", {}) is Dictionary):
 		return _failure("Dock model should include plugin freshness data for the Settings tab update summary.")
 	if not model.has("plugin_version"):
@@ -183,12 +429,128 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	}
 
 
+func cleanup_case(_tree: SceneTree) -> void:
+	for controller in _controllers:
+		if controller != null and controller.has_method("detach"):
+			controller.detach()
+	_controllers.clear()
+
+
 func _failure(message: String) -> Dictionary:
 	return {
 		"name": "dock_model_service_contracts",
 		"success": false,
 		"error": message
 	}
+
+
+func _assert_dock_model_signature_avoids_json_sort_comparators() -> String:
+	var source_path := "res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd"
+	if not FileAccess.file_exists(source_path):
+		return "Dock model service source should exist for signature guard."
+	var source := FileAccess.get_file_as_string(source_path)
+	if source.find("_sort_tool_signature_entries") != -1 or source.find("JSON.stringify(left) < JSON.stringify(right)") != -1:
+		return "Dock model catalog signature should not stringify tool entries inside the sort comparator."
+	if source.find("tool_entries.sort()") == -1:
+		return "Dock model catalog signature should sort precomputed lightweight entry keys."
+	return ""
+
+
+func _assert_dock_model_uses_lightweight_signatures() -> String:
+	var source_path := "res://addons/godot_dotnet_mcp/plugin/presenters/dock_model_service.gd"
+	if not FileAccess.file_exists(source_path):
+		return "Dock model service source should exist for lightweight signature guard."
+	var source := FileAccess.get_file_as_string(source_path)
+	for needle in [
+		"return JSON.stringify({",
+		"tool_entries.append(JSON.stringify",
+		"return JSON.stringify(["
+	]:
+		if source.find(needle) != -1:
+			return "Dock model signatures should avoid JSON serialization in hot refresh paths."
+	if source.find("func _signature_value") == -1 or source.find("func _signature_scalar") == -1:
+		return "Dock model signatures should use lightweight deterministic value signatures."
+	if source.find("_build_tool_catalog_model_signature") == -1 or source.find("_signature_join([") == -1:
+		return "Dock model catalog signatures should use lightweight signature joins."
+	return ""
+
+
+func _verify_mcp_protocol_projection(model: Dictionary) -> Dictionary:
+	var resources: Array = model.get("mcp_resources", [])
+	var resource_templates: Array = model.get("mcp_resource_templates", [])
+	var prompts: Array = model.get("mcp_prompts", [])
+	var counts: Dictionary = model.get("mcp_catalog_counts", {})
+	if resources.is_empty():
+		return _failure("Dock model should project MCP resources for the protocol catalog UI.")
+	if resource_templates.is_empty():
+		return _failure("Dock model should project MCP resource templates for the protocol catalog UI.")
+	if prompts.is_empty():
+		return _failure("Dock model should project MCP prompts for the protocol catalog UI.")
+	if int(counts.get("resources", -1)) != resources.size() or int(counts.get("resource_templates", -1)) != resource_templates.size() or int(counts.get("prompts", -1)) != prompts.size():
+		return _failure("Dock model should include MCP catalog counts matching the projected lists.")
+
+	var guide_resource := _find_resource_by_uri(resources, "godot-dotnet-mcp://guides/index")
+	if guide_resource.is_empty():
+		return _failure("Dock model should include the canonical guide index resource.")
+	if str(guide_resource.get("resource_kind", "")) != "guide":
+		return _failure("Dock resource projection should classify guide resources.")
+	if str(guide_resource.get("title", "")).is_empty() or str(guide_resource.get("description", "")).is_empty() or str(guide_resource.get("mimeType", "")) != "application/json":
+		return _failure("Dock resource projection should preserve title, description, and mime type.")
+	if (guide_resource.get("icons", []) as Array).is_empty():
+		return _failure("Dock resource projection should preserve MCP 2025-11-25 resource icons.")
+
+	var state_resource := _find_resource_by_uri(resources, "godot-dotnet-mcp://state/editor")
+	if str(state_resource.get("resource_kind", "")) != "state":
+		return _failure("Dock resource projection should classify state resources.")
+	var log_resource := _find_resource_by_uri(resources, "godot-dotnet-mcp://logs/editor/errors")
+	if str(log_resource.get("resource_kind", "")) != "log":
+		return _failure("Dock resource projection should classify editor log resources.")
+	var catalog_resource := _find_resource_by_uri(resources, "godot-dotnet-mcp://tools/catalog/visible")
+	if str(catalog_resource.get("resource_kind", "")) != "catalog":
+		return _failure("Dock resource projection should classify catalog resources.")
+	var activity_resource := _find_resource_by_uri(resources, "godot-dotnet-mcp://activity/recent")
+	if str(activity_resource.get("resource_kind", "")) != "activity":
+		return _failure("Dock resource projection should classify activity resources.")
+
+	var scene_template := _find_resource_by_uri(resource_templates, "godot-dotnet-mcp://scene/{path}")
+	if scene_template.is_empty() or str(scene_template.get("resource_kind", "")) != "template" or not bool(scene_template.get("is_template", false)):
+		return _failure("Dock resource projection should include and classify resource templates.")
+
+	var orientation_prompt := _find_prompt_by_name(prompts, "godot.project_orientation")
+	if orientation_prompt.is_empty():
+		return _failure("Dock prompt projection should include the project orientation workflow.")
+	if str(orientation_prompt.get("title", "")).is_empty() or str(orientation_prompt.get("description", "")).is_empty():
+		return _failure("Dock prompt projection should preserve prompt title and description.")
+	if (orientation_prompt.get("icons", []) as Array).is_empty():
+		return _failure("Dock prompt projection should preserve MCP 2025-11-25 prompt icons.")
+	var orientation_args: Array = orientation_prompt.get("arguments", [])
+	if not _array_has_argument(orientation_args, "goal"):
+		return _failure("Dock prompt projection should preserve prompt argument metadata.")
+	var runtime_prompt := _find_prompt_by_name(prompts, "godot.runtime_validation")
+	if str(runtime_prompt.get("prompt_kind", "")) != "runtime":
+		return _failure("Dock prompt projection should classify runtime workflows.")
+	return {"success": true}
+
+
+func _find_resource_by_uri(entries: Array, uri: String) -> Dictionary:
+	for entry in entries:
+		if entry is Dictionary and str((entry as Dictionary).get("uri", "")) == uri:
+			return entry as Dictionary
+	return {}
+
+
+func _find_prompt_by_name(entries: Array, name: String) -> Dictionary:
+	for entry in entries:
+		if entry is Dictionary and str((entry as Dictionary).get("name", "")) == name:
+			return entry as Dictionary
+	return {}
+
+
+func _array_has_argument(entries: Array, name: String) -> bool:
+	for entry in entries:
+		if entry is Dictionary and str((entry as Dictionary).get("name", "")) == name:
+			return true
+	return false
 
 
 func _contains_presentation_category(nodes: Array, category: String) -> bool:
@@ -199,5 +561,29 @@ func _contains_presentation_category(nodes: Array, category: String) -> bool:
 		if str(node_dict.get("kind", "")) == "category" and str(node_dict.get("key", "")) == category:
 			return true
 		if _contains_presentation_category(node_dict.get("children", []), category):
+			return true
+	return false
+
+
+func _contains_presentation_tool(nodes: Array, tool_name: String) -> bool:
+	for node in nodes:
+		if not (node is Dictionary):
+			continue
+		var node_dict := node as Dictionary
+		if ["tool", "public_tool"].has(str(node_dict.get("kind", ""))) and str(node_dict.get("key", "")) == tool_name:
+			return true
+		if _contains_presentation_tool(node_dict.get("children", []), tool_name):
+			return true
+	return false
+
+
+func _contains_kind_key(nodes: Array, kind: String, key: String) -> bool:
+	for node in nodes:
+		if not (node is Dictionary):
+			continue
+		var node_dict := node as Dictionary
+		if str(node_dict.get("kind", "")) == kind and str(node_dict.get("key", "")) == key:
+			return true
+		if _contains_kind_key(node_dict.get("children", []), kind, key):
 			return true
 	return false

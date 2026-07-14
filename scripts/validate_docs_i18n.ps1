@@ -1,12 +1,16 @@
 ﻿param(
     [string]$DocsRoot = "docs",
-    [string[]]$Locales = @("en", "zh-CN", "ja", "ko")
+    [string[]]$Locales = @("en", "zh-CN", "ja", "ko"),
+    [switch]$SkipDocumentMapValidation
 )
 
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $docsRootPath = Join-Path $repoRoot $DocsRoot
+if ([System.IO.Path]::IsPathRooted($DocsRoot)) {
+    $docsRootPath = $DocsRoot
+}
 $errors = New-Object System.Collections.Generic.List[string]
 
 $docMap = @(
@@ -15,13 +19,17 @@ $docMap = @(
     @{ Id = "roadmap"; Paths = @{ en = "ROADMAP.md"; "zh-CN" = "路线图.md"; ja = "ロードマップ.md"; ko = "로드맵.md" } },
     @{ Id = "overview"; Paths = @{ en = "overview.md"; "zh-CN" = "概述.md"; ja = "概要.md"; ko = "개요.md" } },
     @{ Id = "interface-overview"; Paths = @{ en = "interface/overview.md"; "zh-CN" = "界面/总览.md"; ja = "インターフェース/概要.md"; ko = "인터페이스/개요.md" } },
+    @{ Id = "interface-dock-ui-style-guide"; Paths = @{ en = "interface/dock-ui-style-guide.md"; "zh-CN" = "界面/Dock界面风格规范.md"; ja = "インターフェース/Dock-UIスタイルガイド.md"; ko = "인터페이스/Dock-UI-스타일-가이드.md" } },
     @{ Id = "interface-server-config"; Paths = @{ en = "interface/server-and-config-pages.md"; "zh-CN" = "界面/服务与配置页实现.md"; ja = "インターフェース/サーバーと設定ページ実装.md"; ko = "인터페이스/서버와-설정-페이지-구현.md" } },
     @{ Id = "interface-tools"; Paths = @{ en = "interface/tools-page.md"; "zh-CN" = "界面/工具页实现.md"; ja = "インターフェース/ツールページ実装.md"; ko = "인터페이스/도구-페이지-구현.md" } },
     @{ Id = "process-agent-bot"; Paths = @{ en = "process/agent-and-bot-workflow.md"; "zh-CN" = "流程/智能体与机器人流程.md"; ja = "プロセス/エージェントとボットの流れ.md"; ko = "프로세스/에이전트와-봇-흐름.md" } },
+    @{ Id = "process-v2.0.0-protocol-plan"; Paths = @{ en = "process/v2.0.0-protocol-refactor-plan.md"; "zh-CN" = "流程/v2.0.0-协议重构计划.md"; ja = "プロセス/v2.0.0-プロトコルリファクタ計画.md"; ko = "프로세스/v2.0.0-프로토콜-리팩터-계획.md" } },
+    @{ Id = "process-v2.0.0-ui-information-design-plan"; Paths = @{ en = "process/v2.0.0-ui-information-design-plan.md"; "zh-CN" = "流程/v2.0.0-UI信息设计计划.md"; ja = "プロセス/v2.0.0-UI情報設計計画.md"; ko = "프로세스/v2.0.0-UI-정보-설계-계획.md" } },
+    @{ Id = "process-v2.0.0-progress-tracker"; Paths = @{ en = "process/v2.0.0-refactor-progress-tracker.md"; "zh-CN" = "流程/v2.0.0-重构进度跟踪.md"; ja = "プロセス/v2.0.0-リファクタ進捗トラッカー.md"; ko = "프로세스/v2.0.0-리팩터-진행-추적.md" } },
     @{ Id = "process-release-runbook"; Paths = @{ en = "process/release-runbook.md"; "zh-CN" = "流程/发布运行手册.md"; ja = "プロセス/リリース運用手順.md"; ko = "프로세스/릴리스-운영-절차.md" } },
     @{ Id = "process-release-notes-v1.2.0"; Paths = @{ en = "process/release-notes/release-notes-v1.2.0.md"; "zh-CN" = "流程/发布说明/发布说明-v1.2.0.md"; ja = "プロセス/リリースノート/リリースノート-v1.2.0.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v1.2.0.md" } },
     @{ Id = "process-release-notes-v1.3.0"; Paths = @{ en = "process/release-notes/release-notes-v1.3.0.md"; "zh-CN" = "流程/发布说明/发布说明-v1.3.0.md"; ja = "プロセス/リリースノート/リリースノート-v1.3.0.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v1.3.0.md" } },
-    @{ Id = "process-release-notes-v1.4.0"; Paths = @{ en = "process/release-notes/release-notes-v1.4.0.md"; "zh-CN" = "流程/发布说明/发布说明-v1.4.0.md"; ja = "プロセス/リリースノート/リリースノート-v1.4.0.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v1.4.0.md" } },
+    @{ Id = "process-release-notes-v2.0.0"; Paths = @{ en = "process/release-notes/release-notes-v2.0.0.md"; "zh-CN" = "流程/发布说明/发布说明-v2.0.0.md"; ja = "プロセス/リリースノート/リリースノート-v2.0.0.md"; ko = "프로세스/릴리스-노트/릴리스-노트-v2.0.0.md" } },
     @{ Id = "testing-overview"; Paths = @{ en = "testing/overview.md"; "zh-CN" = "测试/总览.md"; ja = "テスト/概要.md"; ko = "테스트/개요.md" } },
     @{ Id = "testing-smoke-ci"; Paths = @{ en = "testing/smoke-and-ci.md"; "zh-CN" = "测试/冒烟测试与持续集成.md"; ja = "テスト/スモークテストと継続的インテグレーション.md"; ko = "테스트/스모크-테스트와-지속적-통합.md" } },
     @{ Id = "testing-headless"; Paths = @{ en = "testing/plugin-headless-testing.md"; "zh-CN" = "测试/插件无头测试.md"; ja = "テスト/プラグインヘッドレステスト.md"; ko = "테스트/플러그인-헤드리스-테스트.md" } },
@@ -175,7 +183,11 @@ function Test-MarkdownLinks {
 
 function Get-ReleaseNoteLanguageSwitchLine {
     param([string]$Version)
-    return "<p align=`"center`"><a href=`"https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v$Version/docs/en/process/release-notes/release-notes-v$Version.md`">English</a> | <a href=`"https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v$Version/docs/zh-CN/流程/发布说明/发布说明-v$Version.md`">简体中文</a> | <a href=`"https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v$Version/docs/ja/プロセス/リリースノート/リリースノート-v$Version.md`">日本語</a> | <a href=`"https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/v$Version/docs/ko/프로세스/릴리스-노트/릴리스-노트-v$Version.md`">한국어</a></p>"
+    $ref = "v$Version"
+    if ($Version -eq "2.0.0") {
+        $ref = "refactor/v2.0.0"
+    }
+    return "<p align=`"center`"><a href=`"https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/$ref/docs/en/process/release-notes/release-notes-v$Version.md`">English</a> | <a href=`"https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/$ref/docs/zh-CN/流程/发布说明/发布说明-v$Version.md`">简体中文</a> | <a href=`"https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/$ref/docs/ja/プロセス/リリースノート/リリースノート-v$Version.md`">日本語</a> | <a href=`"https://github.com/LuoxuanLove/godot-dotnet-mcp/blob/$ref/docs/ko/프로세스/릴리스-노트/릴리스-노트-v$Version.md`">한국어</a></p>"
 }
 
 function Test-ReleaseNoteLanguageSwitch {
@@ -328,6 +340,36 @@ function Remove-AllowedReleaseNoteLanguageSwitch {
     return [regex]::Replace($Content, "(?m)^$expectedLine`r?`n?", '')
 }
 
+function Test-ReleaseNoteFinishedWording {
+    param([string]$Content, [string]$RelativePath)
+    if ($RelativePath -notmatch 'v\d+\.\d+\.\d+\.md$') {
+        return
+    }
+
+    $patterns = @(
+        '(?i)final notes will be completed',
+        '(?i)final highlights will be written',
+        '(?i)compatibility and upgrade notes will be finalized',
+        '(?i)will be completed from the actual',
+        '最终发布说明会在发布前',
+        '最终亮点会.*定稿',
+        '兼容性与升级提示将在.*定稿',
+        '最終\s*release notes\s*は\s*release\s*前',
+        'final highlights\s*を実際の内容から仕上げます',
+        'compatibility and upgrade notes\s*は.*確定します',
+        '최종\s*release notes는\s*release 전에',
+        'final highlights를 실제 내용으로 마무리합니다',
+        'compatibility and upgrade notes는.*확정됩니다'
+    )
+
+    foreach ($pattern in $patterns) {
+        if ($Content -match $pattern) {
+            $errors.Add("Release note contains unfinished release wording: $RelativePath")
+            return
+        }
+    }
+}
+
 function Test-DocumentQuality {
     param([string]$Locale, [string]$RelativePath, [System.IO.FileInfo]$File)
     $content = Get-Content -LiteralPath $File.FullName -Raw -Encoding UTF8
@@ -352,6 +394,10 @@ function Test-DocumentQuality {
     if ($RelativePath -in @("appendix/directory-tree-and-file-responsibilities.md", "附录/目录树与文件职责.md", "付録/ディレクトリツリーとファイル責務.md", "부록/디렉터리-트리와-파일-책임.md")) {
         Test-TablePathDuplicates -File $File -RelativePath $relative
     }
+    if ($RelativePath -in @("CHANGELOG.md", "变更日志.md", "変更履歴.md", "변경-로그.md")) {
+        Test-ChangelogSectionOrder -Content $content -RelativePath $relative
+    }
+    Test-ReleaseNoteFinishedWording -Content $naturalLanguageContent -RelativePath $relative
     foreach ($match in [regex]::Matches($naturalLanguageContent, '(?m)^#{1,6}\s+(.+)$')) {
         Test-LocalizedTextScript -Locale $Locale -Text $match.Groups[1].Value -Context $relative
     }
@@ -393,6 +439,45 @@ function Test-DocumentQuality {
             if ($naturalLanguageContent -match 'docs/(en|zh-CN|ja)/') {
                 $errors.Add("Korean document references another locale docs path: $relative")
             }
+        }
+    }
+}
+
+function Test-ChangelogSectionOrder {
+    param([string]$Content, [string]$RelativePath)
+    $allowedOrder = @("Added", "Changed", "Fixed", "Documentation", "Internal")
+    $orderLookup = @{}
+    for ($i = 0; $i -lt $allowedOrder.Count; $i++) {
+        $orderLookup[$allowedOrder[$i]] = $i
+    }
+
+    $versionMatches = @([regex]::Matches($Content, '(?m)^##\s+.+$'))
+    for ($versionIndex = 0; $versionIndex -lt $versionMatches.Count; $versionIndex++) {
+        $sectionStart = $versionMatches[$versionIndex].Index + $versionMatches[$versionIndex].Length
+        $sectionEnd = $Content.Length
+        if ($versionIndex + 1 -lt $versionMatches.Count) {
+            $sectionEnd = $versionMatches[$versionIndex + 1].Index
+        }
+        $sectionText = $Content.Substring($sectionStart, $sectionEnd - $sectionStart)
+        $lastOrder = -1
+        $seenHeadings = New-Object System.Collections.Generic.HashSet[string]
+        foreach ($match in [regex]::Matches($sectionText, '(?m)^###\s+(.+?)\s*$')) {
+            $heading = $match.Groups[1].Value.Trim()
+            if (-not $orderLookup.ContainsKey($heading)) {
+                continue
+            }
+            if (-not $seenHeadings.Add($heading)) {
+                $versionHeading = $versionMatches[$versionIndex].Value.Trim()
+                $errors.Add("Changelog section is duplicated in ${RelativePath} ${versionHeading}: ${heading}. Each version must use each section heading at most once.")
+                break
+            }
+            $currentOrder = [int]$orderLookup[$heading]
+            if ($currentOrder -lt $lastOrder) {
+                $versionHeading = $versionMatches[$versionIndex].Value.Trim()
+                $errors.Add("Changelog section order is invalid in ${RelativePath} ${versionHeading}: ${heading} appears after a later section. Expected order: $($allowedOrder -join ' / ')")
+                break
+            }
+            $lastOrder = $currentOrder
         }
     }
 }
@@ -466,6 +551,9 @@ foreach ($locale in $Locales) {
     $expectedByLocale[$locale] = New-Object System.Collections.Generic.HashSet[string]
 }
 foreach ($doc in $docMap) {
+    if ($SkipDocumentMapValidation) {
+        break
+    }
     foreach ($locale in $Locales) {
         if (-not $doc.Paths.ContainsKey($locale)) {
             $errors.Add("Missing path mapping for $($doc.Id) in $locale")
@@ -491,13 +579,15 @@ foreach ($locale in $Locales) {
     $actualFiles = @(Get-ChildItem -LiteralPath $localeRoot -Recurse -File -Filter "*.md" | ForEach-Object { Normalize-RelativePath (Get-RelativePath -BasePath $localeRoot -TargetPath $_.FullName) } | Sort-Object -Unique)
     foreach ($relativePath in $actualFiles) {
         Test-PathScript -Locale $locale -RelativePath $relativePath
-        if (-not $expectedByLocale[$locale].Contains($relativePath)) {
+        if ((-not $SkipDocumentMapValidation) -and -not $expectedByLocale[$locale].Contains($relativePath)) {
             $errors.Add("Unexpected localized docs file: $DocsRoot/$locale/$relativePath")
         }
     }
-    foreach ($expected in $expectedByLocale[$locale]) {
-        if ($actualFiles -notcontains $expected) {
-            $errors.Add("Missing localized docs file: $DocsRoot/$locale/$expected")
+    if (-not $SkipDocumentMapValidation) {
+        foreach ($expected in $expectedByLocale[$locale]) {
+            if ($actualFiles -notcontains $expected) {
+                $errors.Add("Missing localized docs file: $DocsRoot/$locale/$expected")
+            }
         }
     }
     $localeFiles = @(Get-ChildItem -LiteralPath $localeRoot -Recurse -File -Filter "*.md")
@@ -510,8 +600,10 @@ foreach ($locale in $Locales) {
 }
 
 $referenceLocale = $Locales[0]
-foreach ($doc in $docMap) {
-    Test-DocumentStructureCompleteness -Doc $doc -ReferenceLocale $referenceLocale
+if (-not $SkipDocumentMapValidation) {
+    foreach ($doc in $docMap) {
+        Test-DocumentStructureCompleteness -Doc $doc -ReferenceLocale $referenceLocale
+    }
 }
 
 foreach ($locale in $Locales) {

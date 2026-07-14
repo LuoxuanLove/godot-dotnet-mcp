@@ -14,10 +14,14 @@ class FakeDock extends Control:
 	signal current_tab_changed(index: int)
 	signal update_source_changed(source: String)
 	signal update_custom_branch_changed(branch: String)
+	signal update_interaction_refresh_requested
 	signal update_check_requested
 	signal update_apply_requested
+	signal update_compare_target_selected(kind: String, target_ref: String, target_commit: String)
+	signal update_switch_requested(kind: String, target_ref: String, target_commit: String)
 	signal full_reload_requested
 	signal copy_requested(text: String, source: String)
+	signal mcp_catalog_preview_requested(kind: String, id: String, arguments: Dictionary)
 
 
 class FakeServerController extends RefCounted:
@@ -32,10 +36,14 @@ class FakePlugin extends RefCounted:
 	var current_tab_changes: Array[int] = []
 	var update_source_changes: Array[String] = []
 	var update_custom_branch_changes: Array[String] = []
+	var update_interaction_refresh_count := 0
 	var update_check_count := 0
 	var update_apply_count := 0
+	var update_compare_targets: Array[Dictionary] = []
+	var update_switches: Array[Dictionary] = []
 	var full_reload_count := 0
 	var copy_events: Array[Dictionary] = []
+	var preview_events: Array[Dictionary] = []
 	var show_message_count := 0
 	var last_message := ""
 	var confirmation_count := 0
@@ -50,17 +58,29 @@ class FakePlugin extends RefCounted:
 	func _on_update_custom_branch_changed(branch: String) -> void:
 		update_custom_branch_changes.append(branch)
 
-	func _on_update_check_requested() -> void:
+	func _on_update_interaction_refresh_requested() -> void:
+		update_interaction_refresh_count += 1
+
+	func _on_update_check_requested(_background_refresh: bool = false) -> void:
 		update_check_count += 1
 
 	func _on_update_sync_requested() -> void:
 		update_apply_count += 1
+
+	func _on_update_compare_target_selected(kind: String, target_ref: String, target_commit: String) -> void:
+		update_compare_targets.append({"kind": kind, "ref": target_ref, "commit": target_commit})
+
+	func _on_update_switch_requested(kind: String, target_ref: String, target_commit: String) -> void:
+		update_switches.append({"kind": kind, "ref": target_ref, "commit": target_commit})
 
 	func _on_full_reload_requested() -> void:
 		full_reload_count += 1
 
 	func _on_copy_requested(text: String, source: String) -> void:
 		copy_events.append({"text": text, "source": source})
+
+	func _on_mcp_catalog_preview_requested(kind: String, id: String, arguments: Dictionary) -> void:
+		preview_events.append({"kind": kind, "id": id, "arguments": arguments.duplicate(true)})
 
 	func _show_message(message: String) -> void:
 		show_message_count += 1
@@ -116,10 +136,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	_router.configure(_plugin, "RuntimeBridge", "res://addons/godot_dotnet_mcp/plugin/runtime/mcp_runtime_bridge.gd")
 
 	var bindings = _coordinator.build_dock_signal_bindings(_router)
-	if bindings.size() != 29:
+	if bindings.size() != 33:
 		return _failure("PluginActionRouter should expose the full dock binding set.")
 	var binding_map := _map_bindings_by_signal(bindings)
-	for signal_name in ["current_tab_changed", "update_source_changed", "update_custom_branch_changed", "update_check_requested", "update_apply_requested", "full_reload_requested", "copy_requested", "config_write_requested"]:
+	for signal_name in ["current_tab_changed", "update_source_changed", "update_custom_branch_changed", "update_interaction_refresh_requested", "update_check_requested", "update_apply_requested", "update_compare_target_selected", "update_switch_requested", "full_reload_requested", "copy_requested", "mcp_catalog_preview_requested", "config_write_requested"]:
 		var binding: Dictionary = binding_map.get(signal_name, {})
 		var callable: Callable = binding.get("callable", Callable())
 		if not callable.is_valid():
@@ -130,10 +150,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		binding_map["current_tab_changed"],
 		binding_map["update_source_changed"],
 		binding_map["update_custom_branch_changed"],
+		binding_map["update_interaction_refresh_requested"],
 		binding_map["update_check_requested"],
 		binding_map["update_apply_requested"],
+		binding_map["update_compare_target_selected"],
+		binding_map["update_switch_requested"],
 		binding_map["full_reload_requested"],
-		binding_map["copy_requested"]
+		binding_map["copy_requested"],
+		binding_map["mcp_catalog_preview_requested"]
 	]
 	if not _coordinator.wire_dock_signals(_dock, routed_bindings, "plugin_action_router_contract", Callable(recorder, "record_incident"), PluginDockCoordinator.DEFAULT_DOCK_SCRIPT_PATH):
 		return _failure("PluginActionRouter should wire valid dock bindings through the dock coordinator.")
@@ -157,21 +181,33 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	_dock.emit_signal("current_tab_changed", 7)
 	_dock.emit_signal("update_source_changed", "custom_branch")
 	_dock.emit_signal("update_custom_branch_changed", "feature/router")
+	_dock.emit_signal("update_interaction_refresh_requested")
 	_dock.emit_signal("update_check_requested")
 	_dock.emit_signal("update_apply_requested")
+	_dock.emit_signal("update_compare_target_selected", "branch", "dev", "compare-sha")
+	_dock.emit_signal("update_switch_requested", "tag", "v2.0.0", "target-sha")
 	_dock.emit_signal("full_reload_requested")
 	_dock.emit_signal("copy_requested", "copy text", "clipboard")
+	_dock.emit_signal("mcp_catalog_preview_requested", "prompt", "godot.project_orientation", {"goal": "inspect"})
 
 	if _plugin.current_tab_changes != [7]:
 		return _failure("PluginActionRouter should route current_tab_changed through the dock binding.")
 	if _plugin.update_source_changes != ["custom_branch"] or _plugin.update_custom_branch_changes != ["feature/router"]:
 		return _failure("PluginActionRouter should route update Settings changes to plugin handlers.")
+	if _plugin.update_interaction_refresh_count != 1:
+		return _failure("PluginActionRouter should route update Settings interaction refresh requests to plugin handlers.")
 	if _plugin.update_check_count != 1 or _plugin.update_apply_count != 1:
 		return _failure("PluginActionRouter should route update discovery and sync requests to plugin handlers.")
+	if _plugin.update_compare_targets.size() != 1 or str(_plugin.update_compare_targets[0].get("kind", "")) != "branch" or str(_plugin.update_compare_targets[0].get("ref", "")) != "dev" or str(_plugin.update_compare_targets[0].get("commit", "")) != "compare-sha":
+		return _failure("PluginActionRouter should route row comparison targets without switching versions.")
+	if _plugin.update_switches.size() != 1 or str(_plugin.update_switches[0].get("kind", "")) != "tag" or str(_plugin.update_switches[0].get("ref", "")) != "v2.0.0" or str(_plugin.update_switches[0].get("commit", "")) != "target-sha":
+		return _failure("PluginActionRouter should route update table Switch requests to plugin handlers.")
 	if _plugin.full_reload_count != 1:
 		return _failure("PluginActionRouter should route full_reload_requested to the plugin UI reload handler.")
 	if _plugin.copy_events.size() != 1 or str(_plugin.copy_events[0].get("text", "")) != "copy text":
 		return _failure("PluginActionRouter should route copy_requested through the dock binding.")
+	if _plugin.preview_events.size() != 1 or str(_plugin.preview_events[0].get("kind", "")) != "prompt" or str((_plugin.preview_events[0].get("arguments", {}) as Dictionary).get("goal", "")) != "inspect":
+		return _failure("PluginActionRouter should route MCP catalog preview requests through the dock binding.")
 	if not recorder.incidents.is_empty():
 		return _failure("PluginActionRouter should not emit incidents for valid dock bindings.")
 

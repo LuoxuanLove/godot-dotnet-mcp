@@ -6,6 +6,13 @@ extends RefCounted
 var bridge
 var _runtime_context: Dictionary = {}
 
+const REPLACEMENT_RESOURCES := [
+	"godot-dotnet-mcp://activity/status",
+	"godot-dotnet-mcp://activity/recent",
+	"godot-dotnet-mcp://activity/call/{id}",
+	"godot-dotnet-mcp://guides/capabilities"
+]
+
 const HANDLED_TOOLS := ["tool_activity"]
 
 
@@ -64,52 +71,7 @@ func get_tools() -> Array[Dictionary]:
 func execute(tool_name: String, args: Dictionary) -> Dictionary:
 	if tool_name not in HANDLED_TOOLS:
 		return _error("invalid_argument", "Unknown tool: %s" % tool_name)
-	var registry = _get_registry()
-	if registry == null:
-		return _error("activity_registry_unavailable", "Tool activity registry is unavailable.")
-	var action := str(args.get("action", "status")).strip_edges()
-	if action.is_empty():
-		action = "status"
-	match action:
-		"status":
-			return _success(registry.get_status(_query_options(args)), "Tool activity status fetched")
-		"recent":
-			var limit := int(args.get("limit", 20))
-			return _success(registry.get_recent(limit, _query_options(args)), "Recent tool activity fetched")
-		"get":
-			var call_id := str(args.get("call_id", "")).strip_edges()
-			if call_id.is_empty():
-				return _error("invalid_argument", "action=get requires call_id.")
-			return _success(registry.get_call(call_id), "Tool activity call fetched")
-		_:
-			return _error("invalid_argument", "Unknown tool_activity action: %s" % action, {
-				"valid_actions": ["status", "recent", "get"]
-			})
-
-
-func _query_options(args: Dictionary) -> Dictionary:
-	var options := {}
-	for key in ["state", "tool", "threshold_ms", "failure_limit"]:
-		if args.has(key):
-			options[key] = args[key]
-	return options
-
-
-func _get_registry():
-	if _runtime_context.get("tool_activity_registry", null) != null:
-		return _runtime_context.get("tool_activity_registry", null)
-	var tool_loader = _runtime_context.get("tool_loader", null)
-	if tool_loader != null and tool_loader.has_method("get_tool_activity_registry"):
-		return tool_loader.get_tool_activity_registry()
-	return null
-
-
-func _success(data: Dictionary, message: String) -> Dictionary:
-	return {
-		"success": true,
-		"data": data,
-		"message": message
-	}
+	return _removed_public_tool()
 
 
 func _error(error_code: String, message: String, data: Dictionary = {}) -> Dictionary:
@@ -121,3 +83,17 @@ func _error(error_code: String, message: String, data: Dictionary = {}) -> Dicti
 	if not data.is_empty():
 		out["data"] = data.duplicate(true)
 	return out
+
+
+func _removed_public_tool() -> Dictionary:
+	var message := "system_tool_activity has been removed from the public tool surface. Read the activity resources instead."
+	return {
+		"success": false,
+		"error": message,
+		"data": {
+			"error_type": "removed_public_tool",
+			"removed_tool": "system_tool_activity",
+			"replacement_methods": ["resources/read", "resources/list", "resources/templates/list"],
+			"replacement_resources": REPLACEMENT_RESOURCES.duplicate()
+		}
+	}

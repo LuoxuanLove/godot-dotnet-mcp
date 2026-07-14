@@ -85,10 +85,16 @@ class SlowGuardDetectionService extends ClientInstallDetectionServiceScript:
 func run_case(_tree: SceneTree) -> Dictionary:
 	var service = FakeDetectionService.new()
 	var gemini_config_path = ConfigPathsScript.get_gemini_project_config_path("E:/Project/Test")
+	var antigravity_config_path = ConfigPathsScript.get_antigravity_mcp_config_path()
 	service.supported_paths[gemini_config_path] = true
+	service.supported_paths[antigravity_config_path] = true
 	service.config_entries["|%s" % gemini_config_path] = {
 		"status": service.ENTRY_PRESENT,
 		"has_server_entry": true
+	}
+	service.config_entries["|%s" % antigravity_config_path] = {
+		"status": service.ENTRY_MISSING_SERVER,
+		"has_server_entry": false
 	}
 	service.resolved_paths = {
 		"claude_desktop": {
@@ -118,6 +124,14 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"gemini": {
 			"path": "C:/Users/Test/AppData/Roaming/npm/gemini.cmd",
 			"detected_via": "where",
+			"using_manual_path": false,
+			"has_manual_path": false,
+			"manual_path_invalid": false,
+			"manual_path": ""
+		},
+		"antigravity": {
+			"path": "C:/Programs/Antigravity/Antigravity.exe",
+			"detected_via": "common_path",
 			"using_manual_path": false,
 			"has_manual_path": false,
 			"manual_path_invalid": false,
@@ -164,6 +178,17 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Claude Desktop detection should expose desktop launch support when an executable path is known.")
 	if not bool(statuses.get("gemini", {}).get("launch_supported", false)):
 		return _failure("Gemini CLI detection should expose launch support when a CLI entry is known.")
+	if not bool(statuses.get("antigravity", {}).get("write_supported", false)):
+		return _failure("Antigravity detection should expose one-click writes for its known MCP config file.")
+	if str(statuses.get("antigravity", {}).get("config_path", "")) != antigravity_config_path:
+		return _failure("Antigravity detection should expose its Gemini-backed MCP config file path.")
+	if str(statuses.get("antigravity", {}).get("guidance_path", "")) != ConfigPathsScript.get_antigravity_config_hint_path():
+		return _failure("Antigravity detection should retain the user-data path as supplemental guidance.")
+	if not bool(statuses.get("antigravity", {}).get("launch_supported", false)):
+		return _failure("Antigravity detection should expose app launch support when an executable path is known.")
+	var antigravity_actions: Array = statuses.get("antigravity", {}).get("capability", {}).get("actions", [])
+	if not antigravity_actions.has("write_config") or not antigravity_actions.has("open_config_file"):
+		return _failure("Antigravity detection should expose config-file write and open actions.")
 	if str(statuses.get("gemini", {}).get("config_entry_status", {}).get("status", "")) != service.ENTRY_PRESENT:
 		return _failure("Gemini detection should reuse config entry inspection so the config page can show install status.")
 	var expected_support_levels := {
@@ -171,6 +196,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"claude_code": "auto_add",
 		"cursor": "full_write",
 		"trae": "full_write",
+		"antigravity": "full_write",
 		"codex_desktop": "launch_path",
 		"codex": "auto_add",
 		"gemini": "auto_add",
@@ -200,6 +226,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Forced client install detection should execute the expected deep CLI queries exactly once each.")
 	if bool(service._allow_slow_checks):
 		return _failure("Forced client detection should restore the slow-check guard after detection.")
+
+	var missing_antigravity_service = FakeDetectionService.new()
+	missing_antigravity_service.supported_paths[antigravity_config_path] = true
+	missing_antigravity_service.configure({
+		"client_manual_paths": {},
+		"current_cli_scope": "project"
+	})
+	var missing_antigravity_statuses = missing_antigravity_service.detect_all(true)
+	if str(missing_antigravity_statuses.get("antigravity", {}).get("status", "")) != service.STATUS_CONFIG_ONLY:
+		return _failure("Antigravity should be config_only when no executable path is detected but the MCP config path is writable.")
 
 	var slow_guard = SlowGuardDetectionService.new()
 	slow_guard.configure({

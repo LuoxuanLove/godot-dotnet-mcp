@@ -19,6 +19,10 @@ static func get_server_name() -> String:
 	return str(get_all().get("server_name", ""))
 
 
+static func get_server_description() -> String:
+	return str(get_all().get("server_description", ""))
+
+
 static func get_server_version() -> String:
 	return str(get_all().get("server_version", ""))
 
@@ -38,7 +42,8 @@ static func get_error_code(key: String) -> String:
 static func build_server_info() -> Dictionary:
 	return {
 		"name": get_server_name(),
-		"version": get_server_version()
+		"version": get_server_version(),
+		"description": get_server_description()
 	}
 
 
@@ -46,6 +51,7 @@ static func build_server_facts() -> Dictionary:
 	return {
 		"server_name": get_server_name(),
 		"server_version": get_server_version(),
+		"server_description": get_server_description(),
 		"protocol_version": get_protocol_version(),
 		"tool_schema_version": get_tool_schema_version()
 	}
@@ -82,20 +88,44 @@ static func _load_facts() -> Dictionary:
 		"tool_schema_version": str(facts.get("tool_schema_version", "")),
 		"server_name": str(facts.get("server_name", "")),
 		"server_version": str(facts.get("server_version", "")),
+		"server_description": str(facts.get("server_description", "")),
 		"error_codes": error_codes
 	}
 
 
 static func _default_facts() -> Dictionary:
 	return {
-		"protocol_version": "2025-06-18",
-		"tool_schema_version": "2026-06-08.25",
+		"protocol_version": "2025-11-25",
+		"tool_schema_version": "2026-06-08.33",
 		"server_name": "godot-dotnet-mcp",
-		"server_version": "1.3.0",
+		"server_description": "Godot editor MCP server for resource-first project context, automation, diagnostics, and validation.",
+		"server_version": "2.0.0",
 		"error_codes": {
 			"bridge_version_mismatch": "bridge_version_mismatch",
+			"runtime_not_running": "runtime_not_running",
+			"runtime_control_disabled": "runtime_control_disabled",
+			"runtime_session_lost": "runtime_session_lost",
+			"runtime_command_timeout": "runtime_command_timeout",
+			"runtime_bridge_unavailable": "runtime_bridge_unavailable",
+			"runtime_capture_failed": "runtime_capture_failed",
+			"invalid_argument": "invalid_argument",
+			"permission_denied": "permission_denied",
+			"tool_load_failed": "tool_load_failed",
+			"tool_runtime_missing": "tool_runtime_missing",
+			"tool_execution_failed": "tool_execution_failed",
 			"project_lifecycle_action_required": "project_lifecycle_action_required",
 			"project_lifecycle_marker_validation_requires_async": "project_lifecycle_marker_validation_requires_async",
+			"run_log_failure_marker_matched": "run_log_failure_marker_matched",
+			"run_log_marker_timeout": "run_log_marker_timeout",
+			"parse_error": "parse_error",
+			"missing_executable": "missing_executable",
+			"invalid_working_directory": "invalid_working_directory",
+			"precheck_read_error": "precheck_read_error",
+			"backup_error": "backup_error",
+			"write_error": "write_error",
+			"dir_error": "dir_error",
+			"resource_not_found": "resource_not_found",
+			"prompt_not_found": "prompt_not_found",
 			"dap_unavailable": "dap_unavailable",
 			"dap_response_failed": "dap_response_failed",
 			"dap_invalid_session_state": "dap_invalid_session_state",

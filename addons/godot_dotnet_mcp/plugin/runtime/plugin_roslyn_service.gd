@@ -1,12 +1,19 @@
 @tool
 extends Node
 
-const FACADE_SCRIPT_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/roslyn/PluginRoslynRuntimeFacade.cs"
-const LOAD_MODE_RUNTIME := "runtime_csharp"
+const RUNTIME_MANIFEST_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/roslyn_runtime/roslyn-runtime-manifest.json"
+const RUNTIME_BRIDGE_DLL_PATH := "res://addons/godot_dotnet_mcp/plugin/runtime/roslyn_runtime/GodotDotnetMcp.PluginBridge.dll"
+const EXPECTED_RUNTIME_COMPONENT := "godot-dotnet-mcp-roslyn-runtime"
+const EXPECTED_BRIDGE_VERSION := "2.0.0"
+const LOAD_MODE_RUNTIME_PROCESS := "isolated_runtime_process"
 const LOAD_MODE_PLACEHOLDER := "gdscript_placeholder"
 const LOAD_MODE_TESTING := "testing_double"
 const CACHE_LIMIT := 32
-
+const RUNTIME_PROCESS_TIMEOUT_MS := 15000
+const RUNTIME_RESPONSE_ROOTS_ENV := "GODOT_DOTNET_MCP_RESPONSE_ROOTS"
+const RUNTIME_TEMP_ROOT := "user://godot_dotnet_mcp/tmp/roslyn_runtime"
+const RUNTIME_TEMP_MAX_AGE_MS := 3600000
+const RUNTIME_DOTNET_REQUIREMENT := ".NET 8 runtime"
 const ERROR_TYPE_INVALID_ARGUMENT := "invalid_argument"
 const ERROR_TYPE_SOURCE_UNAVAILABLE := "source_unavailable"
 const ERROR_TYPE_RUNTIME_UNAVAILABLE := "runtime_unavailable"
@@ -19,6 +26,7 @@ var _load_error := "Roslyn runtime source has not been evaluated yet"
 var _cache_by_key: Dictionary = {}
 var _cache_order: Array[String] = []
 var _last_source_hash := ""
+var _runtime_temp_sequence := 0
 
 
 class PlaceholderRoslynFacade extends RefCounted:
@@ -33,7 +41,7 @@ class PlaceholderRoslynFacade extends RefCounted:
 		return {
 			"success": true,
 			"data": _metadata,
-			"message": "Plugin-internal Roslyn skeleton is present, but the runtime C# facade is not active in this environment."
+			"message": "Isolated Roslyn runtime is not active in this environment."
 		}
 
 	func parse_file(script_path: String, _source_text: String = "") -> Dictionary:
@@ -47,8 +55,60 @@ class PlaceholderRoslynFacade extends RefCounted:
 		}
 
 
+class RuntimeProcessRoslynFacade extends RefCounted:
+	var _owner = null
+
+	func _init(owner) -> void:
+		_owner = owner
+
+	func get_capabilities() -> Dictionary:
+		return _owner._runtime_process_requires_async_result()
+
+	func get_capabilities_async() -> Dictionary:
+		return await _owner._execute_runtime_capabilities_async()
+
+	func parse_file(script_path: String, source_text: String = "") -> Dictionary:
+		return _owner._build_error_result(
+			script_path,
+			"",
+			ERROR_TYPE_RUNTIME_UNAVAILABLE,
+			"roslyn_runtime_process_requires_async",
+			"Isolated Roslyn runtime process calls require parse_file_async."
+		)
+
+	func parse_file_async(script_path: String, source_text: String = "") -> Dictionary:
+		var request: Dictionary = {
+			"path": script_path
+		}
+		if not source_text.is_empty():
+			request["sourceText"] = source_text
+		var response: Dictionary = await _owner._execute_runtime_tool_async("cs_file_read", request)
+		return _owner._convert_bridge_read_response(response, script_path)
+
+	func patch_file(script_path: String, request: Dictionary) -> Dictionary:
+		return _owner._build_error_result(
+			script_path,
+			"",
+			ERROR_TYPE_RUNTIME_UNAVAILABLE,
+			"roslyn_runtime_process_requires_async",
+			"Isolated Roslyn runtime process calls require patch_file_async."
+		)
+
+	func patch_file_async(script_path: String, request: Dictionary) -> Dictionary:
+		var bridge_request: Dictionary = request.duplicate(true)
+		bridge_request["path"] = script_path
+		if bridge_request.has("dry_run") and not bridge_request.has("dryRun"):
+			bridge_request["dryRun"] = bool(bridge_request.get("dry_run", false))
+		bridge_request.erase("dry_run")
+		if not bridge_request.has("dryRun"):
+			bridge_request["dryRun"] = false
+		var response: Dictionary = await _owner._execute_runtime_tool_async("cs_plugin_patch", bridge_request)
+		return _owner._convert_bridge_patch_response(response, script_path)
+
+
 func _init() -> void:
 	_facade = null
+	_cleanup_stale_runtime_temp_files()
 
 
 func _notification(what: int) -> void:
@@ -67,6 +127,24 @@ func get_capabilities() -> Dictionary:
 			"PluginRoslynRuntimeFacade is unavailable"
 		)
 	var result = _facade.get_capabilities()
+	return _normalize_capabilities_result(result)
+
+
+func get_capabilities_async() -> Dictionary:
+	await _ensure_facade_async()
+	if _facade == null:
+		return _build_error_result(
+			"",
+			"",
+			ERROR_TYPE_RUNTIME_UNAVAILABLE,
+			"roslyn_runtime_unavailable",
+			"PluginRoslynRuntimeFacade is unavailable"
+		)
+	var result
+	if _facade.has_method("get_capabilities_async"):
+		result = await _facade.get_capabilities_async()
+	else:
+		result = _facade.get_capabilities()
 	return _normalize_capabilities_result(result)
 
 
@@ -103,6 +181,49 @@ func parse_file(script_path: String, source_text: String = "") -> Dictionary:
 		)
 
 	var result = _facade.parse_file(normalized_path, resolved_source_text)
+	var normalized_result := _normalize_parse_result(result, normalized_path, source_hash)
+	if bool(normalized_result.get("success", false)):
+		_store_cache(cache_key, normalized_result)
+	return normalized_result
+
+
+func parse_file_async(script_path: String, source_text: String = "") -> Dictionary:
+	var normalized_path := _normalize_script_path(script_path)
+	var source_resolution := _resolve_source(normalized_path, source_text)
+	if not bool(source_resolution.get("success", false)):
+		return _build_error_result(
+			normalized_path,
+			str(source_resolution.get("source_hash", "")),
+			str(source_resolution.get("error_type", ERROR_TYPE_SOURCE_UNAVAILABLE)),
+			str(source_resolution.get("error_code", "roslyn_source_unavailable")),
+			str(source_resolution.get("error", "Failed to resolve Roslyn source"))
+		)
+
+	var resolved_source_text := str(source_resolution.get("source_text", ""))
+	var source_hash := str(source_resolution.get("source_hash", ""))
+	_last_source_hash = source_hash
+	var cache_key := _make_key(normalized_path, source_hash)
+	var cached_entry: Variant = _cache_by_key.get(cache_key, null)
+	if cached_entry is Dictionary:
+		var cached_result_raw: Variant = (cached_entry as Dictionary).get("result", {})
+		if cached_result_raw is Dictionary:
+			return (cached_result_raw as Dictionary).duplicate(true)
+
+	await _ensure_facade_async()
+	if _facade == null:
+		return _build_error_result(
+			normalized_path,
+			source_hash,
+			ERROR_TYPE_RUNTIME_UNAVAILABLE,
+			"roslyn_runtime_unavailable",
+			"PluginRoslynRuntimeFacade is unavailable"
+		)
+
+	var result
+	if _facade.has_method("parse_file_async"):
+		result = await _facade.parse_file_async(normalized_path, resolved_source_text)
+	else:
+		result = _facade.parse_file(normalized_path, resolved_source_text)
 	var normalized_result := _normalize_parse_result(result, normalized_path, source_hash)
 	if bool(normalized_result.get("success", false)):
 		_store_cache(cache_key, normalized_result)
@@ -153,10 +274,59 @@ func patch_file(script_path: String, request: Dictionary) -> Dictionary:
 	return normalized_result
 
 
+func patch_file_async(script_path: String, request: Dictionary) -> Dictionary:
+	var normalized_path := _normalize_script_path(script_path)
+	if normalized_path.is_empty():
+		return _build_error_result(
+			normalized_path,
+			"",
+			ERROR_TYPE_INVALID_ARGUMENT,
+			"script_path_required",
+			"script_path is required"
+		)
+	if request.is_empty():
+		return _build_error_result(
+			normalized_path,
+			"",
+			ERROR_TYPE_INVALID_ARGUMENT,
+			"patch_request_required",
+			"patch request is required"
+		)
+
+	await _ensure_facade_async()
+	if _facade == null:
+		return _build_error_result(
+			normalized_path,
+			"",
+			ERROR_TYPE_RUNTIME_UNAVAILABLE,
+			"roslyn_runtime_unavailable",
+			"PluginRoslynRuntimeFacade is unavailable"
+		)
+	if not _facade.has_method("patch_file") and not _facade.has_method("patch_file_async"):
+		return _build_error_result(
+			normalized_path,
+			"",
+			ERROR_TYPE_PROTOCOL_ERROR,
+			"roslyn_patch_unavailable",
+			"PluginRoslynRuntimeFacade does not expose patch_file"
+		)
+
+	var result
+	if _facade.has_method("patch_file_async"):
+		result = await _facade.patch_file_async(normalized_path, request.duplicate(true))
+	else:
+		result = _facade.patch_file(normalized_path, request.duplicate(true))
+	var normalized_result := _normalize_patch_result(result, normalized_path)
+	if bool(normalized_result.get("success", false)):
+		_invalidate_cache_for_path(normalized_path)
+	return normalized_result
+
+
 func clear() -> void:
 	_cache_by_key.clear()
 	_cache_order.clear()
 	_last_source_hash = ""
+	_cleanup_runtime_temp_dir(_runtime_temp_dir())
 	var facade = _facade
 	_facade = null
 	if facade is Node:
@@ -186,32 +356,524 @@ func _ensure_facade() -> void:
 	_facade = _instantiate_facade()
 
 
+func _ensure_facade_async() -> void:
+	if _facade != null:
+		return
+	_facade = await _instantiate_facade_async()
+
+
 func _instantiate_facade():
-	var script = ResourceLoader.load(FACADE_SCRIPT_PATH, "", ResourceLoader.CACHE_MODE_IGNORE)
-	if script == null or not (script is Script):
-		_load_mode = LOAD_MODE_PLACEHOLDER
-		_load_error = "PluginRoslynRuntimeFacade runtime source could not be loaded from res://"
-		return PlaceholderRoslynFacade.new(_base_metadata(true), _load_error)
-	var script_resource := script as Script
-	if script_resource.can_instantiate():
-		var class_instance = script_resource.new()
-		if class_instance != null:
-			_load_mode = LOAD_MODE_RUNTIME
-			_load_error = ""
-			return class_instance
-	if ClassDB.class_exists("PluginRoslynRuntimeFacade"):
-		var class_instance = ClassDB.instantiate("PluginRoslynRuntimeFacade")
-		if class_instance != null:
-			_load_mode = LOAD_MODE_RUNTIME
-			_load_error = ""
-			return class_instance
-	if not script_resource.can_instantiate():
-		_load_mode = LOAD_MODE_PLACEHOLDER
-		_load_error = "PluginRoslynRuntimeFacade runtime source is present but not instantiable in the current Godot C# environment"
-		return PlaceholderRoslynFacade.new(_base_metadata(true), _load_error)
-	_load_mode = LOAD_MODE_PLACEHOLDER
-	_load_error = "PluginRoslynRuntimeFacade runtime source is present but could not be instantiated"
+	var process_facade = _instantiate_runtime_process_facade("PluginRoslynRuntimeFacade in-process runtime is disabled for production installs")
+	if process_facade != null:
+		return process_facade
 	return PlaceholderRoslynFacade.new(_base_metadata(true), _load_error)
+
+
+func _instantiate_runtime_process_facade(reason: String):
+	if not FileAccess.file_exists(RUNTIME_BRIDGE_DLL_PATH):
+		_load_mode = LOAD_MODE_PLACEHOLDER
+		_load_error = _build_runtime_unavailable_message("%s; isolated runtime bridge is missing at %s" % [reason, RUNTIME_BRIDGE_DLL_PATH])
+		return null
+	_load_mode = LOAD_MODE_RUNTIME_PROCESS
+	_load_error = ""
+	return RuntimeProcessRoslynFacade.new(self)
+
+
+func _instantiate_facade_async():
+	var facade = _instantiate_facade()
+	if facade is RuntimeProcessRoslynFacade:
+		var capabilities: Dictionary = await _execute_runtime_capabilities_async()
+		if not bool(capabilities.get("success", false)):
+			_load_mode = LOAD_MODE_PLACEHOLDER
+			_load_error = str(capabilities.get("error", _build_runtime_unavailable_message("PluginRoslynRuntimeFacade isolated runtime process is unavailable")))
+			return null
+	return facade
+
+
+func _build_runtime_unavailable_message(reason: String) -> String:
+	var manifest_state := "missing"
+	if FileAccess.file_exists(RUNTIME_MANIFEST_PATH):
+		manifest_state = "present"
+	return "%s. C# semantic support requires the framework-dependent Roslyn runtime files at %s (manifest %s) and a local %s available to the `dotnet` host." % [
+		reason,
+		RUNTIME_MANIFEST_PATH,
+		manifest_state,
+		RUNTIME_DOTNET_REQUIREMENT
+	]
+
+
+func _execute_runtime_capabilities() -> Dictionary:
+	var result := _execute_runtime_process(["--capabilities"])
+	if not bool(result.get("success", false)):
+		return result
+	var payload := _coerce_dictionary(result.get("payload", {}))
+	var validation := _validate_runtime_capabilities_payload(payload)
+	if not bool(validation.get("success", false)):
+		return validation
+	var data := _base_metadata(false)
+	data["component"] = str(payload.get("component", EXPECTED_RUNTIME_COMPONENT))
+	data["version"] = str(payload.get("version", ""))
+	data["mode"] = str(payload.get("mode", "syntax"))
+	data["semantic_runtime"] = "Roslyn"
+	data["tools"] = _coerce_array(payload.get("tools", []))
+	return {
+		"success": true,
+		"data": data,
+		"message": "Framework-dependent Roslyn runtime is ready."
+	}
+
+
+func _execute_runtime_capabilities_async() -> Dictionary:
+	var result: Dictionary = await _execute_runtime_process_async(["--capabilities"])
+	if not bool(result.get("success", false)):
+		return result
+	var payload := _coerce_dictionary(result.get("payload", {}))
+	var validation := _validate_runtime_capabilities_payload(payload)
+	if not bool(validation.get("success", false)):
+		return validation
+	var data := _base_metadata(false)
+	data["component"] = str(payload.get("component", EXPECTED_RUNTIME_COMPONENT))
+	data["version"] = str(payload.get("version", ""))
+	data["mode"] = str(payload.get("mode", "syntax"))
+	data["semantic_runtime"] = "Roslyn"
+	data["tools"] = _coerce_array(payload.get("tools", []))
+	return {
+		"success": true,
+		"data": data,
+		"message": "Framework-dependent Roslyn runtime is ready."
+	}
+
+
+func _execute_runtime_tool(tool_name: String, request: Dictionary) -> Dictionary:
+	var request_path := _make_runtime_request_path(tool_name)
+	var write_result := _write_runtime_request_file(request_path, request)
+	if not bool(write_result.get("success", false)):
+		return {
+			"success": false,
+			"error": str(write_result.get("error", "Failed to create Roslyn runtime request file: %s" % request_path))
+		}
+	var result := _execute_runtime_process(["--call-json-file", tool_name, ProjectSettings.globalize_path(request_path)])
+	_cleanup_runtime_request_file(request_path)
+	return result
+
+
+func _execute_runtime_tool_async(tool_name: String, request: Dictionary) -> Dictionary:
+	var request_path := _make_runtime_request_path(tool_name)
+	var write_result := _write_runtime_request_file(request_path, request)
+	if not bool(write_result.get("success", false)):
+		return {
+			"success": false,
+			"error": str(write_result.get("error", "Failed to create Roslyn runtime request file: %s" % request_path))
+		}
+	var result: Dictionary = await _execute_runtime_process_async(["--call-json-file", tool_name, ProjectSettings.globalize_path(request_path)])
+	_cleanup_runtime_request_file(request_path)
+	return result
+
+
+func _execute_runtime_process(args: Array[String]) -> Dictionary:
+	return _runtime_process_requires_async_result()
+
+
+func _execute_runtime_process_async(args: Array[String]) -> Dictionary:
+	var runtime_dll := ProjectSettings.globalize_path(RUNTIME_BRIDGE_DLL_PATH)
+	var temp_result := _ensure_runtime_temp_dir()
+	if not bool(temp_result.get("success", false)):
+		return {
+			"success": false,
+			"error": str(temp_result.get("error", "Failed to create Roslyn runtime temp directory.")),
+			"exit_code": -1,
+			"stdout": "",
+			"error_code": str(temp_result.get("error_code", "roslyn_runtime_temp_unavailable"))
+		}
+	var response_path := _make_runtime_response_path()
+	var command_args: Array[String] = [runtime_dll]
+	command_args.append_array(["--timeout-ms", str(RUNTIME_PROCESS_TIMEOUT_MS), "--response-json-file", ProjectSettings.globalize_path(response_path)])
+	command_args.append_array(args)
+	var previous_response_roots := OS.get_environment(RUNTIME_RESPONSE_ROOTS_ENV)
+	OS.set_environment(RUNTIME_RESPONSE_ROOTS_ENV, ProjectSettings.globalize_path(RUNTIME_TEMP_ROOT))
+	var pid := OS.create_process("dotnet", PackedStringArray(command_args), false)
+	OS.set_environment(RUNTIME_RESPONSE_ROOTS_ENV, previous_response_roots)
+	if pid <= 0:
+		_remove_file_if_exists(response_path)
+		return {
+			"success": false,
+			"error": _build_runtime_unavailable_message("Failed to start the `dotnet` host for the framework-dependent Roslyn runtime process"),
+			"exit_code": -1,
+			"stdout": "",
+			"error_code": "roslyn_runtime_process_start_failed",
+			"runtime_requirement": RUNTIME_DOTNET_REQUIREMENT
+		}
+	var started := Time.get_ticks_msec()
+	while OS.is_process_running(pid):
+		if Time.get_ticks_msec() - started > RUNTIME_PROCESS_TIMEOUT_MS:
+			OS.kill(pid)
+			_remove_file_if_exists(response_path)
+			return {
+				"success": false,
+				"error": "Isolated Roslyn runtime timed out after %d ms." % RUNTIME_PROCESS_TIMEOUT_MS,
+				"exit_code": -1,
+				"stdout": "",
+				"error_code": "roslyn_runtime_timeout",
+				"timeout_ms": RUNTIME_PROCESS_TIMEOUT_MS
+			}
+		await _await_process_frame()
+	var exit_code := OS.get_process_exit_code(pid)
+	var stdout := ""
+	if FileAccess.file_exists(response_path):
+		var response_file := FileAccess.open(response_path, FileAccess.READ)
+		if response_file != null:
+			stdout = response_file.get_as_text().strip_edges()
+			response_file.close()
+		_remove_file_if_exists(response_path)
+	return _parse_runtime_process_response(stdout, exit_code)
+
+
+func _runtime_process_requires_async_result() -> Dictionary:
+	return {
+		"success": false,
+		"error": "Isolated Roslyn runtime process calls require the async API.",
+		"exit_code": -1,
+		"stdout": "",
+		"error_code": "roslyn_runtime_process_requires_async"
+	}
+
+
+func _await_process_frame() -> void:
+	var main_loop := Engine.get_main_loop()
+	if main_loop is SceneTree:
+		await (main_loop as SceneTree).process_frame
+	else:
+		await get_tree().process_frame
+
+
+func _parse_runtime_process_response(stdout: String, exit_code: int) -> Dictionary:
+	var json := JSON.new()
+	var parse_error := json.parse(stdout)
+	if parse_error == OK and json.data is Dictionary and (exit_code == 0 or _is_runtime_tool_response_payload(json.data)):
+		return {
+			"success": true,
+			"payload": json.data,
+			"exit_code": exit_code,
+			"stdout": stdout
+		}
+	if exit_code != 0:
+		return {
+			"success": false,
+			"error": "Isolated Roslyn runtime exited with code %d: %s" % [exit_code, stdout],
+			"exit_code": exit_code,
+			"stdout": stdout,
+			"error_code": "roslyn_runtime_process_failed"
+		}
+	return {
+		"success": false,
+		"error": "Isolated Roslyn runtime returned invalid JSON.",
+		"exit_code": exit_code,
+		"stdout": stdout,
+		"error_code": "roslyn_runtime_invalid_json"
+	}
+
+
+func _is_runtime_tool_response_payload(payload: Dictionary) -> bool:
+	return payload.has("isError") or payload.has("structuredContent") or payload.has("content")
+
+
+func _make_runtime_request_path(tool_name: String) -> String:
+	var safe_tool_name := tool_name.replace("/", "_").replace("\\", "_").replace(":", "_")
+	return "%s/request_%s_%s.json" % [
+		_runtime_temp_dir(),
+		safe_tool_name,
+		_next_runtime_temp_token()
+	]
+
+
+func _make_runtime_response_path() -> String:
+	return "%s/response_%s.json" % [
+		_runtime_temp_dir(),
+		_next_runtime_temp_token()
+	]
+
+
+func _remove_file_if_exists(path: String) -> void:
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func _write_runtime_request_file(request_path: String, request: Dictionary) -> Dictionary:
+	var temp_result := _ensure_runtime_temp_dir()
+	if not bool(temp_result.get("success", false)):
+		return temp_result
+	var file := FileAccess.open(request_path, FileAccess.WRITE)
+	if file == null:
+		return {
+			"success": false,
+			"error": "Failed to create Roslyn runtime request file: %s" % request_path
+		}
+	file.store_string(JSON.stringify(request))
+	file.close()
+	return {"success": true}
+
+
+func _cleanup_runtime_request_file(request_path: String) -> void:
+	_remove_file_if_exists(request_path)
+
+
+func _runtime_temp_dir() -> String:
+	return "%s/%d/%d" % [
+		RUNTIME_TEMP_ROOT,
+		OS.get_process_id(),
+		get_instance_id()
+	]
+
+
+func _next_runtime_temp_token() -> String:
+	_runtime_temp_sequence += 1
+	return "%d_%d_%d" % [
+		OS.get_process_id(),
+		_runtime_temp_sequence,
+		Time.get_ticks_usec()
+	]
+
+
+func _ensure_runtime_temp_dir() -> Dictionary:
+	var temp_dir := _runtime_temp_dir()
+	if _runtime_temp_path_or_ancestor_is_link(temp_dir):
+		return {
+			"success": false,
+			"error": "Roslyn runtime temp directory path contains a link: %s" % temp_dir,
+			"error_code": "roslyn_runtime_temp_link"
+		}
+	var absolute_temp_dir := ProjectSettings.globalize_path(temp_dir)
+	var error := DirAccess.make_dir_recursive_absolute(absolute_temp_dir)
+	if error != OK:
+		return {
+			"success": false,
+			"error": "Failed to create Roslyn runtime temp directory: %s" % temp_dir,
+			"error_code": "roslyn_runtime_temp_create_failed"
+		}
+	if _runtime_temp_path_or_ancestor_is_link(temp_dir) or _runtime_temp_path_or_ancestor_is_link(absolute_temp_dir):
+		return {
+			"success": false,
+			"error": "Roslyn runtime temp directory path contains a link: %s" % temp_dir,
+			"error_code": "roslyn_runtime_temp_link"
+		}
+	return {"success": true}
+
+
+func _cleanup_stale_runtime_temp_files() -> void:
+	_cleanup_stale_runtime_temp_dir(RUNTIME_TEMP_ROOT, int(Time.get_unix_time_from_system() * 1000.0))
+
+
+func _cleanup_stale_runtime_temp_dir(path: String, now_ms: int) -> void:
+	var absolute_path := ProjectSettings.globalize_path(path)
+	if not DirAccess.dir_exists_absolute(absolute_path):
+		return
+	if _runtime_temp_path_or_ancestor_is_link(path) or _runtime_temp_path_or_ancestor_is_link(absolute_path):
+		return
+	var dir := DirAccess.open(absolute_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while not entry.is_empty():
+		if entry == "." or entry == "..":
+			entry = dir.get_next()
+			continue
+		var child_path := path.path_join(entry)
+		var child_absolute := ProjectSettings.globalize_path(child_path)
+		if dir.current_is_dir():
+			if dir.is_link(entry):
+				entry = dir.get_next()
+				continue
+			_cleanup_stale_runtime_temp_dir(child_path, now_ms)
+			_cleanup_empty_runtime_temp_dir(child_absolute)
+		else:
+			var modified_ms := FileAccess.get_modified_time(child_absolute) * 1000
+			if modified_ms <= 0 or now_ms - modified_ms > RUNTIME_TEMP_MAX_AGE_MS:
+				DirAccess.remove_absolute(child_absolute)
+		entry = dir.get_next()
+	dir.list_dir_end()
+
+
+func _cleanup_empty_runtime_temp_dir(absolute_path: String) -> void:
+	if _runtime_temp_path_or_ancestor_is_link(absolute_path):
+		return
+	var dir := DirAccess.open(absolute_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	dir.list_dir_end()
+	if entry.is_empty():
+		DirAccess.remove_absolute(absolute_path)
+
+
+func _cleanup_runtime_temp_dir(path: String) -> void:
+	var absolute_path := ProjectSettings.globalize_path(path)
+	if not DirAccess.dir_exists_absolute(absolute_path):
+		return
+	if _runtime_temp_path_or_ancestor_is_link(path) or _runtime_temp_path_or_ancestor_is_link(absolute_path):
+		return
+	var dir := DirAccess.open(absolute_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while not entry.is_empty():
+		if entry == "." or entry == "..":
+			entry = dir.get_next()
+			continue
+		var child_path := path.path_join(entry)
+		var child_absolute := ProjectSettings.globalize_path(child_path)
+		if dir.current_is_dir():
+			if dir.is_link(entry):
+				entry = dir.get_next()
+				continue
+			_cleanup_runtime_temp_dir(child_path)
+		else:
+			DirAccess.remove_absolute(child_absolute)
+		entry = dir.get_next()
+	dir.list_dir_end()
+	DirAccess.remove_absolute(absolute_path)
+
+
+func _runtime_temp_path_or_ancestor_is_link(path: String) -> bool:
+	var normalized := path.replace("\\", "/").simplify_path().trim_suffix("/")
+	if normalized.is_empty():
+		return false
+	var current := ""
+	var remainder := normalized
+	if normalized.begins_with("user://"):
+		current = "user://"
+		remainder = normalized.substr("user://".length())
+	elif normalized.begins_with("res://"):
+		current = "res://"
+		remainder = normalized.substr("res://".length())
+	elif normalized.length() >= 3 and normalized.substr(1, 2) == ":/":
+		current = normalized.substr(0, 3)
+		remainder = normalized.substr(3)
+	elif normalized.begins_with("/"):
+		current = "/"
+		remainder = normalized.substr(1)
+	for part in remainder.split("/", false):
+		current = current.path_join(str(part)).simplify_path()
+		if _is_link_path(current):
+			return true
+	return false
+
+
+func _is_link_path(path: String) -> bool:
+	var parent_path := path.get_base_dir()
+	var name := path.get_file()
+	if parent_path.is_empty() or name.is_empty():
+		return false
+	var parent := DirAccess.open(parent_path)
+	if parent == null:
+		return false
+	return parent.is_link(name)
+
+
+func _validate_runtime_capabilities_payload(payload: Dictionary) -> Dictionary:
+	var component := str(payload.get("component", ""))
+	var version := str(payload.get("version", ""))
+	if component != EXPECTED_RUNTIME_COMPONENT or version != EXPECTED_BRIDGE_VERSION:
+		var data := _base_metadata(true)
+		data["component"] = component
+		data["version"] = version
+		data["expected_component"] = EXPECTED_RUNTIME_COMPONENT
+		data["expected_version"] = EXPECTED_BRIDGE_VERSION
+		data["error_type"] = ERROR_TYPE_PROTOCOL_ERROR
+		data["error_code"] = "bridge_version_mismatch"
+		return {
+			"success": false,
+			"error": "Roslyn runtime bridge version mismatch: expected %s %s, got %s %s." % [
+				EXPECTED_RUNTIME_COMPONENT,
+				EXPECTED_BRIDGE_VERSION,
+				component,
+				version
+			],
+			"data": data
+		}
+	return {"success": true}
+
+
+func _convert_bridge_read_response(response: Dictionary, script_path: String) -> Dictionary:
+	if not bool(response.get("success", false)):
+		return _build_error_result(
+			script_path,
+			"",
+			ERROR_TYPE_RUNTIME_UNAVAILABLE,
+			"roslyn_runtime_process_failed",
+			str(response.get("error", "Isolated Roslyn runtime failed"))
+		)
+	var payload := _coerce_dictionary(response.get("payload", {}))
+	if not bool(payload.get("success", false)):
+		return _build_error_result(
+			script_path,
+			"",
+			ERROR_TYPE_ROSLYN_FAILURE,
+			"roslyn_parse_failed",
+			str(payload.get("error", "Isolated Roslyn runtime parse failed"))
+		)
+	var structured := _coerce_dictionary(payload.get("structuredContent", {}))
+	var data := _base_metadata(false)
+	data["path"] = str(structured.get("path", script_path))
+	data["namespace"] = str(structured.get("namespace", ""))
+	data["usings"] = _coerce_array(structured.get("usings", []))
+	data["types"] = _coerce_array(structured.get("types", []))
+	data["methods"] = _coerce_array(structured.get("methods", []))
+	data["exports"] = _coerce_array(structured.get("exports", []))
+	data["parse_errors"] = _coerce_array(structured.get("parseErrors", structured.get("parse_errors", [])))
+	data["semantic_runtime"] = str(structured.get("semanticRuntime", "Roslyn"))
+	return {
+		"success": true,
+		"data": data,
+		"message": "Syntax parsed successfully."
+	}
+
+
+func _convert_bridge_patch_response(response: Dictionary, script_path: String) -> Dictionary:
+	if not bool(response.get("success", false)):
+		return _build_error_result(
+			script_path,
+			"",
+			ERROR_TYPE_RUNTIME_UNAVAILABLE,
+			"roslyn_runtime_process_failed",
+			str(response.get("error", "Isolated Roslyn runtime failed"))
+		)
+	var payload := _coerce_dictionary(response.get("payload", {}))
+	if not bool(payload.get("success", false)):
+		return _build_error_result(
+			script_path,
+			"",
+			ERROR_TYPE_ROSLYN_FAILURE,
+			"roslyn_patch_failed",
+			str(payload.get("error", "Isolated Roslyn runtime patch failed"))
+		)
+	var structured := _coerce_dictionary(payload.get("structuredContent", {}))
+	var data := _base_metadata(false)
+	data["path"] = str(structured.get("path", script_path))
+	data["source_hash"] = str(structured.get("sourceHash", structured.get("contentHash", "")))
+	var operations := _coerce_array(structured.get("operations", []))
+	if operations.is_empty() and structured.has("operation"):
+		operations = [_coerce_dictionary(structured.get("operation", {}))]
+	data["operation"] = _first_operation(operations)
+	data["operations"] = operations
+	data["preview"] = str(structured.get("preview", ""))
+	data["written"] = bool(structured.get("written", true))
+	data["dry_run"] = bool(structured.get("dryRun", false))
+	data["action"] = str(structured.get("action", ""))
+	data["type_name"] = str(structured.get("typeName", structured.get("type_name", "")))
+	data["member_name"] = str(structured.get("memberName", structured.get("member_name", "")))
+	data["types"] = _coerce_array(structured.get("types", []))
+	data["methods"] = _coerce_array(structured.get("methods", []))
+	data["exports"] = _coerce_array(structured.get("exports", []))
+	data["parse_errors"] = _coerce_array(structured.get("parseErrors", structured.get("parse_errors", [])))
+	data["semantic_runtime"] = str(structured.get("semanticRuntime", "Roslyn"))
+	return {
+		"success": true,
+		"data": data,
+		"message": "Syntax patch applied successfully."
+	}
 
 
 func _normalize_capabilities_result(result) -> Dictionary:
@@ -230,14 +892,17 @@ func _normalize_capabilities_result(result) -> Dictionary:
 	payload["success"] = bool(payload.get("success", false))
 	payload["data"] = data
 	if not payload.has("message"):
-		payload["message"] = "Plugin-internal Roslyn facade is ready."
+		payload["message"] = "Isolated Roslyn runtime facade is ready."
 	if not bool(payload.get("success", false)):
+		var error_type := str(data.get("error_type", ERROR_TYPE_ROSLYN_FAILURE))
+		var error_code := str(data.get("error_code", "roslyn_capabilities_failed"))
 		return _build_error_result(
 			"",
 			"",
-			ERROR_TYPE_ROSLYN_FAILURE,
-			"roslyn_capabilities_failed",
-			str(payload.get("error", payload.get("message", "Failed to fetch Roslyn capabilities")))
+			error_type,
+			error_code,
+			str(payload.get("error", payload.get("message", "Failed to fetch Roslyn capabilities"))),
+			data
 		)
 	return payload
 
@@ -442,12 +1107,30 @@ func _coerce_array(value) -> Array:
 	return []
 
 
+func _first_operation(operations: Array) -> Dictionary:
+	if operations.is_empty():
+		return {}
+	var first = operations[0]
+	if first is Dictionary:
+		return (first as Dictionary).duplicate(true)
+	return {}
+
+
 func _base_metadata(degraded: bool) -> Dictionary:
+	var transport := "isolated_runtime_unavailable"
+	var entrypoint := RUNTIME_BRIDGE_DLL_PATH
+	if _load_mode == LOAD_MODE_RUNTIME_PROCESS:
+		transport = "process_json"
 	return {
 		"engine": "roslyn",
 		"mode": "syntax",
-		"transport": "in_process",
-		"entrypoint": "plugin_internal_facade",
+		"semantic_runtime": "Roslyn",
+		"distribution": "framework-dependent",
+		"runtime_requirement": RUNTIME_DOTNET_REQUIREMENT,
+		"transport": transport,
+		"entrypoint": entrypoint,
+		"runtime_manifest_path": RUNTIME_MANIFEST_PATH,
+		"runtime_manifest_present": FileAccess.file_exists(RUNTIME_MANIFEST_PATH),
 		"load_mode": _load_mode,
 		"load_error": _load_error,
 		"degraded": degraded,

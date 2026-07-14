@@ -8,11 +8,28 @@ const LocalizationServiceScript = preload("res://addons/godot_dotnet_mcp/localiz
 var _plugin = null
 
 
+func _mark_update_target_verified(probe, target_ref: String, target_commit: String = "target-sha") -> void:
+	probe._state.update_refs_state = "success"
+	probe._state.update_refs_refresh_state = "idle"
+	probe._state.update_ref_commits = {target_ref: target_commit}
+	probe._state.update_refs_last_checked_unix = int(Time.get_unix_time_from_system())
+	probe._update_refs_discovery_loaded = true
+	probe._state.update_compare_state = "success"
+	probe._state.update_compare_refresh_state = "idle"
+	probe._state.update_compare_target_ref = target_ref
+	probe._state.update_compare_target_commit = target_commit
+	probe._state.update_compare_ahead_by = 1
+	probe._state.update_compare_behind_by = 0
+	probe._state.update_compare_last_checked_unix = int(Time.get_unix_time_from_system())
+	probe._state.update_selection_refresh_pending = false
+	probe._state.update_selection_refresh_pending_ref = ""
+
+
 class FocusRestoreProbePlugin extends PluginScript:
 	var discovery_request_count := 0
 	var request_parent := Node.new()
 
-	func _ensure_update_refs_discovery_requested(_force_refresh: bool = false) -> bool:
+	func _ensure_update_refs_discovery_requested(_force_refresh: bool = false, _trigger_source: String = "tool") -> bool:
 		discovery_request_count += 1
 		return true
 
@@ -20,29 +37,49 @@ class FocusRestoreProbePlugin extends PluginScript:
 		return request_parent
 
 
+class LoadingDiscoveryProbePlugin extends FocusRestoreProbePlugin:
+	func _ensure_update_refs_discovery_requested(_force_refresh: bool = false, _trigger_source: String = "tool") -> bool:
+		discovery_request_count += 1
+		_state.update_refs_state = "loading"
+		return true
+
+
 class RefreshProbePlugin extends PluginScript:
 	var discovery_request_count := 0
-	var compare_requests: Array = []
+	var discovery_background_flags: Array[bool] = []
 	var request_parent := Node.new()
 
 	func _get_update_request_parent() -> Node:
 		return request_parent
 
-	func _on_update_check_requested() -> void:
+	func _on_update_check_requested(background_refresh: bool = false, _trigger_source: String = "manual") -> void:
 		discovery_request_count += 1
+		discovery_background_flags.append(background_refresh)
+		_update_refs_request_serial += 1
+		if background_refresh:
+			_state.update_refs_refresh_state = "loading"
+			_state.update_refs_refresh_serial = _update_refs_request_serial
+			_update_refs_background_serials[_update_refs_request_serial] = true
+		else:
+			_state.update_refs_state = "loading"
 
 	func _resolve_current_update_commit() -> String:
 		return "current-sync-sha"
 
-	func _start_update_compare_request(base_commit: String, compare_head: String, target_commit: String = "") -> void:
-		compare_requests.append({"base": base_commit, "head": compare_head, "target_commit": target_commit})
-
-
 class RequestParentProbePlugin extends PluginScript:
 	var update_check_count := 0
+	var update_check_background_flags: Array[bool] = []
 
-	func _on_update_check_requested() -> void:
+	func _on_update_check_requested(background_refresh: bool = false, _trigger_source: String = "manual") -> void:
 		update_check_count += 1
+		update_check_background_flags.append(background_refresh)
+
+
+class ForegroundRefsProbePlugin extends PluginScript:
+	var refs_requests: Array[Dictionary] = []
+
+	func _start_update_refs_request(kind: String, url: String, serial: int) -> void:
+		refs_requests.append({"kind": kind, "url": url, "serial": serial})
 
 
 class SyncReloadProbePlugin extends PluginScript:
@@ -63,8 +100,9 @@ class SyncReloadProbePlugin extends PluginScript:
 	func _write_update_sync_marker(_target: Dictionary, _written: int) -> int:
 		return marker_error
 
-	func _refresh_update_compare_for_current_target() -> void:
+	func _refresh_update_compare_for_current_target() -> bool:
 		compare_refresh_count += 1
+		return true
 
 	func _refresh_dock() -> void:
 		dock_refresh_count += 1
@@ -81,6 +119,19 @@ class SyncReloadProbePlugin extends PluginScript:
 		sync_events.append("lifecycle_reload")
 		return {"success": true, "deferred": true, "data": {"source": source}}
 
+	func complete_archive_request(result: int, response_code: int, target: Dictionary, serial: int) -> void:
+		await _on_update_archive_sync_request_attempt_completed(
+			result,
+			response_code,
+			PackedStringArray(),
+			PackedByteArray(),
+			target,
+			serial,
+			[{"label": "test archive request", "url": "https://example.invalid/archive.zip"}],
+			0,
+			[]
+		)
+
 
 class SyncStartProbePlugin extends PluginScript:
 	var archive_requests: Array[Dictionary] = []
@@ -92,8 +143,95 @@ class SyncStartProbePlugin extends PluginScript:
 		archive_requests.append({"target": target.duplicate(true), "serial": serial})
 
 
+class PendingSyncProbePlugin extends SyncStartProbePlugin:
+	var version_requests: Array[Dictionary] = []
+	var refs_refresh_requests: Array[bool] = []
+	var dock_refresh_count := 0
+
+	func _on_update_check_requested(background_refresh: bool = false, _trigger_source: String = "manual") -> void:
+		refs_refresh_requests.append(background_refresh)
+		_update_refs_request_serial += 1
+		if background_refresh:
+			_state.update_refs_refresh_state = "loading"
+			_state.update_refs_refresh_serial = _update_refs_request_serial
+			_update_refs_background_serials[_update_refs_request_serial] = true
+		else:
+			_state.update_refs_state = "loading"
+
+	func _resolve_current_update_commit() -> String:
+		return "current-sync-sha"
+
+	func _start_update_ref_version_request(target_ref: String, target_kind: String = "branch") -> void:
+		version_requests.append({
+			"target_ref": target_ref,
+			"target_kind": target_kind
+		})
+
+	func _refresh_dock() -> void:
+		dock_refresh_count += 1
+
+
+class ToolPreparedSyncProbePlugin extends PendingSyncProbePlugin:
+	var discovery_request_count := 0
+
+	func _on_update_check_requested(background_refresh: bool = false, _trigger_source: String = "manual") -> void:
+		discovery_request_count += 1
+		_update_refs_request_serial += 1
+		_update_refs_discovery_loaded = false
+		_update_refs_pending = {
+			"serial": _update_refs_request_serial,
+			"background": background_refresh,
+			"branch_done": false,
+			"release_done": false,
+			"tag_done": false,
+			"branch_commits_done": false,
+			"branch_commits_branch": "dev",
+			"errors": [],
+			"branches": [],
+			"releases": [],
+			"stable_releases": [],
+			"tags": [],
+			"commits": {},
+			"release_rows": [],
+			"tag_rows": [],
+			"branch_commit_rows": {}
+		}
+		_state.update_refs_state = "loading"
+		_state.update_refs_status = "Loading update refs."
+		_state.update_refs_error = ""
+		_state.update_ref_latest_stable_release = ""
+		_state.update_ref_latest_release = ""
+		_state.update_ref_commits = {}
+
+	func _start_update_ref_version_request(target_ref: String, target_kind: String = "branch") -> void:
+		version_requests.append({
+			"target_ref": target_ref,
+			"target_kind": target_kind
+		})
+
+
+class ArchiveAttemptProbePlugin extends PluginScript:
+	var attempt_requests: Array[Dictionary] = []
+
+	func _start_update_archive_sync_request_attempt(target: Dictionary, serial: int, attempts: Array, attempt_index: int, failures: Array) -> void:
+		attempt_requests.append({
+			"target": target.duplicate(true),
+			"serial": serial,
+			"attempts": attempts.duplicate(true),
+			"attempt_index": attempt_index,
+			"failures": failures.duplicate(true)
+		})
+
+
+class MirrorSyncProbePlugin extends PluginScript:
+	var addon_root := "res://tests_tmp/plugin_update_mirror_contract/addons/godot_dotnet_mcp"
+
+	func _get_update_sync_addon_root() -> String:
+		return addon_root
+
+
 class CurrentTabProbeDock extends Control:
-	var current_tab := 3
+	var current_tab := 5
 	var apply_model_count := 0
 
 	func get_current_tab() -> int:
@@ -103,11 +241,46 @@ class CurrentTabProbeDock extends Control:
 		apply_model_count += 1
 
 
+class StableDockProbe extends CurrentTabProbeDock:
+	var tool_loader_status := {
+		"initialized": true,
+		"status": "ready",
+		"tool_count": 152,
+		"exposed_tool_count": 26,
+		"category_count": 6,
+		"tool_load_error_count": 0
+	}
+
+	func get_current_tab() -> int:
+		return 1
+
+
 func run_case(_tree: SceneTree) -> Dictionary:
 	_remove_saved_settings()
 	var settings_store = SettingsStoreScript.new()
 	if settings_store._normalize_update_source("latest_dev") != "custom_branch" or settings_store._normalize_update_source("branch") != "custom_branch":
 		return _failure("settings_store.gd should preserve legacy dev-tracking update sources as custom_branch.")
+	var normalized_cache: Dictionary = settings_store.normalize_update_refs_cache({
+		"branches": ["dev", "dev", ""],
+		"releases": ["v2.0.0", ""],
+		"latest_stable_release": "v2.0.0",
+		"latest_release": "v2.1.0-beta.1",
+		"commits": {"dev": "dev-sha", "": "ignored"},
+		"versions": {"v2.0.0": "2.0.0"},
+		"release_rows": [{"kind": "tag", "ref": "v2.0.0", "commit": "tag-sha", "title": "Release 2.0.0", "date": "2026-07-08T00:00:00Z", "stable": true}],
+		"branch_commit_rows": {"dev": [{"kind": "branch", "ref": "dev", "commit": "dev-sha", "title": "dev head", "date": "2026-07-08T00:00:00Z"}]},
+		"commit_histories": {
+			"dev-sha": {"head_commit": "dev-sha", "commits": ["dev-sha", "base-sha"], "complete": true, "checked_unix": 10},
+			"incomplete": {"head_commit": "incomplete", "commits": ["incomplete"], "complete": false}
+		}
+	})
+	var normalized_histories: Dictionary = normalized_cache.get("commit_histories", {})
+	if int(normalized_cache.get("format_version", 0)) != 3 or (normalized_cache.get("branches", []) as Array).size() != 1 or str((normalized_cache.get("commits", {}) as Dictionary).get("dev", "")) != "dev-sha" or (normalized_cache.get("release_rows", []) as Array).size() != 1 or normalized_histories.size() != 1 or not normalized_histories.has("dev-sha") or normalized_histories.has("incomplete"):
+		return _failure("settings_store.gd should normalize persisted update refs cache into stable arrays, dictionaries, and table rows.")
+	settings_store.save_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH, normalized_cache)
+	var history_round_trip: Dictionary = settings_store.load_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH)
+	if not (history_round_trip.get("commit_histories", {}) as Dictionary).has("dev-sha"):
+		return _failure("settings_store.gd should save and restore complete local commit histories.")
 	_plugin = PluginScript.new()
 	if _plugin == null:
 		return _failure("plugin.gd should instantiate for update settings persistence contracts.")
@@ -124,12 +297,107 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	switch_probe._state.settings["update_source"] = "latest_stable"
 	switch_probe._state.settings["update_custom_branch"] = "fix/old"
 	switch_probe._on_update_source_changed("custom_branch")
-	if str(switch_probe._state.settings.get("update_source", "")) != "custom_branch" or str(switch_probe._state.settings.get("update_custom_branch", "")) != "dev":
+	if str(switch_probe._state.settings.get("update_source", "")) != "custom_branch" or str(switch_probe._state.settings.get("update_custom_branch", "")) != "fix/old":
 		switch_probe.free()
-		return _failure("plugin.gd should reset the selected custom branch to dev whenever custom branch mode is selected.")
+		return _failure("plugin.gd should preserve the selected custom branch when custom branch mode is selected.")
 	switch_probe.free()
+	var empty_branch_probe := PluginScript.new()
+	empty_branch_probe._state.settings["update_source"] = "latest_stable"
+	empty_branch_probe._state.settings["update_custom_branch"] = ""
+	empty_branch_probe._on_update_source_changed("custom_branch")
+	if str(empty_branch_probe._state.settings.get("update_source", "")) != "custom_branch" or str(empty_branch_probe._state.settings.get("update_custom_branch", "")) != "dev":
+		empty_branch_probe.free()
+		return _failure("plugin.gd should default an empty custom branch selection to dev.")
+	empty_branch_probe.free()
 	if saved_settings.has("update_ref_branches") or saved_settings.has("update_ref_releases") or saved_settings.has("update_refs_state"):
 		return _failure("plugin.gd should not persist transient discovered update refs in settings.")
+
+	settings_store.save_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH, normalized_cache)
+	var cache_restore_probe := PluginScript.new()
+	cache_restore_probe._load_state()
+	if cache_restore_probe._state.update_refs_state != "success" or not cache_restore_probe._update_refs_discovery_loaded or cache_restore_probe._state.update_ref_branches.size() != 1 or str(cache_restore_probe._state.update_ref_branches[0]) != "dev" or str(cache_restore_probe._state.update_ref_versions.get("v2.0.0", "")) != "2.0.0" or (cache_restore_probe._state.update_ref_release_rows as Array).is_empty():
+		cache_restore_probe.free()
+		return _failure("plugin.gd should restore the last successful update refs cache into Settings state during startup.")
+	cache_restore_probe.free()
+
+	var cache_startup_probe := RefreshProbePlugin.new()
+	cache_startup_probe._state.update_refs_state = "success"
+	cache_startup_probe._update_refs_discovery_loaded = true
+	cache_startup_probe._request_startup_update_refs_refresh()
+	if cache_startup_probe.discovery_request_count != 0 or cache_startup_probe.discovery_background_flags != []:
+		cache_startup_probe.free()
+		return _failure("plugin.gd should restore cached refs without contacting GitHub during startup.")
+	cache_startup_probe.free()
+
+	var row_selection_probe := RefreshProbePlugin.new()
+	row_selection_probe._state.settings["update_source"] = "custom_branch"
+	row_selection_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
+	row_selection_probe._state.update_refs_state = "success"
+	row_selection_probe._state.update_ref_commits = {"refactor/v2.0.0": "current-sync-sha"}
+	row_selection_probe._state.update_ref_branch_commit_rows = {"refactor/v2.0.0": [
+		{"kind": "branch", "ref": "refactor/v2.0.0", "commit": "current-sync-sha", "title": "Current", "date": ""},
+		{"kind": "branch", "ref": "refactor/v2.0.0", "commit": "older-sha", "title": "Older", "date": ""}
+	]}
+	row_selection_probe._update_commit_histories_fallback = {
+		"current-sync-sha": {"head_commit": "current-sync-sha", "commits": ["current-sync-sha", "older-sha", "base-sha"], "complete": true},
+		"older-sha": {"head_commit": "older-sha", "commits": ["older-sha", "base-sha"], "complete": true}
+	}
+	row_selection_probe._update_refs_discovery_loaded = true
+	row_selection_probe._on_update_compare_target_selected("branch", "refactor/v2.0.0", "current-sync-sha")
+	if row_selection_probe._state.update_compare_state != "success" or row_selection_probe._state.update_compare_ahead_by != 0 or row_selection_probe._state.update_compare_behind_by != 0:
+		row_selection_probe.free()
+		return _failure("plugin.gd should compare an identical selected row locally without a GitHub request.")
+	row_selection_probe._on_update_compare_target_selected("branch", "refactor/v2.0.0", "older-sha")
+	if row_selection_probe._state.update_compare_state != "success" or row_selection_probe._state.update_compare_ahead_by != 0 or row_selection_probe._state.update_compare_behind_by != 1:
+		var compare_state: String = str(row_selection_probe._state.update_compare_state)
+		var compare_ahead: int = int(row_selection_probe._state.update_compare_ahead_by)
+		var compare_behind: int = int(row_selection_probe._state.update_compare_behind_by)
+		var selected_commit: String = str(row_selection_probe._state.update_selected_target_commit)
+		row_selection_probe.free()
+		return _failure("plugin.gd row selection should compare a historic commit from refreshed local history: state=%s, ahead=%s, behind=%s, selected=%s" % [
+			compare_state,
+			compare_ahead,
+			compare_behind,
+			selected_commit
+		])
+	row_selection_probe._on_update_sync_requested()
+	if row_selection_probe._state.update_sync_state != "error" or row_selection_probe._state.update_sync_error != LocalizationServiceScript.translate("settings_update_refuses_rollback"):
+		row_selection_probe.free()
+		return _failure("plugin.gd should refuse a locally-detected rollback without issuing a Compare request.")
+	row_selection_probe.free()
+
+	var cache_save_probe := PluginScript.new()
+	cache_save_probe._state.settings["update_source"] = "custom_branch"
+	cache_save_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
+	cache_save_probe._update_refs_request_serial = 99
+	cache_save_probe._update_refs_pending = {
+		"serial": 99,
+		"background": false,
+		"branch_done": true,
+		"release_done": true,
+		"tag_done": true,
+		"branch_commits_done": true,
+		"branch_commits_branch": "refactor/v2.0.0",
+		"errors": [],
+		"branches": ["refactor/v2.0.0"],
+		"releases": ["v2.0.0"],
+		"stable_releases": ["v2.0.0"],
+		"tags": [],
+		"commits": {"refactor/v2.0.0": "branch-sha", "v2.0.0": "tag-sha"},
+		"release_rows": [{"kind": "tag", "ref": "v2.0.0", "commit": "", "title": "Release 2.0.0", "date": "2026-07-08T00:00:00Z", "stable": true}],
+		"tag_rows": [],
+		"branch_commit_rows": {"refactor/v2.0.0": [{"kind": "branch", "ref": "refactor/v2.0.0", "commit": "branch-sha", "title": "Merge pull request", "date": "2026-07-08T00:00:00Z"}]},
+		"commit_histories": {
+			"current-sync-sha": {"head_commit": "current-sync-sha", "commits": ["current-sync-sha", "base-sha"], "complete": true, "done": true},
+			"branch-sha": {"head_commit": "branch-sha", "commits": ["branch-sha", "current-sync-sha", "base-sha"], "complete": true, "done": true}
+		}
+	}
+	cache_save_probe._finalize_update_refs_discovery_if_ready(99)
+	var saved_cache: Dictionary = settings_store.load_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH)
+	if str((saved_cache.get("commits", {}) as Dictionary).get("refactor/v2.0.0", "")) != "branch-sha" or ((saved_cache.get("branch_commit_rows", {}) as Dictionary).get("refactor/v2.0.0", []) as Array).is_empty() or not (saved_cache.get("commit_histories", {}) as Dictionary).has("branch-sha"):
+		cache_save_probe.free()
+		return _failure("plugin.gd should persist refreshed update refs and commit table rows after successful discovery.")
+	cache_save_probe.free()
 
 	var target_probe := PluginScript.new()
 	target_probe._state.settings["update_custom_branch"] = "feature/target"
@@ -174,6 +442,48 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(explicit_release_target.get("kind", "")) != "tag" or str(explicit_release_target.get("ref", "")) != "01" or str(explicit_release_target.get("commit", "")) != "tag-commit":
 		target_probe.free()
 		return _failure("plugin.gd should resolve an explicit release/tag selection as the sync target.")
+	var branch_ref_url := target_probe._get_update_branch_ref_url("refactor/v2.0.0")
+	if not branch_ref_url.ends_with("/branches/refactor%2Fv2.0.0"):
+		target_probe.free()
+		return _failure("plugin.gd should encode slash-containing branch refs for the GitHub branch API.")
+	if not target_probe._should_resolve_update_branch_commit_before_archive({"kind": "branch", "ref": "refactor/v2.0.0", "commit": ""}):
+		target_probe.free()
+		return _failure("plugin.gd should resolve branch commit metadata before starting a branch archive sync without discovered refs.")
+	if target_probe._should_resolve_update_branch_commit_before_archive({"kind": "tag", "ref": "v2.0.0", "commit": ""}):
+		target_probe.free()
+		return _failure("plugin.gd should not resolve tag archive targets through the branch API.")
+	var archive_attempts := target_probe._build_update_archive_request_attempts({"kind": "branch", "ref": "refactor/v2.0.0", "commit": "target-sha"})
+	if archive_attempts.size() != 2:
+		target_probe.free()
+		return _failure("plugin.gd should only use immutable commit archive attempts after resolving branch sync commits.")
+	if not str((archive_attempts[0] as Dictionary).get("url", "")).ends_with("/zip/target-sha"):
+		target_probe.free()
+		return _failure("plugin.gd should prefer codeload commit archive downloads when target commit metadata is known.")
+	for archive_attempt in archive_attempts:
+		if str((archive_attempt as Dictionary).get("url", "")).find("/refs/heads/refactor/v2.0.0") != -1:
+			target_probe.free()
+			return _failure("plugin.gd should not fallback to mutable branch archives after resolving a branch commit.")
+	var unresolved_branch_attempts := target_probe._build_update_archive_request_attempts({"kind": "branch", "ref": "refactor/v2.0.0", "commit": ""})
+	if unresolved_branch_attempts.size() != 2 or str((unresolved_branch_attempts[0] as Dictionary).get("url", "")).find("/refs/heads/refactor/v2.0.0") == -1:
+		target_probe.free()
+		return _failure("plugin.gd should keep slash-containing branch refs usable only when branch commit metadata is unavailable.")
+	var tag_attempts := target_probe._build_update_archive_request_attempts({"kind": "tag", "ref": "v2.0.0", "commit": "dev"})
+	if tag_attempts.size() != 2:
+		target_probe.free()
+		return _failure("plugin.gd should ignore release target_commitish values and sync tags by tag archive.")
+	for tag_attempt in tag_attempts:
+		var tag_url := str((tag_attempt as Dictionary).get("url", ""))
+		if tag_url.find("/zip/dev") != -1 or tag_url.find("/archive/dev.zip") != -1:
+			target_probe.free()
+			return _failure("plugin.gd should not use mutable release target_commitish values as tag sync archives.")
+	target_probe._state.settings["update_source"] = "latest_stable"
+	if not target_probe._should_discover_update_target_before_sync():
+		target_probe.free()
+		return _failure("plugin.gd should require update ref discovery before syncing release-derived targets.")
+	target_probe._state.settings["update_source"] = "custom_branch"
+	if target_probe._should_discover_update_target_before_sync():
+		target_probe.free()
+		return _failure("plugin.gd should not require update ref discovery before syncing custom branch targets.")
 	target_probe.free()
 
 	var tool_facade_probe := PluginScript.new()
@@ -195,6 +505,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		if not status_data.has(required_status_field):
 			tool_facade_probe.free()
 			return _failure("plugin.gd update tool facade should include %s in status." % required_status_field)
+	var status_refs: Dictionary = status_data.get("refs", {})
+	var status_compare: Dictionary = status_data.get("compare", {})
+	for required_refresh_field in ["refresh_state", "refresh_error", "last_checked_unix", "refresh_serial"]:
+		if not status_refs.has(required_refresh_field):
+			tool_facade_probe.free()
+			return _failure("plugin.gd update tool facade refs status should include background refresh field %s." % required_refresh_field)
+		if not status_compare.has(required_refresh_field):
+			tool_facade_probe.free()
+			return _failure("plugin.gd update tool facade compare status should include background refresh field %s." % required_refresh_field)
 	var selected_result: Dictionary = tool_facade_probe.set_plugin_update_source_from_tools("latest_release", "", "v1.0.0")
 	if not bool(selected_result.get("success", false)):
 		tool_facade_probe.free()
@@ -207,14 +526,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		tool_facade_probe.free()
 		return _failure("plugin.gd update tool facade should clear a previously selected release tag when set_source omits release_tag.")
 	var discover_result: Dictionary = tool_facade_probe.discover_plugin_update_refs_from_tools(true)
-	if not bool(discover_result.get("success", false)) or str(discover_result.get("status", "")) != "pending":
+	if not bool(discover_result.get("success", false)) or str(discover_result.get("status", "")) != "unavailable":
 		tool_facade_probe.free()
-		return _failure("plugin.gd update tool facade should report pending discovery when no request host is available.")
+		return _failure("plugin.gd update tool facade should report unavailable discovery when no request host is available.")
 	tool_facade_probe.free()
 
 	var sync_start_probe := SyncStartProbePlugin.new()
 	sync_start_probe._state.settings["update_source"] = "custom_branch"
 	sync_start_probe._state.settings["update_custom_branch"] = "dev"
+	_mark_update_target_verified(sync_start_probe, "dev")
 	var first_sync_start: Dictionary = sync_start_probe.start_plugin_update_sync_from_tools()
 	var second_sync_start: Dictionary = sync_start_probe.start_plugin_update_sync_from_tools()
 	if sync_start_probe.archive_requests.size() != 1:
@@ -224,41 +544,499 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		sync_start_probe.free()
 		return _failure("plugin.gd update tool facade should return idempotent loading status for duplicate sync starts.")
 	sync_start_probe.free()
+	var release_discovery_probe := LoadingDiscoveryProbePlugin.new()
+	release_discovery_probe._state.settings["update_source"] = "latest_stable"
+	release_discovery_probe._state.update_ref_latest_stable_release = ""
+	_tree.root.add_child(release_discovery_probe.request_parent)
+	var release_start_result: Dictionary = release_discovery_probe.start_plugin_update_sync_from_tools()
+	if bool(release_start_result.get("accepted", false)) or bool(release_start_result.get("loading", false)) or str(release_start_result.get("status", "")) != "error" or release_discovery_probe.discovery_request_count != 0:
+		release_discovery_probe.request_parent.queue_free()
+		release_discovery_probe.free()
+		return _failure("plugin.gd tool update sync should not auto-discover release-derived targets before refs are loaded.")
+	var release_start_data: Dictionary = release_start_result.get("data", {})
+	if bool(release_start_data.get("pending_sync_after_refs_discovery", false)):
+		release_discovery_probe.request_parent.queue_free()
+		release_discovery_probe.free()
+		return _failure("plugin.gd tool update sync should not expose a pending discovery state when sync needs a manual refs refresh.")
+	release_discovery_probe.request_parent.queue_free()
+	release_discovery_probe.free()
+	var branch_without_refs_probe := SyncStartProbePlugin.new()
+	branch_without_refs_probe._state.settings["update_source"] = "custom_branch"
+	branch_without_refs_probe._state.settings["update_custom_branch"] = "feature/no-refs"
+	branch_without_refs_probe._state.update_refs_state = "idle"
+	branch_without_refs_probe._update_refs_discovery_loaded = false
+	var branch_without_refs_result: Dictionary = branch_without_refs_probe.start_plugin_update_sync_from_tools()
+	if bool(branch_without_refs_result.get("accepted", false)) or bool(branch_without_refs_result.get("loading", true)) or branch_without_refs_probe.archive_requests.size() != 0 or branch_without_refs_probe._update_sync_after_refs_discovery_pending or str(branch_without_refs_probe._state.update_sync_state) != "error":
+		branch_without_refs_probe.free()
+		return _failure("plugin.gd tool update sync should require a manually refreshed refs cache before one-click branch sync.")
+	if str(branch_without_refs_result.get("message", "")).strip_edges().is_empty() or str(branch_without_refs_result.get("message", "")) != str(branch_without_refs_probe._state.update_sync_error):
+		branch_without_refs_probe.free()
+		return _failure("plugin.gd tool update sync should explain that the version list must be refreshed before one-click sync.")
+	branch_without_refs_probe.free()
+	var prepared_sync_probe := ToolPreparedSyncProbePlugin.new()
+	prepared_sync_probe._state.settings["update_source"] = "latest_stable"
+	var prepared_discover_result: Dictionary = prepared_sync_probe.discover_plugin_update_refs_from_tools(true)
+	if not bool(prepared_discover_result.get("accepted", false)) or str(prepared_discover_result.get("status", "")) != "accepted" or prepared_sync_probe.discovery_request_count != 1:
+		prepared_sync_probe.free()
+		return _failure("plugin.gd explicit update ref discovery should still start release target discovery.")
+	prepared_sync_probe._update_refs_pending["branch_done"] = true
+	prepared_sync_probe._update_refs_pending["release_done"] = true
+	prepared_sync_probe._update_refs_pending["tag_done"] = true
+	prepared_sync_probe._update_refs_pending["branch_commits_done"] = true
+	prepared_sync_probe._update_refs_pending["releases"] = ["v2.0.0"]
+	prepared_sync_probe._update_refs_pending["stable_releases"] = ["v2.0.0"]
+	prepared_sync_probe._update_refs_pending["tags"] = ["v2.0.0"]
+	prepared_sync_probe._update_refs_pending["commits"] = {"v2.0.0": "tag-sha"}
+	prepared_sync_probe._update_refs_pending["commit_histories"] = {
+		"current-sync-sha": {"head_commit": "current-sync-sha", "commits": ["current-sync-sha", "base-sha"], "complete": true, "done": true},
+		"tag-sha": {"head_commit": "tag-sha", "commits": ["tag-sha", "current-sync-sha", "base-sha"], "complete": true, "done": true}
+	}
+	prepared_sync_probe._finalize_update_refs_discovery_if_ready(prepared_sync_probe._update_refs_request_serial)
+	if prepared_sync_probe.archive_requests.size() != 0 or prepared_sync_probe._update_sync_after_refs_discovery_pending:
+		prepared_sync_probe.free()
+		return _failure("plugin.gd explicit update ref discovery should refresh cached refs without hidden compare or queued sync.")
+	var prepared_start_result: Dictionary = prepared_sync_probe.start_plugin_update_sync_from_tools()
+	if not bool(prepared_start_result.get("accepted", false)) or not bool(prepared_start_result.get("loading", false)) or prepared_sync_probe.archive_requests.size() != 1 or prepared_sync_probe._update_sync_after_refs_discovery_pending:
+		prepared_sync_probe.free()
+		return _failure("plugin.gd tool update sync should consume completed local history without a Compare request.")
+	var prepared_target: Dictionary = (prepared_sync_probe.archive_requests[0] as Dictionary).get("target", {})
+	if str(prepared_target.get("kind", "")) != "tag" or str(prepared_target.get("ref", "")) != "v2.0.0" or str(prepared_target.get("commit", "")) != "tag-sha":
+		prepared_sync_probe.free()
+		return _failure("plugin.gd tool update sync should reuse the discovered release target when continuing sync.")
+	var prepared_status: Dictionary = prepared_sync_probe.get_plugin_update_status_from_tools()
+	var prepared_data: Dictionary = prepared_status.get("data", {})
+	if bool(prepared_data.get("pending_sync_after_refs_discovery", true)) or str(prepared_data.get("status", "")) != "syncing":
+		prepared_sync_probe.free()
+		return _failure("plugin.gd update status should clear pending-sync once archive sync starts.")
+	prepared_sync_probe.free()
+	var dock_sync_probe := SyncStartProbePlugin.new()
+	dock_sync_probe._state.settings["update_source"] = "custom_branch"
+	dock_sync_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
+	_mark_update_target_verified(dock_sync_probe, "refactor/v2.0.0")
+	dock_sync_probe._on_update_sync_requested()
+	var tool_sync_probe := SyncStartProbePlugin.new()
+	tool_sync_probe._state.settings["update_source"] = "custom_branch"
+	tool_sync_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
+	_mark_update_target_verified(tool_sync_probe, "refactor/v2.0.0")
+	var tool_start_result: Dictionary = tool_sync_probe.start_plugin_update_sync_from_tools()
+	if dock_sync_probe.archive_requests.size() != 1 or tool_sync_probe.archive_requests.size() != 1:
+		dock_sync_probe.free()
+		tool_sync_probe.free()
+		return _failure("plugin.gd should start one update archive request from both Dock and tool entry points.")
+	if not bool(tool_start_result.get("accepted", false)):
+		dock_sync_probe.free()
+		tool_sync_probe.free()
+		return _failure("plugin.gd tool update sync should be accepted when the equivalent Dock update sync would start.")
+	var dock_target: Dictionary = (dock_sync_probe.archive_requests[0] as Dictionary).get("target", {})
+	var tool_target: Dictionary = (tool_sync_probe.archive_requests[0] as Dictionary).get("target", {})
+	if JSON.stringify(dock_target) != JSON.stringify(tool_target):
+		dock_sync_probe.free()
+		tool_sync_probe.free()
+		return _failure("plugin.gd should route Dock and tool update sync through the same resolved target.")
+	dock_sync_probe.free()
+	tool_sync_probe.free()
+	var guarded_scenarios := [
+		{"label": "already latest", "ahead": 0, "behind": 0, "message": "latest"},
+		{"label": "rollback", "ahead": 0, "behind": 1, "message": "roll back"},
+		{"label": "divergent", "ahead": 1, "behind": 1, "message": "divergent"}
+	]
+	for scenario in guarded_scenarios:
+		var guard_probe := SyncStartProbePlugin.new()
+		guard_probe._state.settings["update_source"] = "custom_branch"
+		guard_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
+		_mark_update_target_verified(guard_probe, "refactor/v2.0.0")
+		guard_probe._state.update_compare_ahead_by = int(scenario.get("ahead", 0))
+		guard_probe._state.update_compare_behind_by = int(scenario.get("behind", 0))
+		var guard_result: Dictionary = guard_probe.start_plugin_update_sync_from_tools()
+		if bool(guard_result.get("accepted", false)) or bool(guard_result.get("loading", true)) or guard_probe.archive_requests.size() != 0 or str(guard_probe._state.update_sync_state) != "error":
+			guard_probe.free()
+			return _failure("plugin.gd tool update sync should block one-click %s targets before archive sync." % str(scenario.get("label", "")))
+		if str(guard_result.get("message", "")).strip_edges().is_empty() or str(guard_result.get("message", "")) != str(guard_probe._state.update_sync_error):
+			guard_probe.free()
+			return _failure("plugin.gd tool update sync should explain the blocked one-click %s target." % str(scenario.get("label", "")))
+		guard_probe.free()
+
+	var archive_attempt_probe := ArchiveAttemptProbePlugin.new()
+	archive_attempt_probe._update_sync_request_serial = 21
+	var branch_body := JSON.stringify({"commit": {"sha": "resolved-sha"}}).to_utf8_buffer()
+	await archive_attempt_probe._on_update_archive_branch_ref_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), branch_body, {"kind": "branch", "ref": "refactor/v2.0.0", "commit": ""}, 21)
+	if archive_attempt_probe.attempt_requests.size() != 1:
+		archive_attempt_probe.free()
+		return _failure("plugin.gd should start archive attempts after resolving branch commit metadata.")
+	var resolved_attempt: Dictionary = archive_attempt_probe.attempt_requests[0]
+	var resolved_target: Dictionary = resolved_attempt.get("target", {})
+	if str(resolved_target.get("commit", "")) != "resolved-sha" or str(archive_attempt_probe._state.update_ref_commits.get("refactor/v2.0.0", "")) != "resolved-sha":
+		archive_attempt_probe.free()
+		return _failure("plugin.gd should propagate resolved branch commit metadata into archive sync target and ref cache.")
+	var resolved_attempts: Array = resolved_attempt.get("attempts", [])
+	if resolved_attempts.is_empty() or not str((resolved_attempts[0] as Dictionary).get("url", "")).ends_with("/zip/resolved-sha"):
+		archive_attempt_probe.free()
+		return _failure("plugin.gd should retry branch sync through a commit archive after branch ref resolution.")
+	archive_attempt_probe.free()
+
+	var archive_ref_failure_probe := ArchiveAttemptProbePlugin.new()
+	archive_ref_failure_probe._update_sync_request_serial = 22
+	await archive_ref_failure_probe._on_update_archive_branch_ref_request_completed(HTTPRequest.RESULT_CONNECTION_ERROR, 0, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "refactor/v2.0.0", "commit": ""}, 22)
+	if archive_ref_failure_probe.attempt_requests.size() != 1:
+		archive_ref_failure_probe.free()
+		return _failure("plugin.gd should still try ref archive fallback when branch ref metadata lookup fails.")
+	var ref_failure_request: Dictionary = archive_ref_failure_probe.attempt_requests[0]
+	if (ref_failure_request.get("failures", []) as Array).is_empty():
+		archive_ref_failure_probe.free()
+		return _failure("plugin.gd should preserve branch ref lookup failure details for update sync diagnostics.")
+	var ref_failure_attempts: Array = ref_failure_request.get("attempts", [])
+	if ref_failure_attempts.is_empty() or str((ref_failure_attempts[0] as Dictionary).get("label", "")).find("branch") == -1:
+		archive_ref_failure_probe.free()
+		return _failure("plugin.gd should fallback to branch archive attempts when commit metadata cannot be resolved.")
+	archive_ref_failure_probe.free()
 
 	var refresh_probe := RefreshProbePlugin.new()
 	_tree.root.add_child(refresh_probe.request_parent)
 	refresh_probe._state.update_refs_state = "success"
 	refresh_probe._update_refs_discovery_loaded = true
+	refresh_probe._on_update_interaction_refresh_requested()
+	if refresh_probe.discovery_request_count != 0 or refresh_probe.discovery_background_flags != []:
+		refresh_probe.request_parent.queue_free()
+		refresh_probe.free()
+		return _failure("plugin.gd should not refresh update refs when Settings update selectors are pressed without changing selection.")
+	refresh_probe._on_update_interaction_refresh_requested()
+	if refresh_probe.discovery_request_count != 0:
+		refresh_probe.request_parent.queue_free()
+		refresh_probe.free()
+		return _failure("plugin.gd should keep selector interaction refresh-free.")
+	refresh_probe._state.update_refs_refresh_state = "idle"
 	refresh_probe._on_update_source_changed("custom_branch")
-	if refresh_probe.discovery_request_count != 1:
+	if refresh_probe.discovery_request_count != 0 or refresh_probe.discovery_background_flags != []:
 		refresh_probe.request_parent.queue_free()
 		refresh_probe.free()
-		return _failure("plugin.gd should force-refresh update refs when the update source is selected again.")
+		return _failure("plugin.gd should not refresh update refs when the update source changes.")
 	refresh_probe._state.update_refs_state = "success"
 	refresh_probe._update_refs_discovery_loaded = true
+	refresh_probe._state.update_refs_refresh_state = "idle"
 	refresh_probe._on_update_custom_branch_changed("dev")
-	if refresh_probe.discovery_request_count != 2:
+	if refresh_probe.discovery_request_count != 0 or refresh_probe.discovery_background_flags != []:
 		refresh_probe.request_parent.queue_free()
 		refresh_probe.free()
-		return _failure("plugin.gd should force-refresh update refs when the selected branch is selected again.")
-	refresh_probe._state.update_ref_commits = {"v1.0.0-pre3": "annotated-tag-object-sha"}
-	refresh_probe._state.update_ref_versions = {"v1.0.0-pre3": "1.0.0-pre3"}
-	refresh_probe._state.update_ref_latest_release = "v1.0.0-pre3"
-	refresh_probe._state.settings["update_source"] = "latest_release"
-	refresh_probe._state.update_refs_state = "success"
-	refresh_probe._update_refs_discovery_loaded = true
-	refresh_probe._refresh_update_compare_for_current_target()
-	if refresh_probe.compare_requests.is_empty() or str((refresh_probe.compare_requests[0] as Dictionary).get("head", "")) != "v1.0.0-pre3" or str((refresh_probe.compare_requests[0] as Dictionary).get("target_commit", "")) != "annotated-tag-object-sha":
-		refresh_probe.request_parent.queue_free()
-		refresh_probe.free()
-		return _failure("plugin.gd should compare release tags by ref name while preserving the displayed target commit hash.")
+		return _failure("plugin.gd should not refresh update refs when the selected branch changes.")
 	refresh_probe.request_parent.queue_free()
 	refresh_probe.free()
+
+	var no_host_background_probe := RequestParentProbePlugin.new()
+	no_host_background_probe._state.current_tab = 5
+	no_host_background_probe._state.update_refs_state = "success"
+	no_host_background_probe._state.update_refs_last_checked_unix = 1
+	no_host_background_probe._update_refs_discovery_loaded = true
+	if no_host_background_probe._maybe_start_background_update_info_refresh() or no_host_background_probe.update_check_count != 0 or no_host_background_probe._update_refs_discovery_retry_pending:
+		no_host_background_probe.free()
+		return _failure("plugin.gd should not convert background update refreshes into foreground retry/loading when no request host exists.")
+	no_host_background_probe.free()
+
+	var tick_background_probe := RequestParentProbePlugin.new()
+	var tick_background_dock := CurrentTabProbeDock.new()
+	_tree.root.add_child(tick_background_dock)
+	tick_background_probe._dock = tick_background_dock
+	tick_background_probe._state.current_tab = 5
+	tick_background_probe._state.update_refs_state = "success"
+	tick_background_probe._state.update_refs_last_checked_unix = 1
+	tick_background_probe._update_refs_discovery_loaded = true
+	tick_background_probe._tick_update_request_maintenance(6.0)
+	if tick_background_probe.update_check_count != 0 or tick_background_probe.update_check_background_flags != [] or tick_background_probe._state.update_refs_state != "success":
+		tick_background_probe.free()
+		tick_background_dock.queue_free()
+		return _failure("plugin.gd should not revalidate stale Settings update refs on the editor tick.")
+	tick_background_probe.free()
+	tick_background_dock.queue_free()
+
+	var foreground_compare_probe := RefreshProbePlugin.new()
+	foreground_compare_probe._state.update_refs_state = "success"
+	foreground_compare_probe._state.update_compare_state = "loading"
+	foreground_compare_probe._state.update_compare_last_checked_unix = 0
+	if foreground_compare_probe._should_refresh_update_compare_in_background():
+		foreground_compare_probe.free()
+		return _failure("plugin.gd should not start a background compare refresh while a foreground compare request is loading.")
+	foreground_compare_probe.free()
+
+	var compare_reset_probe := PluginScript.new()
+	compare_reset_probe._state.update_compare_state = "success"
+	compare_reset_probe._state.update_compare_refresh_state = "loading"
+	compare_reset_probe._state.update_compare_refresh_error = ""
+	compare_reset_probe._state.update_compare_refresh_serial = 7
+	compare_reset_probe._reset_update_compare_state()
+	if compare_reset_probe._state.update_compare_refresh_state != "idle" or compare_reset_probe._state.update_compare_refresh_serial != 8:
+		compare_reset_probe.free()
+		return _failure("plugin.gd should reset local comparison state without a remote request serial.")
+	compare_reset_probe.free()
+
+	var foreground_refs_probe := ForegroundRefsProbePlugin.new()
+	foreground_refs_probe._state.update_refs_state = "success"
+	foreground_refs_probe._state.update_refs_refresh_state = "loading"
+	foreground_refs_probe._state.update_refs_refresh_serial = 1
+	foreground_refs_probe._state.update_ref_latest_stable_release = "v1.0.0"
+	foreground_refs_probe._update_refs_background_serials[1] = true
+	foreground_refs_probe._on_update_check_requested(false)
+	var foreground_request_kinds: Array[String] = []
+	for request in foreground_refs_probe.refs_requests:
+		foreground_request_kinds.append(str(request.get("kind", "")))
+	if foreground_refs_probe._state.update_refs_refresh_state != "idle" or foreground_refs_probe._state.update_refs_refresh_serial != foreground_refs_probe._update_refs_request_serial or not foreground_refs_probe._update_refs_background_serials.is_empty() or foreground_refs_probe.refs_requests.size() != 4 or not foreground_request_kinds.has("branches") or not foreground_request_kinds.has("releases") or not foreground_request_kinds.has("tags") or not foreground_request_kinds.has("branch_commits") or not (foreground_refs_probe._update_refs_pending.get("stable_releases", []) as Array).is_empty():
+		foreground_refs_probe.free()
+		return _failure("plugin.gd should refresh stable and development endpoints together without prepending a cached stable release to the fresh release result.")
+	foreground_refs_probe.free()
+
+	var foreground_preserve_probe := ForegroundRefsProbePlugin.new()
+	foreground_preserve_probe._state.update_refs_state = "success"
+	foreground_preserve_probe._update_refs_discovery_loaded = true
+	var preserved_branches: Array[String] = ["cached/branch"]
+	var preserved_releases: Array[String] = ["v2.0.0"]
+	foreground_preserve_probe._state.settings["update_source"] = "custom_branch"
+	foreground_preserve_probe._state.settings["update_custom_branch"] = "cached/branch"
+	foreground_preserve_probe._state.update_ref_branches = preserved_branches
+	foreground_preserve_probe._state.update_ref_releases = preserved_releases
+	foreground_preserve_probe._state.update_ref_commits = {"cached/branch": "cached-sha"}
+	foreground_preserve_probe._state.update_ref_branch_commit_rows = {"cached/branch": [{"kind": "branch", "ref": "cached/branch", "commit": "cached-sha", "title": "Cached", "date": "2026-07-08T00:00:00Z"}]}
+	foreground_preserve_probe._on_update_check_requested(false)
+	var preserve_request_kinds: Array[String] = []
+	for request in foreground_preserve_probe.refs_requests:
+		preserve_request_kinds.append(str(request.get("kind", "")))
+	if foreground_preserve_probe._state.update_refs_state != "loading" or foreground_preserve_probe._state.update_ref_branches != preserved_branches or foreground_preserve_probe._state.update_ref_releases != preserved_releases or str(foreground_preserve_probe._state.update_ref_commits.get("cached/branch", "")) != "cached-sha" or foreground_preserve_probe.refs_requests.size() != 4 or not preserve_request_kinds.has("branches") or not preserve_request_kinds.has("releases") or not preserve_request_kinds.has("tags") or not preserve_request_kinds.has("branch_commits"):
+		foreground_preserve_probe.free()
+		return _failure("plugin.gd should preserve cached data while refreshing both version panels.")
+	foreground_preserve_probe.free()
+
+	var paged_refresh_probe := ForegroundRefsProbePlugin.new()
+	paged_refresh_probe._state.settings["update_source"] = "custom_branch"
+	paged_refresh_probe._state.settings["update_custom_branch"] = "dev"
+	paged_refresh_probe._on_update_check_requested(false)
+	var next_page_headers := PackedStringArray(['Link: <https://api.github.test/branches?page=2>; rel="next"'])
+	paged_refresh_probe._on_update_refs_request_completed(HTTPRequest.RESULT_SUCCESS, 200, next_page_headers, '[{"name":"dev","commit":{"sha":"page-1-sha"}}]'.to_utf8_buffer(), "branches", 1)
+	if (paged_refresh_probe._update_refs_pending.get("successful_kinds", []) as Array).has("branches") or bool(paged_refresh_probe._update_refs_pending.get("branch_done", false)) or paged_refresh_probe.refs_requests.size() != 5:
+		paged_refresh_probe.free()
+		return _failure("plugin.gd should not mark a paginated endpoint successful until its final page completes.")
+	paged_refresh_probe._on_update_refs_request_completed(HTTPRequest.RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray(), "branches", 1)
+	if (paged_refresh_probe._update_refs_pending.get("successful_kinds", []) as Array).has("branches"):
+		paged_refresh_probe.free()
+		return _failure("plugin.gd should not promote partial first-page data when a later page fails.")
+	paged_refresh_probe.free()
+
+	var rate_limit_probe := ForegroundRefsProbePlugin.new()
+	rate_limit_probe._state.update_refs_rate_limit_remaining = "0"
+	rate_limit_probe._state.update_refs_rate_limit_reset_unix = int(Time.get_unix_time_from_system()) + 3600
+	rate_limit_probe._state.update_refs_last_http_status = 403
+	rate_limit_probe._on_update_check_requested(false, "manual")
+	if not rate_limit_probe.refs_requests.is_empty() or rate_limit_probe._update_refs_request_serial != 0 or rate_limit_probe._state.update_refs_state != "error":
+		rate_limit_probe.free()
+		return _failure("plugin.gd should not repeat unauthenticated GitHub requests during a recorded rate-limit cooldown.")
+	rate_limit_probe.free()
+
+
+	var background_failure_probe := PluginScript.new()
+	background_failure_probe._state.update_refs_state = "success"
+	var old_branches: Array[String] = ["old/branch"]
+	var empty_string_array: Array[String] = []
+	background_failure_probe._state.update_ref_branches = old_branches
+	background_failure_probe._state.update_ref_commits = {"old/branch": "old-sha"}
+	background_failure_probe._state.update_refs_last_checked_unix = 100
+	background_failure_probe._update_refs_request_serial = 1
+	background_failure_probe._update_refs_pending = {
+		"serial": 1,
+		"background": true,
+		"branch_done": true,
+		"release_done": true,
+		"tag_done": true,
+		"branch_commits_done": true,
+		"branch_commits_branch": "dev",
+		"errors": ["network unavailable"],
+		"branches": empty_string_array,
+		"releases": empty_string_array,
+		"stable_releases": empty_string_array,
+		"tags": empty_string_array,
+		"commits": {},
+		"release_rows": [],
+		"tag_rows": [],
+		"branch_commit_rows": {}
+	}
+	background_failure_probe._finalize_update_refs_discovery_if_ready(1)
+	if background_failure_probe._state.update_refs_state != "success" or background_failure_probe._state.update_ref_branches != old_branches or str(background_failure_probe._state.update_ref_commits.get("old/branch", "")) != "old-sha" or background_failure_probe._state.update_refs_refresh_state != "error" or background_failure_probe._state.update_refs_last_checked_unix != 100:
+		background_failure_probe.free()
+		return _failure("plugin.gd should preserve the last successful update refs snapshot when a background refresh fails.")
+	background_failure_probe.free()
+
+	var partial_development_probe := PluginScript.new()
+	partial_development_probe._state.settings["update_source"] = "custom_branch"
+	partial_development_probe._state.settings["update_custom_branch"] = "dev"
+	partial_development_probe._state.update_refs_state = "success"
+	var cached_development_branches: Array[String] = ["dev"]
+	partial_development_probe._state.update_ref_branches = cached_development_branches
+	partial_development_probe._state.update_ref_commits = {"dev": "old-sha"}
+	partial_development_probe._state.update_ref_branch_commit_rows = {"dev": [{"kind": "branch", "ref": "dev", "commit": "old-sha", "title": "Cached history", "date": "2026-07-08T00:00:00Z"}]}
+	partial_development_probe._update_refs_request_serial = 1
+	partial_development_probe._update_refs_pending = {
+		"serial": 1,
+		"background": false,
+		"required_kinds": ["branches", "branch_commits"],
+		"successful_kinds": ["branches"],
+		"branch_done": true,
+		"release_done": true,
+		"tag_done": true,
+		"branch_commits_done": true,
+		"branch_commits_branch": "dev",
+		"errors": ["branch commits unavailable"],
+		"branches": ["dev", "feature/new"],
+		"releases": [],
+		"stable_releases": [],
+		"tags": [],
+		"commits": {"dev": "new-head-sha"},
+		"release_rows": [],
+		"tag_rows": [],
+		"branch_commit_rows": {}
+	}
+	partial_development_probe._finalize_update_refs_discovery_if_ready(1)
+	var preserved_history: Array = (partial_development_probe._state.update_ref_branch_commit_rows as Dictionary).get("dev", [])
+	if not (partial_development_probe._state.update_ref_branches as Array).has("feature/new") or preserved_history.size() != 1 or str((preserved_history[0] as Dictionary).get("commit", "")) != "old-sha":
+		partial_development_probe.free()
+		return _failure("plugin.gd should preserve the last successful branch history when the branch list succeeds but commit history refresh fails.")
+	partial_development_probe.free()
+
+	var partial_history_probe := PluginScript.new()
+	partial_history_probe._state.settings["update_source"] = "custom_branch"
+	partial_history_probe._state.settings["update_custom_branch"] = "dev"
+	partial_history_probe._state.update_refs_state = "success"
+	var cached_history_branches: Array[String] = ["dev"]
+	partial_history_probe._state.update_ref_branches = cached_history_branches
+	partial_history_probe._state.update_ref_commits = {"dev": "old-sha"}
+	partial_history_probe._state.update_ref_branch_commit_rows = {"dev": [{"kind": "branch", "ref": "dev", "commit": "old-sha", "title": "Old head", "date": "2026-07-08T00:00:00Z"}]}
+	partial_history_probe._update_refs_request_serial = 1
+	partial_history_probe._update_refs_pending = {
+		"serial": 1,
+		"background": false,
+		"required_kinds": ["branches", "branch_commits"],
+		"successful_kinds": ["branch_commits"],
+		"branch_done": true,
+		"release_done": true,
+		"tag_done": true,
+		"branch_commits_done": true,
+		"branch_commits_branch": "dev",
+		"errors": ["branches unavailable"],
+		"branches": [],
+		"releases": [],
+		"stable_releases": [],
+		"tags": [],
+		"commits": {"dev": "old-sha"},
+		"release_rows": [],
+		"tag_rows": [],
+		"branch_commit_rows": {"dev": [{"kind": "branch", "ref": "dev", "commit": "new-sha", "title": "New head", "date": "2026-07-13T00:00:00Z"}]}
+	}
+	partial_history_probe._finalize_update_refs_discovery_if_ready(1)
+	if str(partial_history_probe._state.update_ref_commits.get("dev", "")) != "new-sha" or str(partial_history_probe._resolve_update_sync_target().get("commit", "")) != "new-sha":
+		partial_history_probe.free()
+		return _failure("plugin.gd should align the implicit branch target with refreshed visible history when only commit history succeeds.")
+	partial_history_probe.free()
+
+	var partial_release_probe := PluginScript.new()
+	partial_release_probe._state.settings["update_source"] = "latest_stable"
+	partial_release_probe._state.update_refs_state = "success"
+	var cached_release_values: Array[String] = ["v1.0.0"]
+	partial_release_probe._state.update_ref_releases = cached_release_values
+	partial_release_probe._state.update_ref_release_rows = [{"kind": "tag", "ref": "v1.0.0", "commit": "old-tag-sha", "title": "Cached tag", "date": "2026-07-01T00:00:00Z", "stable": true}]
+	partial_release_probe._state.update_ref_commits = {"v1.0.0": "old-tag-sha"}
+	partial_release_probe._update_refs_request_serial = 1
+	partial_release_probe._update_refs_pending = {
+		"serial": 1,
+		"background": false,
+		"required_kinds": ["releases", "tags"],
+		"successful_kinds": ["releases"],
+		"branch_done": true,
+		"release_done": true,
+		"tag_done": true,
+		"branch_commits_done": true,
+		"branch_commits_branch": "dev",
+		"errors": ["tags unavailable"],
+		"branches": [],
+		"releases": ["v2.0.0"],
+		"stable_releases": ["v2.0.0"],
+		"tags": [],
+		"commits": {"v1.0.0": "old-tag-sha"},
+		"release_rows": [{"kind": "tag", "ref": "v2.0.0", "commit": "", "title": "Release 2.0.0", "date": "2026-07-13T00:00:00Z", "stable": true}],
+		"tag_rows": [],
+		"branch_commit_rows": {}
+	}
+	partial_release_probe._finalize_update_refs_discovery_if_ready(1)
+	if not (partial_release_probe._state.update_ref_releases as Array).has("v2.0.0") or not (partial_release_probe._state.update_ref_releases as Array).has("v1.0.0") or (partial_release_probe._state.update_ref_release_rows as Array).size() != 2:
+		partial_release_probe.free()
+		return _failure("plugin.gd should merge fresh release data with cached tag data when only one Release endpoint succeeds.")
+	partial_release_probe.free()
+
+	var hidden_selection_probe := PluginScript.new()
+	hidden_selection_probe._state.settings["update_source"] = "custom_branch"
+	hidden_selection_probe._state.settings["update_custom_branch"] = "dev"
+	hidden_selection_probe._state.update_refs_state = "success"
+	hidden_selection_probe._state.update_selected_target_kind = "branch"
+	hidden_selection_probe._state.update_selected_target_ref = "dev"
+	hidden_selection_probe._state.update_selected_target_commit = "old-sha"
+	hidden_selection_probe._update_refs_request_serial = 1
+	hidden_selection_probe._update_refs_pending = {
+		"serial": 1,
+		"background": false,
+		"required_kinds": ["branches", "branch_commits"],
+		"successful_kinds": ["branches", "branch_commits"],
+		"branch_done": true,
+		"release_done": true,
+		"tag_done": true,
+		"branch_commits_done": true,
+		"branch_commits_branch": "dev",
+		"errors": [],
+		"branches": ["dev"],
+		"releases": [],
+		"stable_releases": [],
+		"tags": [],
+		"commits": {"dev": "new-sha"},
+		"release_rows": [],
+		"tag_rows": [],
+		"branch_commit_rows": {"dev": [{"kind": "branch", "ref": "dev", "commit": "new-sha", "title": "New head", "date": "2026-07-13T00:00:00Z"}]}
+	}
+	hidden_selection_probe._finalize_update_refs_discovery_if_ready(1)
+	if not str(hidden_selection_probe._state.update_selected_target_ref).is_empty() or not str(hidden_selection_probe._state.update_selected_target_commit).is_empty() or str(hidden_selection_probe._resolve_update_sync_target().get("commit", "")) != "new-sha":
+		hidden_selection_probe.free()
+		return _failure("plugin.gd should clear a selected compare target that is no longer visible after an explicit refresh.")
+	hidden_selection_probe.free()
+
+	var background_success_probe := PluginScript.new()
+	background_success_probe._state.settings["update_source"] = "custom_branch"
+	background_success_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
+	background_success_probe._state.update_refs_state = "idle"
+	background_success_probe._update_refs_request_serial = 1
+	var target_branches: Array[String] = ["refactor/v2.0.0"]
+	background_success_probe._update_refs_pending = {
+		"serial": 1,
+		"background": true,
+		"branch_done": true,
+		"release_done": true,
+		"tag_done": true,
+		"branch_commits_done": true,
+		"branch_commits_branch": "refactor/v2.0.0",
+		"errors": [],
+		"branches": target_branches,
+		"releases": empty_string_array,
+		"stable_releases": empty_string_array,
+		"tags": empty_string_array,
+		"commits": {"refactor/v2.0.0": "target-sha"},
+		"release_rows": [],
+		"tag_rows": [],
+		"branch_commit_rows": {"refactor/v2.0.0": [{"kind": "branch", "ref": "refactor/v2.0.0", "commit": "target-sha", "title": "Target head", "date": "2026-07-13T00:00:00Z"}]},
+		"commit_histories": {
+			"current-sync-sha": {"head_commit": "current-sync-sha", "commits": ["current-sync-sha", "base-sha"], "complete": true, "done": true, "pages": 1},
+			"target-sha": {"head_commit": "target-sha", "commits": ["target-sha", "current-sync-sha", "base-sha"], "complete": true, "done": true, "pages": 1}
+		}
+	}
+	background_success_probe._finalize_update_refs_discovery_if_ready(1)
+	if background_success_probe._state.update_refs_state != "success" or background_success_probe._state.update_refs_refresh_state != "success" or background_success_probe._state.update_ref_branches != target_branches or str(background_success_probe._state.update_ref_commits.get("refactor/v2.0.0", "")) != "target-sha" or not background_success_probe._update_refs_discovery_loaded:
+		background_success_probe.free()
+		return _failure("plugin.gd should promote successful background update refs snapshots into the visible Settings state.")
+	background_success_probe.free()
 
 	var reload_probe := SyncReloadProbePlugin.new()
 	reload_probe._update_sync_request_serial = 10
 	reload_probe._state.update_sync_state = "loading"
-	await reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 10, null)
+	await reload_probe.complete_archive_request(HTTPRequest.RESULT_SUCCESS, 200, {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 10)
 	var localized_refresh_status := LocalizationServiceScript.translate("settings_update_sync_refreshing_editor")
 	if reload_probe.reload_requests != ["settings_sync"] or reload_probe.sync_events != ["editor_refresh", "lifecycle_reload"] or reload_probe.editor_refresh_count != 1 or reload_probe.editor_refresh_state != "loading" or reload_probe.editor_refresh_status != localized_refresh_status or str(reload_probe._state.update_sync_state) != "success" or reload_probe.compare_refresh_count != 1 or reload_probe.dock_refresh_count < 2:
 		reload_probe.free()
@@ -269,7 +1047,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	refresh_timeout_probe._update_sync_request_serial = 16
 	refresh_timeout_probe._state.update_sync_state = "loading"
 	refresh_timeout_probe.editor_refresh_result = {"success": false, "scan_requested": true, "scan_completed": false}
-	await refresh_timeout_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 16, null)
+	await refresh_timeout_probe.complete_archive_request(HTTPRequest.RESULT_SUCCESS, 200, {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 16)
 	var localized_refresh_timeout := LocalizationServiceScript.translate("settings_update_sync_refresh_timeout")
 	if refresh_timeout_probe.reload_requests != [] or refresh_timeout_probe.sync_events != ["editor_refresh"] or str(refresh_timeout_probe._state.update_sync_state) != "error" or str(refresh_timeout_probe._state.update_sync_error) != localized_refresh_timeout or refresh_timeout_probe.compare_refresh_count != 0:
 		refresh_timeout_probe.free()
@@ -278,7 +1056,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var failed_sync_reload_probe := SyncReloadProbePlugin.new()
 	failed_sync_reload_probe._update_sync_request_serial = 11
-	await failed_sync_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_CONNECTION_ERROR, 500, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 11, null)
+	await failed_sync_reload_probe.complete_archive_request(HTTPRequest.RESULT_CONNECTION_ERROR, 500, {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 11)
 	if failed_sync_reload_probe.editor_refresh_count != 0 or not failed_sync_reload_probe.reload_requests.is_empty() or str(failed_sync_reload_probe._state.update_sync_state) != "error":
 		failed_sync_reload_probe.free()
 		return _failure("plugin.gd should not schedule a lifecycle reload when the update archive request fails.")
@@ -287,16 +1065,32 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var failed_copy_reload_probe := SyncReloadProbePlugin.new()
 	failed_copy_reload_probe._update_sync_request_serial = 12
 	failed_copy_reload_probe.sync_result = {"success": false, "error": "copy failed"}
-	await failed_copy_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 12, null)
+	await failed_copy_reload_probe.complete_archive_request(HTTPRequest.RESULT_SUCCESS, 200, {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 12)
 	if failed_copy_reload_probe.editor_refresh_count != 0 or not failed_copy_reload_probe.reload_requests.is_empty() or str(failed_copy_reload_probe._state.update_sync_state) != "error":
 		failed_copy_reload_probe.free()
 		return _failure("plugin.gd should not schedule a lifecycle reload when archive files fail to sync into the addon.")
 	failed_copy_reload_probe.free()
 
+	var failed_rollback_reload_probe := SyncReloadProbePlugin.new()
+	failed_rollback_reload_probe._update_sync_request_serial = 17
+	failed_rollback_reload_probe.sync_result = {
+		"success": false,
+		"error": "copy failed",
+		"dirty": true,
+		"recovered": false,
+		"rollback_error": "restore failed"
+	}
+	await failed_rollback_reload_probe.complete_archive_request(HTTPRequest.RESULT_SUCCESS, 200, {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 17)
+	var failed_rollback_error := str(failed_rollback_reload_probe._state.update_sync_error)
+	if not failed_rollback_error.contains("copy failed") or not failed_rollback_error.contains("partially updated") or not failed_rollback_error.contains("Rollback did not fully recover") or not failed_rollback_error.contains("restore failed"):
+		failed_rollback_reload_probe.free()
+		return _failure("plugin.gd should surface dirty rollback diagnostics when archive sync rollback fails: %s" % failed_rollback_error)
+	failed_rollback_reload_probe.free()
+
 	var stale_serial_reload_probe := SyncReloadProbePlugin.new()
 	stale_serial_reload_probe._update_sync_request_serial = 14
 	stale_serial_reload_probe._state.update_sync_state = "pending"
-	await stale_serial_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 13, null)
+	await stale_serial_reload_probe.complete_archive_request(HTTPRequest.RESULT_SUCCESS, 200, {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 13)
 	if stale_serial_reload_probe.editor_refresh_count != 0 or not stale_serial_reload_probe.reload_requests.is_empty() or str(stale_serial_reload_probe._state.update_sync_state) != "pending" or stale_serial_reload_probe.compare_refresh_count != 0 or stale_serial_reload_probe.dock_refresh_count != 0:
 		stale_serial_reload_probe.free()
 		return _failure("plugin.gd should ignore stale update archive callbacks without scheduling a lifecycle reload.")
@@ -305,7 +1099,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var marker_failure_reload_probe := SyncReloadProbePlugin.new()
 	marker_failure_reload_probe._update_sync_request_serial = 15
 	marker_failure_reload_probe.marker_error = ERR_CANT_CREATE
-	await marker_failure_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 15, null)
+	await marker_failure_reload_probe.complete_archive_request(HTTPRequest.RESULT_SUCCESS, 200, {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 15)
 	if marker_failure_reload_probe.editor_refresh_count != 0 or not marker_failure_reload_probe.reload_requests.is_empty() or str(marker_failure_reload_probe._state.update_sync_state) != "error":
 		marker_failure_reload_probe.free()
 		return _failure("plugin.gd should not schedule a lifecycle reload when sync marker writing fails.")
@@ -315,7 +1109,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	pending_reload_probe._update_sync_request_serial = 13
 	pending_reload_probe._state.update_sync_state = "loading"
 	pending_reload_probe._plugin_reenable_pending = true
-	await pending_reload_probe._on_update_archive_sync_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray(), {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 13, null)
+	await pending_reload_probe.complete_archive_request(HTTPRequest.RESULT_SUCCESS, 200, {"kind": "branch", "ref": "dev", "commit": "target-sha"}, 13)
 	if pending_reload_probe.editor_refresh_count != 1 or not pending_reload_probe.reload_requests.is_empty() or str(pending_reload_probe._state.update_sync_state) != "success":
 		pending_reload_probe.free()
 		return _failure("plugin.gd should keep sync success state without scheduling a duplicate lifecycle reload when one is already pending.")
@@ -323,19 +1117,19 @@ func run_case(_tree: SceneTree) -> Dictionary:
 
 	var focus_restore_probe := FocusRestoreProbePlugin.new()
 	focus_restore_probe._state.current_tab = 0
-	focus_restore_probe._state.settings["_pending_focus_snapshot"] = {"tab_index": 3, "focus_path": ""}
+	focus_restore_probe._state.settings["_pending_focus_snapshot"] = {"tab_index": 5, "focus_path": ""}
 	focus_restore_probe._restore_pending_focus_snapshot_if_needed()
-	if focus_restore_probe._state.current_tab != 3 or focus_restore_probe.discovery_request_count != 1 or focus_restore_probe._state.settings.has("_pending_focus_snapshot"):
+	if focus_restore_probe._state.current_tab != 5 or focus_restore_probe.discovery_request_count != 0 or focus_restore_probe._state.settings.has("_pending_focus_snapshot"):
 		focus_restore_probe.free()
-		return _failure("plugin.gd should restore the Settings tab index and request update refs after restoring Dock focus.")
+		return _failure("plugin.gd should restore the Settings tab index without requesting update refs.")
 	focus_restore_probe._state.settings["update_source"] = "release_tag"
 	var focus_request_parent := focus_restore_probe.request_parent
 	_tree.root.add_child(focus_request_parent)
 	focus_restore_probe._ensure_saved_update_source_discovery_requested()
-	if focus_restore_probe.discovery_request_count != 2:
+	if focus_restore_probe.discovery_request_count != 0:
 		focus_request_parent.queue_free()
 		focus_restore_probe.free()
-		return _failure("plugin.gd should request update refs on startup when the saved update source needs release/tag discovery.")
+		return _failure("plugin.gd should not request update refs on startup when the saved update source needs release/tag discovery.")
 	focus_request_parent.queue_free()
 	focus_restore_probe.free()
 
@@ -345,10 +1139,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	saved_source_probe._dock = saved_source_dock
 	saved_source_probe._state.settings["update_source"] = "release_tag"
 	saved_source_probe._refresh_dock()
-	if saved_source_probe.discovery_request_count != 1 or saved_source_dock.apply_model_count != 0:
+	if saved_source_probe.discovery_request_count != 0 or saved_source_dock.apply_model_count != 1:
 		saved_source_probe.free()
 		saved_source_dock.free()
-		return _failure("plugin.gd should auto-discover update refs during Dock refresh when the saved update source needs release/tag discovery.")
+		return _failure("plugin.gd should render Dock refresh without auto-discovering update refs for saved sources.")
 	saved_source_probe.free()
 	saved_source_dock.free()
 
@@ -357,10 +1151,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	current_tab_probe._dock = probe_dock
 	current_tab_probe._state.current_tab = 0
 	current_tab_probe._refresh_dock()
-	if current_tab_probe._state.current_tab != 3 or current_tab_probe.discovery_request_count != 1 or probe_dock.apply_model_count != 0:
+	if current_tab_probe._state.current_tab != 5 or current_tab_probe.discovery_request_count != 0 or probe_dock.apply_model_count != 1:
 		current_tab_probe.free()
 		probe_dock.free()
-		return _failure("plugin.gd should sync the visible Dock tab before building the model and auto-discover refs on Settings.")
+		return _failure("plugin.gd should sync the visible Dock tab and build the model without auto-discovering refs on Settings.")
 	current_tab_probe.free()
 	probe_dock.free()
 
@@ -371,7 +1165,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if not request_parent_probe._ensure_update_refs_discovery_requested() or request_parent_probe.update_check_count != 1:
 		request_parent_probe.free()
 		request_parent_dock.queue_free()
-		return _failure("plugin.gd should use an active Dock request host when auto-discovering update refs.")
+		return _failure("plugin.gd should use an active Dock request host for explicit update ref discovery.")
 	request_parent_probe.free()
 	request_parent_dock.queue_free()
 
@@ -379,18 +1173,87 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var pending_retry_dock := CurrentTabProbeDock.new()
 	pending_retry_probe._dock = pending_retry_dock
 	pending_retry_probe._state.settings["update_source"] = "release_tag"
-	if pending_retry_probe._ensure_saved_update_source_discovery_requested() or pending_retry_probe.update_check_count != 0 or not pending_retry_probe._update_refs_discovery_retry_pending:
+	if pending_retry_probe._ensure_saved_update_source_discovery_requested() or pending_retry_probe.update_check_count != 0 or pending_retry_probe._update_refs_discovery_retry_pending:
 		pending_retry_probe.free()
 		pending_retry_dock.free()
-		return _failure("plugin.gd should mark saved update refs discovery pending when the Dock is not in the tree yet.")
+		return _failure("plugin.gd should not mark saved update refs discovery pending when the Dock is not in the tree yet.")
 	_tree.root.add_child(pending_retry_dock)
 	pending_retry_probe._refresh_dock()
-	if pending_retry_probe.update_check_count != 1 or pending_retry_probe._update_refs_discovery_retry_pending or pending_retry_dock.apply_model_count != 0:
+	if pending_retry_probe.update_check_count != 0 or pending_retry_probe._update_refs_discovery_retry_pending or pending_retry_dock.apply_model_count != 1:
 		pending_retry_probe.free()
 		pending_retry_dock.queue_free()
-		return _failure("plugin.gd should retry pending saved-source update refs discovery after the Dock enters the tree.")
+		return _failure("plugin.gd should not retry saved-source update refs discovery after the Dock enters the tree.")
 	pending_retry_probe.free()
 	pending_retry_dock.queue_free()
+
+	var stable_refresh_probe := FocusRestoreProbePlugin.new()
+	var stable_refresh_dock := StableDockProbe.new()
+	stable_refresh_probe._dock = stable_refresh_dock
+	stable_refresh_probe._state.current_tab = 1
+	stable_refresh_probe._refresh_service_instances()
+	stable_refresh_probe._state.settings["update_source"] = "latest_stable"
+	stable_refresh_probe._state.update_refs_state = "success"
+	stable_refresh_probe._update_refs_discovery_loaded = true
+	stable_refresh_probe._refresh_dock()
+	stable_refresh_probe._refresh_dock_if_status_changed()
+	if stable_refresh_dock.apply_model_count != 1:
+		stable_refresh_probe.free()
+		stable_refresh_dock.free()
+		return _failure("plugin.gd should skip a second dock rebuild when the lightweight status signature stays unchanged.")
+	stable_refresh_probe._state.update_ref_commits = {"refactor/v2.0.0": "new-target-sha"}
+	stable_refresh_probe._refresh_dock_if_status_changed()
+	stable_refresh_probe._state.update_compare_ahead_by = 4
+	stable_refresh_probe._state.update_compare_behind_by = 7
+	stable_refresh_probe._refresh_dock_if_status_changed()
+	if stable_refresh_dock.apply_model_count != 3:
+		stable_refresh_probe.free()
+		stable_refresh_dock.free()
+		return _failure("plugin.gd should rebuild the Dock when background update refs or ahead/behind compare metadata changes.")
+	stable_refresh_probe.free()
+	stable_refresh_dock.free()
+
+	var plugin_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin.gd")
+	var mirror_service_source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/plugin/runtime/plugin_update_sync_mirror_service.gd")
+	if plugin_source.is_empty() or mirror_service_source.is_empty():
+		return _failure("Plugin update sync mirror sources should be readable.")
+	if plugin_source.find("PluginUpdateSyncMirrorServiceScript.new()") == -1:
+		return _failure("plugin.gd should delegate update sync mirror responsibilities to PluginUpdateSyncMirrorService.")
+	for required_mirror_method in [
+		"func sync_archive_to_addon(",
+		"func cleanup_stale_addon_files(",
+		"func delete_stale_paths(",
+		"func is_path_or_ancestor_link("
+	]:
+		if mirror_service_source.find(required_mirror_method) == -1:
+			return _failure("PluginUpdateSyncMirrorService should own mirror helper: %s" % required_mirror_method)
+	for forbidden_plugin_body in [
+		"var reader := ZIPReader.new()",
+		"func _delete_update_sync_stale_paths_recursive(",
+		"func _resolve_update_ref_commit(",
+		"func _encode_update_archive_ref_path(",
+		"const UPDATE_SYNC_STALE_ADDON_FILES := [",
+		"const UPDATE_SYNC_ADDON_PREFIX :="
+	]:
+		if plugin_source.find(forbidden_plugin_body) != -1:
+			return _failure("plugin.gd should not retain update sync mirror internals: %s" % forbidden_plugin_body)
+	if plugin_source.find("_build_dock_refresh_status_signature(model)") != -1 or plugin_source.find("_build_dock_refresh_status_signature_data_from_model") != -1:
+		return _failure("plugin.gd should derive Dock refresh status signatures from one lightweight source instead of comparing model-derived loader data.")
+	if plugin_source.find("func _build_dock_refresh_status_signature() -> String:\n\tif _state == null:\n\t\treturn \"\"\n\treturn JSON.stringify(") != -1:
+		return _failure("plugin.gd should build Dock refresh signatures without serializing JSON on every status poll.")
+
+	var shared_sync_entry_result := _run_shared_update_sync_entry_contract()
+	if not bool(shared_sync_entry_result.get("success", false)):
+		return shared_sync_entry_result
+
+	var mirror_result := _run_update_sync_mirror_contract()
+	if not bool(mirror_result.get("success", false)):
+		return mirror_result
+	var stale_cleanup_result := _run_update_sync_stale_cleanup_contract()
+	if not bool(stale_cleanup_result.get("success", false)):
+		return stale_cleanup_result
+	var stale_cleanup_link_result := _run_update_sync_stale_cleanup_link_guard_contract()
+	if not bool(stale_cleanup_link_result.get("success", false)):
+		return stale_cleanup_link_result
 	return {"name": "plugin_update_settings_persistence_contracts", "success": true, "error": ""}
 
 
@@ -416,6 +1279,435 @@ func _remove_saved_settings() -> void:
 	var settings_path := ProjectSettings.globalize_path(PluginRuntimeStateScript.SETTINGS_PATH)
 	if FileAccess.file_exists(PluginRuntimeStateScript.SETTINGS_PATH):
 		DirAccess.remove_absolute(settings_path)
+	var cache_path := ProjectSettings.globalize_path(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH)
+	if FileAccess.file_exists(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH):
+		DirAccess.remove_absolute(cache_path)
+
+
+func _run_shared_update_sync_entry_contract() -> Dictionary:
+	var probe := SyncStartProbePlugin.new()
+	probe._state.settings["update_source"] = "custom_branch"
+	probe._state.settings["update_custom_branch"] = "feature/sync-entry"
+	_mark_update_target_verified(probe, "feature/sync-entry")
+	probe._on_update_sync_requested()
+	if probe.archive_requests.size() != 1:
+		probe.free()
+		return _failure("Dock update sync should enter the shared archive sync request path.")
+	var dock_request: Dictionary = probe.archive_requests[0]
+	probe._state.update_sync_state = "idle"
+	var tool_response: Dictionary = probe.start_plugin_update_sync_from_tools()
+	if not bool(tool_response.get("success", false)) or not bool(tool_response.get("accepted", false)):
+		probe.free()
+		return _failure("MCP plugin update sync should accept the same available custom branch target.")
+	if probe.archive_requests.size() != 2:
+		probe.free()
+		return _failure("MCP plugin update sync should enter the shared archive sync request path.")
+	var tool_request: Dictionary = probe.archive_requests[1]
+	if str((dock_request.get("target", {}) as Dictionary).get("ref", "")) != "feature/sync-entry":
+		probe.free()
+		return _failure("Dock update sync should pass the resolved custom branch target into the shared sync path.")
+	if (dock_request.get("target", {}) as Dictionary) != (tool_request.get("target", {}) as Dictionary):
+		probe.free()
+		return _failure("Dock and MCP update sync should resolve the same archive target before starting sync.")
+	if int(tool_request.get("serial", 0)) <= int(dock_request.get("serial", 0)):
+		probe.free()
+		return _failure("Shared update sync should allocate a fresh serial for every accepted sync request.")
+	probe.free()
+	return {"success": true}
+
+
+func _run_update_sync_mirror_contract() -> Dictionary:
+	var probe := MirrorSyncProbePlugin.new()
+	var root := probe._get_update_sync_addon_root()
+	var external_root := "res://tests_tmp/plugin_update_mirror_external"
+	var archive_path := "user://godot_dotnet_mcp/plugin_update_mirror_contract.zip"
+	var incomplete_archive_path := "user://godot_dotnet_mcp/plugin_update_mirror_incomplete_contract.zip"
+	_remove_tree(root)
+	_remove_tree(external_root)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(root))
+	_write_text(root.path_join("plugin.cfg"), "old")
+	_write_text(root.path_join("plugin.gd"), "old")
+	_write_text(root.path_join("tools/node_tools.gd"), "legacy")
+	_write_text(root.path_join("tools/animation_tools.gd"), "legacy")
+	_write_text(root.path_join("tools/old_domain/orphan.gd"), "legacy")
+	_write_text(root.path_join("custom_tools/user_tool.gd"), "keep")
+	_write_text(root.path_join("dotnet_bridge/bin/bridge.dll"), "keep")
+	_write_text(root.path_join("dotnet_bridge/obj/cache.tmp"), "keep")
+	_write_text(root.path_join("ui/generated.png.import"), "keep")
+	_write_text(root.path_join(".import/local.cache"), "keep")
+	_write_text(external_root.path_join("protected.txt"), "outside")
+	var external_link_path := root.path_join("tools/linked_external")
+	var external_link_created := _create_directory_link(external_link_path, external_root)
+	var incomplete_archive_error := _write_update_sync_fixture_archive(incomplete_archive_path, {
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/plugin.cfg": "[plugin]\nversion=\"2.0.0\"\n",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/plugin.gd": "extends EditorPlugin\n"
+	})
+	if incomplete_archive_error != OK:
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync mirror contract could not create incomplete fixture archive: %s" % incomplete_archive_error)
+	var incomplete_sync_result: Dictionary = probe._sync_update_archive_to_addon(incomplete_archive_path)
+	if bool(incomplete_sync_result.get("success", false)):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should reject incomplete archives before mirroring.")
+	if not FileAccess.file_exists(root.path_join("tools/node_tools.gd")) or not FileAccess.file_exists(root.path_join("tools/old_domain/orphan.gd")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should not delete stale files when archive completeness validation fails.")
+	var archive_error := _write_update_sync_fixture_archive(archive_path, {
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/plugin.cfg": "[plugin]\nversion=\"2.0.0\"\n",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/plugin.gd": "extends EditorPlugin\n",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/ui/mcp_dock.tscn": "[gd_scene format=3]\n",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/tools/node/executor.gd": "extends RefCounted\n",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/tools/animation/executor.gd": "extends RefCounted\n",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/.import/archive.cache": "skip\n"
+	})
+	if archive_error != OK:
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync mirror contract could not create fixture archive: %s" % archive_error)
+	var linked_write_result := _run_update_sync_linked_write_guard_contract(archive_path)
+	if not bool(linked_write_result.get("success", false)):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return linked_write_result
+	var write_failure_rollback_result := _run_update_sync_write_failure_rollback_contract()
+	if not bool(write_failure_rollback_result.get("success", false)):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return write_failure_rollback_result
+	var sync_result: Dictionary = probe._sync_update_archive_to_addon(archive_path)
+	if not bool(sync_result.get("success", false)):
+		var error := str(sync_result.get("error", ""))
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should mirror archive into addon root: %s" % error)
+	if FileAccess.file_exists(root.path_join("tools/node_tools.gd")) or FileAccess.file_exists(root.path_join("tools/animation_tools.gd")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should remove stale root tool monolith files that are absent from the archive.")
+	if FileAccess.file_exists(root.path_join("tools/old_domain/orphan.gd")) or DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(root.path_join("tools/old_domain"))):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should remove stale addon subdirectories after deleting orphan files.")
+	if not FileAccess.file_exists(root.path_join("tools/node/executor.gd")) or not FileAccess.file_exists(root.path_join("tools/animation/executor.gd")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should write files from the branch archive.")
+	if not FileAccess.file_exists(root.path_join("custom_tools/user_tool.gd")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should preserve custom_tools during mirror cleanup.")
+	if not FileAccess.file_exists(root.path_join("dotnet_bridge/bin/bridge.dll")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should preserve dotnet_bridge/bin during mirror cleanup.")
+	if not FileAccess.file_exists(root.path_join("dotnet_bridge/obj/cache.tmp")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should preserve dotnet_bridge/obj during mirror cleanup.")
+	if not FileAccess.file_exists(root.path_join("ui/generated.png.import")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should preserve .import sidecar files during mirror cleanup.")
+	if not FileAccess.file_exists(root.path_join(".import/local.cache")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should preserve the .import cache directory during mirror cleanup.")
+	if FileAccess.file_exists(root.path_join(".import/archive.cache")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should not write archive .import cache entries into the addon root.")
+	if int(sync_result.get("deleted_files", 0)) < 3:
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should report stale files removed during mirror cleanup.")
+	if external_link_created:
+		if not FileAccess.file_exists(external_root.path_join("protected.txt")):
+			probe.free()
+			_remove_tree(root)
+			_remove_tree(external_root)
+			return _failure("plugin.gd update sync should skip linked directories instead of deleting linked external contents.")
+		if int(sync_result.get("skipped_links", 0)) < 1:
+			probe.free()
+			_remove_tree(root)
+			_remove_tree(external_root)
+			return _failure("plugin.gd update sync should report skipped linked directories during mirror cleanup.")
+	probe.free()
+	_remove_tree(root)
+	_remove_tree(external_root)
+	return {"success": true}
+
+
+func _run_update_sync_stale_cleanup_contract() -> Dictionary:
+	var probe := MirrorSyncProbePlugin.new()
+	probe.addon_root = "res://tests_tmp/plugin_update_stale_cleanup_contract/addons/godot_dotnet_mcp"
+	var root := probe._get_update_sync_addon_root()
+	_remove_tree(root)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(root))
+	_write_text(root.path_join("tools/node_tools.gd"), "legacy")
+	_write_text(root.path_join("tools/node_tools.gd.uid"), "legacy")
+	_write_text(root.path_join("tools/animation_tools.gd"), "legacy")
+	_write_text(root.path_join("tools/debug_tools.gd"), "current")
+	_write_text(root.path_join("custom_tools/node_tools.gd"), "user")
+	var cleanup_result: Dictionary = probe._cleanup_stale_update_sync_addon_files()
+	if not bool(cleanup_result.get("success", false)):
+		var error := str(cleanup_result.get("error", ""))
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd stale update cleanup should succeed inside the addon root: %s" % error)
+	if FileAccess.file_exists(root.path_join("tools/node_tools.gd")) or FileAccess.file_exists(root.path_join("tools/node_tools.gd.uid")) or FileAccess.file_exists(root.path_join("tools/animation_tools.gd")):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd stale update cleanup should remove known removed root tool monolith leftovers.")
+	if not FileAccess.file_exists(root.path_join("tools/debug_tools.gd")):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd stale update cleanup should keep current compatibility wrappers.")
+	if not FileAccess.file_exists(root.path_join("custom_tools/node_tools.gd")):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd stale update cleanup should not touch user custom tools.")
+	if int(cleanup_result.get("deleted", 0)) < 3:
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd stale update cleanup should report removed legacy files.")
+	probe.free()
+	_remove_tree(root)
+	return {"success": true}
+
+
+func _run_update_sync_stale_cleanup_link_guard_contract() -> Dictionary:
+	var probe := MirrorSyncProbePlugin.new()
+	probe.addon_root = "res://tests_tmp/plugin_update_stale_cleanup_link_contract/addons/godot_dotnet_mcp"
+	var root := probe._get_update_sync_addon_root()
+	var external_root := "res://tests_tmp/plugin_update_stale_cleanup_link_external"
+	_remove_tree(root)
+	_remove_tree(external_root)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(root))
+	_write_text(external_root.path_join("node_tools.gd"), "external")
+	_write_text(external_root.path_join("sentinel.txt"), "external")
+	var linked_tools_path := root.path_join("tools")
+	var link_created := _create_directory_link(linked_tools_path, external_root)
+	if not link_created:
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return {"success": true}
+	var cleanup_result: Dictionary = probe._cleanup_stale_update_sync_addon_files()
+	if not bool(cleanup_result.get("success", false)):
+		var error := str(cleanup_result.get("error", ""))
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd stale update cleanup should skip linked ancestors instead of failing: %s" % error)
+	if not FileAccess.file_exists(external_root.path_join("node_tools.gd")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd stale update cleanup should not remove stale filenames through linked ancestor directories.")
+	if not FileAccess.file_exists(external_root.path_join("sentinel.txt")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd stale update cleanup should preserve linked external target contents.")
+	if int(cleanup_result.get("skipped_links", 0)) <= 0:
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd stale update cleanup should report skipped linked ancestor paths.")
+	probe.free()
+	_remove_tree(root)
+	_remove_tree(external_root)
+	return {"success": true}
+
+
+func _run_update_sync_linked_write_guard_contract(archive_path: String) -> Dictionary:
+	var probe := MirrorSyncProbePlugin.new()
+	probe.addon_root = "res://tests_tmp/plugin_update_linked_write_contract/addons/godot_dotnet_mcp"
+	var root := probe._get_update_sync_addon_root()
+	var external_root := "res://tests_tmp/plugin_update_linked_write_external"
+	_remove_tree(root)
+	_remove_tree(external_root)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(root))
+	_write_text(root.path_join("plugin.cfg"), "old")
+	_write_text(root.path_join("plugin.gd"), "old")
+	_write_text(root.path_join("ui/mcp_dock.tscn"), "old")
+	_write_text(external_root.path_join("sentinel.txt"), "outside")
+	var linked_tools_path := root.path_join("tools")
+	var link_created := _create_directory_link(linked_tools_path, external_root)
+	if not link_created:
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return {"success": true}
+	var sync_result: Dictionary = probe._sync_update_archive_to_addon(archive_path)
+	if bool(sync_result.get("success", false)):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should reject archives whose write target traverses a linked directory.")
+	if FileAccess.file_exists(external_root.path_join("node/executor.gd")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should not write archive entries through linked target directories.")
+	if not FileAccess.file_exists(external_root.path_join("sentinel.txt")):
+		probe.free()
+		_remove_tree(root)
+		_remove_tree(external_root)
+		return _failure("plugin.gd update sync should preserve linked external target contents when rejecting a linked write target.")
+	probe.free()
+	_remove_tree(root)
+	_remove_tree(external_root)
+	return {"success": true}
+
+
+func _run_update_sync_write_failure_rollback_contract() -> Dictionary:
+	var probe := MirrorSyncProbePlugin.new()
+	probe.addon_root = "res://tests_tmp/plugin_update_write_failure_rollback_contract/addons/godot_dotnet_mcp"
+	var root := probe._get_update_sync_addon_root()
+	var archive_path := "user://godot_dotnet_mcp/plugin_update_write_failure_rollback_contract.zip"
+	_remove_tree(root)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(root))
+	_write_text(root.path_join("plugin.cfg"), "old cfg")
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(root.path_join("plugin.gd")))
+	_write_text(root.path_join("plugin.gd/sentinel.txt"), "directory target")
+	_write_text(root.path_join("ui/mcp_dock.tscn"), "old scene")
+	var archive_error := _write_update_sync_fixture_archive(archive_path, {
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/plugin.cfg": "new cfg",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/new/nested/file.txt": "new nested",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/plugin.gd": "new plugin",
+		"godot-dotnet-mcp-ref/addons/godot_dotnet_mcp/ui/mcp_dock.tscn": "new scene"
+	})
+	if archive_error != OK:
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync rollback contract could not create fixture archive: %s" % archive_error)
+	var sync_result: Dictionary = probe._sync_update_archive_to_addon(archive_path)
+	if bool(sync_result.get("success", false)):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync should fail when an archive file target is an existing directory.")
+	if str(FileAccess.get_file_as_string(root.path_join("plugin.cfg"))) != "old cfg":
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync should restore files written before a later archive write failure.")
+	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(root.path_join("plugin.gd"))) or not FileAccess.file_exists(root.path_join("plugin.gd/sentinel.txt")):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync should preserve the directory that caused a write failure.")
+	if not bool(sync_result.get("recovered", false)) or bool(sync_result.get("dirty", true)):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync write failures should report recovered clean state: %s" % str(sync_result))
+	if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(root.path_join("new"))):
+		probe.free()
+		_remove_tree(root)
+		return _failure("plugin.gd update sync write failures should remove empty directories created before the failure.")
+	probe.free()
+	_remove_tree(root)
+	return {"success": true}
+
+
+func _write_update_sync_fixture_archive(archive_path: String, entries: Dictionary) -> int:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(archive_path.get_base_dir()))
+	if FileAccess.file_exists(archive_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(archive_path))
+	var packer := ZIPPacker.new()
+	var open_error := packer.open(archive_path)
+	if open_error != OK:
+		return open_error
+	for path in entries.keys():
+		var start_error := packer.start_file(str(path))
+		if start_error != OK:
+			packer.close()
+			return start_error
+		packer.write_file(str(entries[path]).to_utf8_buffer())
+		packer.close_file()
+	return packer.close()
+
+
+func _write_text(path: String, content: String) -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file != null:
+		file.store_string(content)
+		file.close()
+
+
+func _create_directory_link(link_path: String, target_path: String) -> bool:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(link_path.get_base_dir()))
+	var absolute_link := ProjectSettings.globalize_path(link_path)
+	var absolute_target := ProjectSettings.globalize_path(target_path)
+	var output: Array = []
+	var exit_code := -1
+	if OS.get_name() == "Windows":
+		exit_code = OS.execute("cmd", ["/c", "mklink", "/D", absolute_link, absolute_target], output, true)
+		if exit_code != 0:
+			output.clear()
+			exit_code = OS.execute("cmd", ["/c", "mklink", "/J", absolute_link, absolute_target], output, true)
+	else:
+		exit_code = OS.execute("ln", ["-s", absolute_target, absolute_link], output, true)
+	if exit_code != 0:
+		return false
+	if _is_link_path(link_path):
+		return true
+	DirAccess.remove_absolute(absolute_link)
+	return false
+
+
+func _is_link_path(path: String) -> bool:
+	var parent_path := path.get_base_dir()
+	var name := path.get_file()
+	if parent_path.is_empty() or name.is_empty():
+		return false
+	var parent := DirAccess.open(parent_path)
+	if parent == null:
+		return false
+	return parent.is_link(name)
+
+
+func _remove_tree(path: String) -> void:
+	var absolute_path := ProjectSettings.globalize_path(path)
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(absolute_path)
+		return
+	var dir := DirAccess.open(absolute_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while not entry.is_empty():
+		if entry != "." and entry != "..":
+			var child := absolute_path.path_join(entry)
+			if dir.is_link(entry):
+				DirAccess.remove_absolute(child)
+			elif dir.current_is_dir():
+				_remove_tree(ProjectSettings.localize_path(child))
+			else:
+				DirAccess.remove_absolute(child)
+		entry = dir.get_next()
+	dir.list_dir_end()
+	DirAccess.remove_absolute(absolute_path)
 
 
 func _failure(message: String) -> Dictionary:

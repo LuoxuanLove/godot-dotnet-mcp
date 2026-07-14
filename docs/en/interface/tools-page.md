@@ -91,9 +91,6 @@ root
   │   │   │   ├─ runtime_step
   │   │   │   ├─ runtime_capture
   │   │   │   └─ runtime_input
-  │   │   ├─ system_tool_activity
-  │   │   │   ├─ status / recent / get
-  │   │   │   └─ self-reported _mcp_context activity
   │   │   ├─ system_dap_debugger
   │   │   │   ├─ status / get_settings / set_settings / initialize / launch / attach / configuration_done / threads / disconnect
   │   │   │   ├─ set_breakpoint / remove_breakpoint / pause / continue / step_over / stack_trace / output / terminate
@@ -115,7 +112,7 @@ Notes:
 - `plugin_*` tools live under the `plugin` domain, separate from core editor/project tools and user tools
 - `system_*` high-level tools expand through `SystemTreeCatalog` into their real atomic and action chains. For example, `system_editor_control` shows `wait_for_ui`, control-local click and pointer-motion actions such as `click_control`, `right_click_control`, `hover_control`, and `leave_control`, top menu actions such as `list_menus`, `open_menu`, and `select_menu_item`, and `system_editor_plugin_control` shows the underlying `editor_plugin` status and toggle actions
 - `system_scene_inspect` shows `validate`, `analyze`, and `full` read-only scene inspection actions while keeping the underlying scene audit, dependency query, binding audit, and script inspection chain visible as implementation context
-- `system_tool_activity` reports activity recorded at the shared execution layer. Optional `_mcp_context` is stripped before concrete tool execution and treated as self-reported coordination metadata, not as authentication or a per-tool schema field
+- activity reads move to resources such as `godot-dotnet-mcp://activity/status`, `godot-dotnet-mcp://activity/recent`, and `godot-dotnet-mcp://activity/call/{id}`. Optional `_mcp_context` is stripped before concrete tool execution and treated as self-reported coordination metadata, not as authentication or a per-tool schema field
 - `runtime_*` is an internal atomic category. It is only shown as a child chain of `system_runtime_*`, and it is not exposed as an MCP tool by itself
 - atomic tool nodes can keep expanding recursively
 - the check state for atomic tools follows the same logic as normal tool rows and still flows back through `tool_toggled`
@@ -249,7 +246,6 @@ The main UI-level controls that remain in the script are:
 | `ui/tools_tab.tscn` | Tools tab node tree and layout |
 | `ui/tools_tab.gd` | Main Tools tab controller, containing context menu, model, selection, search, and preview logic |
 | `tools/system/executor.gd` and `tools/system/impl_*.gd` | Current system high-level tool scheduling and implementation entry points |
-| `tools/tool_registry.gd` | Builtin executor registration source |
-| `tools/tool_manifest.gd` | Domain and category metadata access layer |
+| `tools/tool_catalog_manifest.gd` | Builtin executor registration, domain metadata, and public MCP catalog source |
 | `plugin/runtime/plugin_runtime_state.gd` | Current settings and custom-profile state |
 | `plugin/runtime/tool_profile_catalog.gd` | Builtin profile catalog |

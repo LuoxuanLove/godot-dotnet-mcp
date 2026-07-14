@@ -25,6 +25,7 @@ class FakeLocalization extends RefCounted:
 		"config_client_path_source_label": "Path Source",
 		"config_file_path": "Config File",
 		"config_client_action_apply": "Apply",
+		"config_client_action_running": "Running...",
 		"config_client_action_open_project": "Open Project",
 		"config_client_action_choose_program_path": "Choose Program",
 		"config_client_action_clear_custom_path": "Clear Path",
@@ -59,6 +60,10 @@ class Recorder extends RefCounted:
 
 
 func run_case(tree: SceneTree) -> Dictionary:
+	var source_guard := _verify_config_tab_uses_lightweight_client_card_signatures()
+	if not source_guard.is_empty():
+		return _failure(source_guard)
+
 	_instance = ConfigPanelScene.instantiate() as VBoxContainer
 	if _instance == null:
 		return _failure("Config tab rendering test could not instantiate the config panel scene.")
@@ -204,6 +209,19 @@ func run_case(tree: SceneTree) -> Dictionary:
 	if not rebuilt_copy_button.visible:
 		return _failure("Config tab content copy button should preserve hover visibility across a rendered model rebuild.")
 
+	_instance.apply_model(base_model)
+	await tree.process_frame
+	await tree.process_frame
+	var install_message_model: Dictionary = base_model.duplicate(true)
+	install_message_model["desktop_clients"][0]["install_message_text"] = "Config installed by the MCP plugin."
+	_instance.apply_model(install_message_model)
+	await tree.process_frame
+	await tree.process_frame
+	var install_message_desktop_clients = _instance.get_node("Scroll/Margin/Content/DesktopCard/DesktopCardMargin/DesktopCardBody/DesktopClients") as VBoxContainer
+	var install_message_labels = install_message_desktop_clients.get_child(0).find_children("*", "Label", true, false)
+	if _find_label_containing(install_message_labels, "Config installed by the MCP plugin.") == null:
+		return _failure("Config tab client-card signature should include install_message_text so visible install messages refresh.")
+
 	var layout_model: Dictionary = base_model.duplicate(true)
 	layout_model["desktop_clients"] = [
 		{
@@ -241,6 +259,29 @@ func run_case(tree: SceneTree) -> Dictionary:
 	layout_action_grid = _find_action_grid(layout_desktop_clients.get_child(0))
 	if layout_action_grid == null or layout_action_grid.columns != 1:
 		return _failure("Config tab should refresh client action grids to one column after a narrow resize without changing selection.")
+
+	var busy_model: Dictionary = base_model.duplicate(true)
+	busy_model["desktop_clients"] = [
+		{
+			"id": "cursor",
+			"name_key": "config_client_cursor",
+			"summary_text": "Desktop busy summary",
+			"primary_action_label_key": "config_client_action_running",
+			"primary_action_enabled": false,
+			"primary_action_busy": true,
+			"action_status_text": "Running Cursor setup command..."
+		}
+	]
+	_instance.apply_model(busy_model)
+	await tree.process_frame
+	await tree.process_frame
+	var busy_desktop_clients = _instance.get_node("Scroll/Margin/Content/DesktopCard/DesktopCardMargin/DesktopCardBody/DesktopClients") as VBoxContainer
+	var busy_labels = busy_desktop_clients.get_child(0).find_children("*", "Label", true, false)
+	if _find_label_containing(busy_labels, "Running Cursor setup command...") == null:
+		return _failure("Config tab should show in-progress action status while one-click CLI setup runs asynchronously.")
+	var busy_button = _find_button(busy_desktop_clients.get_child(0).find_children("*", "Button", true, false), "Running...")
+	if busy_button == null or not busy_button.disabled:
+		return _failure("Config tab should disable the primary action button while one-click CLI setup is running.")
 
 	return {
 		"name": "config_tab_rendering_contracts",
@@ -293,6 +334,28 @@ func _find_action_grid(root: Node) -> GridContainer:
 		if grid != null and bool(grid.get_meta("is_client_action_grid", false)):
 			return grid
 	return null
+
+
+func _verify_config_tab_uses_lightweight_client_card_signatures() -> String:
+	var source := FileAccess.get_file_as_string("res://addons/godot_dotnet_mcp/ui/config_tab.gd")
+	if source.is_empty():
+		return "Config tab source should be readable for rendering contract guards."
+	var signature_start := source.find("func _make_client_cards_signature")
+	var info_block_start := source.find("func _create_info_block")
+	if signature_start == -1 or info_block_start == -1 or info_block_start <= signature_start:
+		return "Config tab should keep client-card signature helpers before info-block rendering."
+	var signature_section := source.substr(signature_start, info_block_start - signature_start)
+	if signature_section.find("JSON.stringify") != -1:
+		return "Config tab client-card signatures should avoid JSON serialization on refresh paths."
+	for required in [
+		"func _signature_value",
+		"func _signature_scalar",
+		"return \"\\n\".join(parts)",
+		"return \"|\".join(parts)"
+	]:
+		if signature_section.find(required) == -1:
+			return "Config tab client-card signatures should use lightweight deterministic string parts: %s" % required
+	return ""
 
 
 func _failure(message: String) -> Dictionary:

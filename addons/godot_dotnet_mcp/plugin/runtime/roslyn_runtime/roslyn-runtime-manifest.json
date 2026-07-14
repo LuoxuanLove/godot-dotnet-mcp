@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "component": "godot-dotnet-mcp-roslyn-runtime",
+  "version": "2.0.0",
+  "contract": "asset-library-install-semantic-csharp-runtime",
+  "distribution": "framework-dependent",
+  "source_surface": "excluded",
+  "mode": "syntax",
+  "semantic_runtime": "Roslyn",
+  "runtime_requirements": {
+    "host": "dotnet",
+    "framework": "Microsoft.NETCore.App",
+    "version": "8.0.0"
+  },
+  "entrypoints": {
+    "capabilities": "--capabilities",
+    "call": "--call <tool_name> <json_arguments>",
+    "call_json_file": "--call-json-file <tool_name> <json_file>",
+    "timeout": "--timeout-ms <milliseconds>",
+    "response_file": "--response-json-file <json_file>"
+  },
+  "files": [
+    "GodotDotnetMcp.PluginBridge.dll",
+    "GodotDotnetMcp.PluginBridge.exe",
+    "GodotDotnetMcp.PluginBridge.deps.json",
+    "GodotDotnetMcp.PluginBridge.runtimeconfig.json",
+    "Microsoft.CodeAnalysis.dll",
+    "Microsoft.CodeAnalysis.CSharp.dll"
+  ]
+}

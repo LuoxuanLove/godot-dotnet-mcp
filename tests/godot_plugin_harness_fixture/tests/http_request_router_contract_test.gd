@@ -2,6 +2,9 @@ extends RefCounted
 
 const HttpRequestRouterScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_router.gd")
 const HttpRequestRouterContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_http_request_router_context.gd")
+const JsonRpcRequestServiceScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_request_service.gd")
+const JsonRpcRequestContextScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_json_rpc_request_context.gd")
+const ProtocolFactsScript = preload("res://addons/godot_dotnet_mcp/plugin/runtime/mcp_protocol_facts.gd")
 
 
 class FakeCallbacks:
@@ -13,6 +16,17 @@ class FakeCallbacks:
 
 	func handle_mcp_request_async(body: String) -> Dictionary:
 		last_mcp_body = body
+		var parsed = JSON.parse_string(body)
+		if parsed is Dictionary and str((parsed as Dictionary).get("method", "")) == "initialize":
+			return {
+				"jsonrpc": "2.0",
+				"result": {
+					"protocolVersion": ProtocolFactsScript.get_protocol_version(),
+					"capabilities": {"tools": {"listChanged": false}},
+					"serverInfo": ProtocolFactsScript.build_server_info()
+				},
+				"id": (parsed as Dictionary).get("id")
+			}
 		return {
 			"status": 200,
 			"echo": body
@@ -43,7 +57,7 @@ class FakeCallbacks:
 			"body": body
 		}
 
-	func build_cors_response(origin: String = "", allow_methods: String = "GET, POST", allow_headers: String = "Content-Type, Accept") -> Dictionary:
+	func build_cors_response(origin: String = "", allow_methods: String = "GET, POST", allow_headers: String = "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id, Last-Event-ID") -> Dictionary:
 		return {
 			"_status_code": 204,
 			"_no_body": true,
@@ -54,6 +68,58 @@ class FakeCallbacks:
 				"Vary": "Origin"
 			}
 		}
+
+
+class ResponsePostService:
+	extends RefCounted
+
+	var _service = JsonRpcRequestServiceScript.new()
+	var routed_requests := 0
+
+	func _init() -> void:
+		var context = JsonRpcRequestContextScript.new()
+		context.route_json_rpc_async = Callable(self, "route_json_rpc_async")
+		context.build_json_rpc_error = Callable(self, "build_json_rpc_error")
+		context.emit_request_received = Callable(self, "emit_request_received")
+		context.log = Callable(self, "log")
+		_service.configure(context)
+
+	func handle_mcp_request_async(body: String) -> Dictionary:
+		return await _service.handle_request_async(body)
+
+	func route_json_rpc_async(_method: String, _params: Dictionary, id, _has_id: bool) -> Dictionary:
+		routed_requests += 1
+		if _method == "initialize":
+			return {
+				"jsonrpc": "2.0",
+				"result": {
+					"protocolVersion": ProtocolFactsScript.get_protocol_version(),
+					"capabilities": {"tools": {"listChanged": false}},
+					"serverInfo": ProtocolFactsScript.build_server_info()
+				},
+				"id": id
+			}
+		return {
+			"jsonrpc": "2.0",
+			"result": {"routed": true},
+			"id": id
+		}
+
+	func build_json_rpc_error(code: int, message: String, id) -> Dictionary:
+		return {
+			"jsonrpc": "2.0",
+			"error": {
+				"code": code,
+				"message": message
+			},
+			"id": id
+		}
+
+	func emit_request_received(_method: String, _params: Dictionary) -> void:
+		routed_requests += 1
+
+	func log(_message: String, _level: String) -> void:
+		pass
 
 
 func run_case(_tree: SceneTree) -> Dictionary:
@@ -70,25 +136,214 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	router.set_allowed_cors_origins(["http://localhost:5173"])
 	router.set_allowed_hosts(["10.0.0.8"])
 
-	var mcp_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\"}")
-	if str(mcp_response.get("echo", "")) != "{\"jsonrpc\":\"2.0\"}":
-		return _failure("HTTP request router did not forward POST /mcp to the MCP request handler.")
+	var missing_host_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\"}", {"content-type": "application/json", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(missing_host_response.get("status", 0)) != 403 or str(missing_host_response.get("error", "")) != "HTTP Host is not allowed":
+		return _failure("HTTP request router should reject POST /mcp requests without a Host header.")
+	var blank_host_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\"}", {"host": "   ", "content-type": "application/json", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(blank_host_response.get("status", 0)) != 403 or str(blank_host_response.get("error", "")) != "HTTP Host is not allowed":
+		return _failure("HTTP request router should reject blank Host headers before routing MCP requests.")
+	var invalid_host_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\"}", {"host": "attacker.example", "content-type": "application/json", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(invalid_host_response.get("status", 0)) != 403:
+		return _failure("HTTP request router should reject untrusted Host headers.")
+	var explicit_allowed_host_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\"}", {"host": "10.0.0.8", "content-type": "application/json", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(explicit_allowed_host_response.get("status", 0)) != 406:
+		return _failure("HTTP request router should continue to allow explicitly configured Host headers.")
 
-	var get_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "")
-	if int(get_mcp_response.get("status", 0)) != 405 or not bool(get_mcp_response.get("_no_body", false)):
-		return _failure("HTTP request router did not preserve the GET /mcp 405 semantics.")
+	var mcp_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\"}", {"host": "localhost:3000", "content-type": "application/json", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(mcp_response.get("status", 0)) != 406:
+		return _failure("HTTP request router should require explicit Streamable HTTP Accept headers for POST /mcp after required content/protocol headers pass.")
 
-	var health_response: Dictionary = await router.route_request_async("GET", "/health", "")
+	var get_mcp_without_sse: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "application/json", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(get_mcp_without_sse.get("status", 0)) != 406:
+		return _failure("HTTP request router should reject GET /mcp requests that cannot accept SSE responses.")
+	var get_mcp_sse_q_zero: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream;q=0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(get_mcp_sse_q_zero.get("status", 0)) != 406:
+		return _failure("HTTP request router should reject GET /mcp requests that declare text/event-stream with q=0.")
+	var get_missing_protocol_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream"})
+	if int(get_missing_protocol_response.get("status", 0)) != 400 or str(get_missing_protocol_response.get("error", "")) != "Missing MCP protocol version":
+		return _failure("HTTP request router should require MCP-Protocol-Version on GET /mcp.")
+	var get_without_session_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(get_without_session_response.get("status", 0)) != 400 or str(get_without_session_response.get("error", "")) != "Missing MCP session id":
+		return _failure("HTTP request router should require an initialized session id for GET /mcp SSE probes.")
+	var sse_session_id := await _initialize_session(router)
+	if sse_session_id.is_empty():
+		return _failure("HTTP request router should issue a session id for successful initialize before GET /mcp SSE.")
+	var first_session_parts := sse_session_id.split("-")
+	if first_session_parts.size() < 6:
+		return _failure("HTTP request router should issue session ids with a prefix, semver fields, timestamp, and random entropy fields.")
+	var first_session_entropy := str(first_session_parts[first_session_parts.size() - 2])
+	if first_session_entropy.length() != 12:
+		return _failure("HTTP request router session ids should use random entropy instead of a machine fingerprint field.")
+	var second_session_id := await _initialize_session(router, 901)
+	if second_session_id.is_empty() or second_session_id == sse_session_id:
+		return _failure("HTTP request router should issue unique random session ids for separate initialize requests.")
+	var second_session_parts := second_session_id.split("-")
+	if str(second_session_parts[second_session_parts.size() - 2]) == first_session_entropy:
+		return _failure("HTTP request router session entropy should be unlinkable across initialize requests.")
+	var get_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": sse_session_id, "last-event-id": "cursor-7"})
+	if int(get_mcp_response.get("status", 0)) != 200:
+		return _failure("HTTP request router should allow GET /mcp as a Streamable HTTP SSE probe for initialized sessions.")
+	if str(get_mcp_response.get("_content_type", "")) != "text/event-stream; charset=utf-8":
+		return _failure("HTTP request router should mark GET /mcp responses as SSE.")
+	if str(get_mcp_response.get("_stream_mode", "")) != "sse":
+		return _failure("HTTP request router should mark GET /mcp responses as streaming SSE connections.")
+	var get_mcp_headers: Dictionary = get_mcp_response.get("_headers", {})
+	if str(get_mcp_headers.get("Mcp-Session-Id", "")) != sse_session_id:
+		return _failure("HTTP request router should echo the initialized session id on GET /mcp SSE responses.")
+	if str(get_mcp_headers.get("MCP-Protocol-Version", "")) != ProtocolFactsScript.get_protocol_version():
+		return _failure("HTTP request router should attach protocol headers to GET /mcp SSE responses.")
+	if str(get_mcp_headers.get("Cache-Control", "")) != "no-cache, no-transform":
+		return _failure("HTTP request router should disable caching for GET /mcp SSE responses.")
+	var get_mcp_body := str(get_mcp_response.get("_raw_body", ""))
+	if get_mcp_body.find("event: message") != -1 or get_mcp_body.find("event: open") == -1 or get_mcp_body.find("\"jsonrpc\":\"2.0\"") != -1 or get_mcp_body.find("\"method\":\"notifications/message\"") != -1 or get_mcp_body.find("\"transport\":\"streamable_http\"") == -1:
+		return _failure("HTTP request router should return observable non-message Streamable HTTP SSE metadata for GET /mcp.")
+	if get_mcp_body.find("id: streamable-http-get-") == -1:
+		return _failure("HTTP request router should attach a stream-specific SSE event id.")
+	if get_mcp_body.find("retry: 1000") == -1:
+		return _failure("HTTP request router should advertise an SSE retry interval for stream resumption.")
+	if get_mcp_body.find("\"resume_from_event_id\":\"cursor-7\"") == -1:
+		return _failure("HTTP request router should surface Last-Event-ID as a GET /mcp resume cursor hint.")
+	if get_mcp_body.find("\"resume_cursor_found\":false") == -1:
+		return _failure("HTTP request router should report missing SSE resume cursors without replaying unrelated events.")
+	if get_mcp_body.find("\"resume_status\":\"unknown_cursor\"") == -1:
+		return _failure("HTTP request router should distinguish active-session unknown SSE cursors from matched or stale cursors.")
+	if get_mcp_body.find("\"resume_start_index\":0") == -1 or get_mcp_body.find("\"resume_base_index\":0") == -1 or get_mcp_body.find("\"resume_next_index\":0") == -1:
+		return _failure("HTTP request router should expose stable SSE resume window indexes for unknown cursors.")
+	var first_sse_event_id := _extract_first_sse_event_id(get_mcp_body)
+	if first_sse_event_id.is_empty():
+		return _failure("HTTP request router should expose an SSE open event id for current-stream observability.")
+	var legacy_sse_session_id := await _initialize_session(router, 900)
+	var initial_get_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": legacy_sse_session_id})
+	var initial_get_body := str(initial_get_response.get("_raw_body", ""))
+	if initial_get_body.find("event: endpoint") == -1 or initial_get_body.find("data: http://localhost:3000/mcp") == -1:
+		return _failure("HTTP request router should prepend a legacy-compatible endpoint event on fresh GET /mcp SSE streams.")
+	if initial_get_body.find("data: \"http://localhost:3000/mcp\"") != -1:
+		return _failure("HTTP request router should serialize endpoint event URL data as plain SSE text, not a JSON string.")
+	if initial_get_body.find("event: open") == -1 or initial_get_body.find("event: message") != -1:
+		return _failure("HTTP request router should classify connection metadata as open events instead of JSON-RPC message events.")
+	var forwarded_untrusted_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": legacy_sse_session_id, "x-forwarded-proto": "https"})
+	var forwarded_untrusted_body := str(forwarded_untrusted_response.get("_raw_body", ""))
+	if forwarded_untrusted_body.find("data: http://localhost:3000/mcp") == -1:
+		return _failure("HTTP request router should ignore X-Forwarded-Proto unless proxy headers are explicitly trusted.")
+	router.set_trust_proxy_headers(true)
+	var forwarded_trusted_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": legacy_sse_session_id, "x-forwarded-proto": "https"})
+	var forwarded_trusted_body := str(forwarded_trusted_response.get("_raw_body", ""))
+	if forwarded_trusted_body.find("data: https://localhost:3000/mcp") == -1:
+		return _failure("HTTP request router should honor trusted X-Forwarded-Proto values when explicitly enabled.")
+	router.set_trust_proxy_headers(false)
+	var resumed_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": sse_session_id, "last-event-id": first_sse_event_id})
+	if int(resumed_mcp_response.get("status", 0)) != 200:
+		return _failure("HTTP request router should accept non-replayable GET open event ids as Last-Event-ID cursor hints.")
+	var resumed_body := str(resumed_mcp_response.get("_raw_body", ""))
+	if _count_sse_event_id(resumed_body, first_sse_event_id) != 0:
+		return _failure("HTTP request router should not repeat non-replayable GET open events.")
+	if _count_sse_events(resumed_body) != 1:
+		return _failure("HTTP request router should return only the current open metadata event for non-replayable GET cursors.")
+	if resumed_body.find("\"resume_cursor_found\":false") == -1:
+		return _failure("HTTP request router should not report GET open cursors as matched replay cursors.")
+	if resumed_body.find("\"resume_status\":\"unknown_cursor\"") == -1:
+		return _failure("HTTP request router should report GET open cursors as unknown replay cursors.")
+	if resumed_body.find("\"resume_start_index\":0") == -1 or resumed_body.find("\"resume_next_index\":0") == -1:
+		return _failure("HTTP request router should keep the replay window unchanged for GET open cursors.")
+	var second_sse_event_id := _extract_first_sse_event_id(resumed_body)
+	if second_sse_event_id.is_empty() or second_sse_event_id == first_sse_event_id:
+		return _failure("HTTP request router should assign a new non-replayable SSE open event id for each GET probe.")
+	var replay_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": sse_session_id, "last-event-id": first_sse_event_id})
+	var replay_body := str(replay_mcp_response.get("_raw_body", ""))
+	if replay_body.find(second_sse_event_id) != -1:
+		return _failure("HTTP request router should not replay prior GET open metadata events.")
+	if _count_sse_events(replay_body) != 1:
+		return _failure("HTTP request router should not add GET open events to the resumable event log.")
+	if replay_body.find("\"replay_event_count\":0") == -1:
+		return _failure("HTTP request router should report zero replay events for GET open cursors.")
+	var unknown_active_cursor_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": sse_session_id, "last-event-id": "streamable-http-get-%s-999" % sse_session_id})
+	var unknown_active_cursor_body := str(unknown_active_cursor_response.get("_raw_body", ""))
+	if unknown_active_cursor_body.find("\"resume_status\":\"unknown_cursor\"") == -1:
+		return _failure("HTTP request router should distinguish active-session unknown SSE cursors from stale retained-window cursors.")
+	var never_issued_get_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "never-issued-get"})
+	if int(never_issued_get_response.get("status", 0)) != 404 or str(never_issued_get_response.get("error", "")) != "MCP session not found":
+		return _failure("HTTP request router should reject GET /mcp for a never-issued supplied MCP session id.")
+	for index in range(70):
+		var evict_session_id := await _initialize_session(router, 100 + index)
+		await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": evict_session_id})
+	var evicted_mcp_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": sse_session_id, "last-event-id": first_sse_event_id})
+	if int(evicted_mcp_response.get("status", 0)) != 404 or str(evicted_mcp_response.get("error", "")) != "MCP session not found":
+		return _failure("HTTP request router should reject GET /mcp for an unknown or evicted supplied session id.")
+
+	var bounded_router = HttpRequestRouterScript.new()
+	var bounded_service = ResponsePostService.new()
+	var bounded_context = HttpRequestRouterContextScript.new()
+	bounded_context.handle_mcp_request_async = Callable(bounded_service, "handle_mcp_request_async")
+	bounded_context.build_health_response = Callable(callbacks, "build_health_response")
+	bounded_context.build_tools_list_response = Callable(callbacks, "build_tools_list_response")
+	bounded_context.handle_editor_lifecycle_request = Callable(callbacks, "handle_editor_lifecycle_request")
+	bounded_context.handle_editor_lifecycle_post_request = Callable(callbacks, "handle_editor_lifecycle_post_request")
+	bounded_context.build_cors_response = Callable(callbacks, "build_cors_response")
+	bounded_router.configure(bounded_context)
+	var bounded_session_id := await _initialize_session(bounded_router, 500)
+	if bounded_session_id.is_empty():
+		return _failure("HTTP request router should issue a bounded-window session through initialize.")
+	var bounded_first_response: Dictionary = await bounded_router.route_request_async(
+		"POST",
+		"/mcp",
+		JSON.stringify({"jsonrpc": "2.0", "id": 501, "method": "tools/list"}),
+		{"host": "localhost:3000", "content-type": "application/json", "accept": "application/json;q=0.1, text/event-stream;q=1.0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": bounded_session_id}
+	)
+	var bounded_first_event_id := _extract_first_sse_event_id_with_prefix(str(bounded_first_response.get("_raw_body", "")), "streamable-http-post-")
+	if bounded_first_event_id.is_empty():
+		return _failure("HTTP request router should queue the first POST SSE event before stale-cursor eviction checks.")
+	for index in range(33):
+		await bounded_router.route_request_async(
+			"POST",
+			"/mcp",
+			JSON.stringify({"jsonrpc": "2.0", "id": 502 + index, "method": "tools/list"}),
+			{"host": "localhost:3000", "content-type": "application/json", "accept": "application/json;q=0.1, text/event-stream;q=1.0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": bounded_session_id}
+		)
+	var stale_cursor_response: Dictionary = await bounded_router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": bounded_session_id, "last-event-id": bounded_first_event_id})
+	var stale_cursor_body := str(stale_cursor_response.get("_raw_body", ""))
+	if stale_cursor_body.find("\"resume_cursor_found\":false") == -1:
+		return _failure("HTTP request router should report stale retained-window cursors as not found.")
+	if stale_cursor_body.find("\"resume_status\":\"stale_cursor\"") == -1:
+		return _failure("HTTP request router should distinguish stale retained-window cursors from unknown sessions.")
+	if stale_cursor_body.find("\"resume_base_index\":2") == -1 or stale_cursor_body.find("\"resume_next_index\":34") == -1:
+		return _failure("HTTP request router should expose retained-window indexes for stale cursors.")
+	var previous_allowed_hosts := OS.get_environment("GODOT_DOTNET_MCP_ALLOWED_HOSTS") if OS.has_environment("GODOT_DOTNET_MCP_ALLOWED_HOSTS") else ""
+	var had_allowed_hosts := OS.has_environment("GODOT_DOTNET_MCP_ALLOWED_HOSTS")
+	OS.set_environment("GODOT_DOTNET_MCP_ALLOWED_HOSTS", "env.example.test, 127.0.0.1:3000")
+	var env_host_router = HttpRequestRouterScript.new()
+	env_host_router.configure(context)
+	var env_host_response: Dictionary = await env_host_router.route_request_async("GET", "/health", "", {"host": "env.example.test"})
+	if str(env_host_response.get("status", "")) != "ok":
+		return _failure("HTTP request router should allow Host values configured through GODOT_DOTNET_MCP_ALLOWED_HOSTS.")
+	env_host_router.dispose()
+	if had_allowed_hosts:
+		OS.set_environment("GODOT_DOTNET_MCP_ALLOWED_HOSTS", previous_allowed_hosts)
+	else:
+		OS.set_environment("GODOT_DOTNET_MCP_ALLOWED_HOSTS", "")
+	var get_protocol_denied_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": "1900-01-01"})
+	if int(get_protocol_denied_response.get("status", 0)) != 400:
+		return _failure("HTTP request router should reject unsupported MCP-Protocol-Version headers on GET /mcp.")
+	var get_invalid_session_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client\r\nInjected: yes"})
+	if int(get_invalid_session_response.get("status", 0)) != 400 or str(get_invalid_session_response.get("error", "")) != "Invalid MCP session id":
+		return _failure("HTTP request router should reject invalid GET /mcp session ids before echoing response headers.")
+	var get_invalid_session_bad_version_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": "1900-01-01", "mcp-session-id": "client\r\nInjected: yes"})
+	var get_invalid_session_bad_version_headers: Dictionary = get_invalid_session_bad_version_response.get("_headers", {})
+	if int(get_invalid_session_bad_version_response.get("status", 0)) != 400 or str(get_invalid_session_bad_version_response.get("error", "")) != "Invalid MCP session id":
+		return _failure("HTTP request router should prioritize unsafe GET session ids over protocol-version guard responses.")
+	if str(get_invalid_session_bad_version_headers.get("Mcp-Session-Id", "")).find("Injected") != -1:
+		return _failure("HTTP request router must not echo unsafe GET session ids on earlier transport guard failures.")
+
+	var health_response: Dictionary = await router.route_request_async("GET", "/health", "", {"host": "localhost:3000"})
 	if str(health_response.get("status", "")) != "ok":
 		return _failure("HTTP request router did not route GET /health.")
 
-	var lifecycle_response: Dictionary = await router.route_request_async("GET", "/api/editor/lifecycle", "")
+	var lifecycle_response: Dictionary = await router.route_request_async("GET", "/api/editor/lifecycle", "", {"host": "localhost:3000"})
 	if str(lifecycle_response.get("action", "")) != "status":
 		return _failure("HTTP request router did not route lifecycle status requests.")
 
-	var options_response: Dictionary = await router.route_request_async("OPTIONS", "/mcp", "")
+	var options_response: Dictionary = await router.route_request_async("OPTIONS", "/mcp", "", {"host": "localhost:3000"})
 	var options_headers: Dictionary = options_response.get("_headers", {})
-	if int(options_response.get("status", 0)) != 405 or str(options_headers.get("Allow", "")) != "POST":
+	if int(options_response.get("status", 0)) != 405 or str(options_headers.get("Allow", "")) != "GET, POST, DELETE":
 		return _failure("HTTP request router did not reject non-CORS OPTIONS requests with the allowed methods.")
 
 	var denied_origin_response: Dictionary = await router.route_request_async("OPTIONS", "/mcp", "", {"origin": "https://example.com", "host": "localhost:3000"})
@@ -101,8 +356,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("HTTP request router did not allow configured CORS preflight origins.")
 	if str(allowed_origin_headers.get("Access-Control-Allow-Origin", "")) != "http://localhost:5173":
 		return _failure("HTTP request router did not echo the configured CORS origin.")
+	if str(allowed_origin_headers.get("Access-Control-Allow-Methods", "")) != "GET, POST, DELETE":
+		return _failure("HTTP request router CORS preflight should advertise DELETE /mcp support.")
+	if str(allowed_origin_headers.get("Access-Control-Allow-Headers", "")).find("MCP-Protocol-Version") == -1:
+		return _failure("HTTP request router CORS preflight should allow MCP protocol headers.")
+	if str(allowed_origin_headers.get("Access-Control-Allow-Headers", "")).find("Mcp-Session-Id") == -1:
+		return _failure("HTTP request router CORS preflight should allow MCP session headers.")
+	if str(allowed_origin_headers.get("Access-Control-Allow-Headers", "")).find("Last-Event-ID") == -1:
+		return _failure("HTTP request router CORS preflight should allow SSE resume cursor headers.")
 	if str(allowed_origin_headers.get("Access-Control-Allow-Origin", "")) == "*":
 		return _failure("HTTP request router must not use wildcard CORS origins.")
+	if str(allowed_origin_headers.get("Access-Control-Allow-Headers", "")).find("MCP-Protocol-Version") == -1:
+		return _failure("HTTP request router CORS preflight should allow MCP-Protocol-Version headers.")
 
 	var host_denied_response: Dictionary = await router.route_request_async("GET", "/health", "", {"host": "example.com:3000"})
 	if int(host_denied_response.get("status", 0)) != 403:
@@ -116,12 +381,281 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if int(content_type_denied_response.get("status", 0)) != 415:
 		return _failure("HTTP request router did not reject non-JSON POST content types.")
 
+	var missing_content_type_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "accept": "application/json, text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(missing_content_type_response.get("status", 0)) != 415:
+		return _failure("HTTP request router should require Content-Type on POST /mcp.")
+
+	var accept_denied_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "text/html", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(accept_denied_response.get("status", 0)) != 406:
+		return _failure("HTTP request router did not reject POST /mcp requests that cannot accept JSON or SSE responses.")
+
+	var json_only_accept_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(json_only_accept_response.get("status", 0)) != 406:
+		return _failure("HTTP request router should reject POST /mcp requests that omit text/event-stream from Accept.")
+
+	var sse_only_accept_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(sse_only_accept_response.get("status", 0)) != 406:
+		return _failure("HTTP request router should reject POST /mcp requests that omit application/json from Accept.")
+	var json_q_zero_accept_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json;q=0, text/event-stream;q=1", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(json_q_zero_accept_response.get("status", 0)) != 406:
+		return _failure("HTTP request router should reject POST /mcp requests that declare application/json with q=0.")
+	var sse_q_zero_accept_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json;q=1, text/event-stream;q=0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(sse_q_zero_accept_response.get("status", 0)) != 406:
+		return _failure("HTTP request router should reject POST /mcp requests that declare text/event-stream with q=0.")
+	var wildcard_accept_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "*/*", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(wildcard_accept_response.get("status", 0)) == 406:
+		return _failure("HTTP request router should allow wildcard Accept headers when no required response type is explicitly rejected.")
+	var wildcard_json_rejected_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "*/*, application/json;q=0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(wildcard_json_rejected_response.get("status", 0)) != 406:
+		return _failure("HTTP request router should reject wildcard Accept headers that explicitly reject application/json.")
+	var wildcard_sse_rejected_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "*/*, text/event-stream;q=0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(wildcard_sse_rejected_response.get("status", 0)) != 406:
+		return _failure("HTTP request router should reject wildcard Accept headers that explicitly reject text/event-stream.")
+
+	var missing_protocol_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream"})
+	if int(missing_protocol_response.get("status", 0)) != 400 or str(missing_protocol_response.get("error", "")) != "Missing MCP protocol version":
+		return _failure("HTTP request router should require MCP-Protocol-Version on POST /mcp.")
+	var initialize_without_protocol_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"%s\"}}" % ProtocolFactsScript.get_protocol_version(), {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream"})
+	var initialize_without_protocol_result = initialize_without_protocol_response.get("result", {})
+	if not (initialize_without_protocol_result is Dictionary) or str((initialize_without_protocol_result as Dictionary).get("protocolVersion", "")) != ProtocolFactsScript.get_protocol_version():
+		return _failure("HTTP request router should allow initialize POST /mcp to reach JSON-RPC negotiation before MCP-Protocol-Version is established.")
+	var initialize_with_client_session_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"%s\"}}" % ProtocolFactsScript.get_protocol_version(), {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream", "mcp-session-id": "client-fixed-session"})
+	var initialize_with_client_session_headers: Dictionary = initialize_with_client_session_response.get("_headers", {})
+	var initialize_with_client_session_id := str(initialize_with_client_session_headers.get("Mcp-Session-Id", ""))
+	if initialize_with_client_session_id.is_empty() or initialize_with_client_session_id == "client-fixed-session":
+		return _failure("HTTP request router should ignore client-supplied session ids on initialize and issue a server-generated session.")
+
+	var generated_session_id := await _initialize_session(router, 4)
+	if generated_session_id.is_empty():
+		return _failure("HTTP request router should issue a streamable HTTP session id after initialize succeeds.")
+	var streamable_accept_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\",\"id\":2}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": generated_session_id})
+	if str(streamable_accept_response.get("echo", "")) != "{\"jsonrpc\":\"2.0\",\"id\":2}":
+		return _failure("HTTP request router did not allow Streamable HTTP Accept headers for POST /mcp with an initialized session.")
+	var streamable_accept_headers: Dictionary = streamable_accept_response.get("_headers", {})
+	if str(streamable_accept_headers.get("MCP-Protocol-Version", "")) != ProtocolFactsScript.get_protocol_version():
+		return _failure("HTTP request router did not attach the MCP protocol version response header.")
+	if str(streamable_accept_headers.get("Mcp-Session-Id", "")) != generated_session_id:
+		return _failure("HTTP request router should echo the initialized MCP session id on POST /mcp.")
+
+	var second_streamable_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	var second_streamable_headers: Dictionary = second_streamable_response.get("_headers", {})
+	if int(second_streamable_response.get("status", 0)) != 400 or str(second_streamable_response.get("error", "")) != "Missing MCP session id":
+		return _failure("HTTP request router should require Mcp-Session-Id for non-initialize POST /mcp requests.")
+	if second_streamable_headers.has("Mcp-Session-Id"):
+		return _failure("HTTP request router should not issue sessions for missing-session POST guard failures.")
+
+	var second_router = HttpRequestRouterScript.new()
+	second_router.configure(context)
+	var second_router_response: Dictionary = await second_router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	var second_router_headers: Dictionary = second_router_response.get("_headers", {})
+	if int(second_router_response.get("status", 0)) != 400 or str(second_router_response.get("error", "")) != "Missing MCP session id":
+		return _failure("HTTP request router should require Mcp-Session-Id for non-initialize POST /mcp across router instances.")
+	if second_router_headers.has("Mcp-Session-Id"):
+		return _failure("HTTP request router should not issue sessions for cross-router missing-session guard failures.")
+
+	var unknown_session_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client-session-7"})
+	if int(unknown_session_response.get("status", 0)) != 404 or str(unknown_session_response.get("error", "")) != "MCP session not found":
+		return _failure("HTTP request router should reject unknown client-supplied MCP session ids on POST /mcp.")
+	var unknown_session_headers: Dictionary = unknown_session_response.get("_headers", {})
+	if unknown_session_headers.has("Mcp-Session-Id"):
+		return _failure("HTTP request router should not issue or echo session ids on unknown-session guard failures.")
+	var existing_session_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": generated_session_id})
+	var existing_session_headers: Dictionary = existing_session_response.get("_headers", {})
+	if str(existing_session_headers.get("Mcp-Session-Id", "")) != generated_session_id:
+		return _failure("HTTP request router should echo an existing MCP session id.")
+	var delete_post_only_session: Dictionary = await router.route_request_async("DELETE", "/mcp", "", {"host": "localhost:3000", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": generated_session_id})
+	if int(delete_post_only_session.get("status", 0)) != 200 or not bool(delete_post_only_session.get("_no_body", false)):
+		return _failure("HTTP request router should return 200 OK for DELETE /mcp on a session issued by initialize responses.")
+	var invalid_session_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client\nInjected: yes"})
+	if int(invalid_session_response.get("status", 0)) != 400 or str(invalid_session_response.get("error", "")) != "Invalid MCP session id":
+		return _failure("HTTP request router should reject invalid POST /mcp session ids before echoing response headers.")
+	var invalid_session_bad_accept_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "text/html", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client\nInjected: yes"})
+	var invalid_session_bad_accept_headers: Dictionary = invalid_session_bad_accept_response.get("_headers", {})
+	if int(invalid_session_bad_accept_response.get("status", 0)) != 400 or str(invalid_session_bad_accept_response.get("error", "")) != "Invalid MCP session id":
+		return _failure("HTTP request router should prioritize unsafe POST session ids over accept guard responses.")
+	if str(invalid_session_bad_accept_headers.get("Mcp-Session-Id", "")).find("Injected") != -1:
+		return _failure("HTTP request router must not echo unsafe POST session ids on earlier transport guard failures.")
+
+	var accept_denied_headers: Dictionary = sse_only_accept_response.get("_headers", {})
+	if str(accept_denied_headers.get("MCP-Protocol-Version", "")) != ProtocolFactsScript.get_protocol_version():
+		return _failure("HTTP request router should attach protocol headers to MCP transport guard failures.")
+	if accept_denied_headers.has("Mcp-Session-Id"):
+		return _failure("HTTP request router should not issue MCP session ids for transport guard failures.")
+
+	var protocol_denied_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream", "mcp-protocol-version": "1900-01-01"})
+	if int(protocol_denied_response.get("status", 0)) != 400:
+		return _failure("HTTP request router did not reject unsupported MCP-Protocol-Version headers.")
+	if str(protocol_denied_response.get("supported_protocol_version", "")) != ProtocolFactsScript.get_protocol_version():
+		return _failure("HTTP request router should report the supported MCP protocol version.")
+
+	var protocol_session_id := await _initialize_session(router, 5)
+	if protocol_session_id.is_empty():
+		return _failure("HTTP request router should establish a session before protocol-version guarded POST checks.")
+	var protocol_allowed_response: Dictionary = await router.route_request_async("POST", "/mcp", "{\"jsonrpc\":\"2.0\",\"id\":3}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": protocol_session_id})
+	if str(protocol_allowed_response.get("echo", "")) != "{\"jsonrpc\":\"2.0\",\"id\":3}":
+		return _failure("HTTP request router rejected the configured MCP-Protocol-Version header.")
+
+	var delete_missing_session_response: Dictionary = await router.route_request_async("DELETE", "/mcp", "", {"host": "localhost:3000", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()})
+	if int(delete_missing_session_response.get("status", 0)) != 400 or str(delete_missing_session_response.get("error", "")) != "Missing MCP session id":
+		return _failure("HTTP request router should require Mcp-Session-Id for DELETE /mcp session termination.")
+	var delete_invalid_session_response: Dictionary = await router.route_request_async("DELETE", "/mcp", "", {"host": "localhost:3000", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "client\nInjected: yes"})
+	if int(delete_invalid_session_response.get("status", 0)) != 400 or str(delete_invalid_session_response.get("error", "")) != "Invalid MCP session id":
+		return _failure("HTTP request router should reject unsafe DELETE /mcp session ids.")
+	var delete_missing_protocol_response: Dictionary = await router.route_request_async("DELETE", "/mcp", "", {"host": "localhost:3000", "mcp-session-id": "delete-session"})
+	if int(delete_missing_protocol_response.get("status", 0)) != 400 or str(delete_missing_protocol_response.get("error", "")) != "Missing MCP protocol version":
+		return _failure("HTTP request router should require MCP-Protocol-Version for DELETE /mcp.")
+	var delete_unknown_session_response: Dictionary = await router.route_request_async("DELETE", "/mcp", "", {"host": "localhost:3000", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": "delete-never-issued"})
+	if int(delete_unknown_session_response.get("status", 0)) != 404 or str(delete_unknown_session_response.get("error", "")) != "MCP session not found":
+		return _failure("HTTP request router should reject DELETE /mcp for a never-issued MCP session.")
+	var delete_session_id := await _initialize_session(router, 900)
+	if delete_session_id.is_empty():
+		return _failure("HTTP request router should allow a session to exist before DELETE /mcp termination.")
+	var delete_session_response: Dictionary = await router.route_request_async("DELETE", "/mcp", "", {"host": "localhost:3000", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": delete_session_id})
+	if int(delete_session_response.get("status", 0)) != 200 or not bool(delete_session_response.get("_no_body", false)):
+		return _failure("HTTP request router should return 200 OK with no body for successful DELETE /mcp session termination.")
+	if str(delete_session_response.get("_terminate_mcp_session_id", "")) != delete_session_id:
+		return _failure("HTTP request router should emit an internal termination directive for active SSE streams.")
+	var delete_session_headers: Dictionary = delete_session_response.get("_headers", {})
+	if str(delete_session_headers.get("X-MCP-Session-Terminated", "")) != "true":
+		return _failure("HTTP request router should expose session termination metadata on DELETE /mcp.")
+	var get_after_delete_response: Dictionary = await router.route_request_async("GET", "/mcp", "", {"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": delete_session_id})
+	if int(get_after_delete_response.get("status", 0)) != 404:
+		return _failure("HTTP request router should reject GET /mcp for a terminated session.")
+	var post_after_delete_response: Dictionary = await router.route_request_async("POST", "/mcp", "{}", {"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": delete_session_id})
+	if int(post_after_delete_response.get("status", 0)) != 404:
+		return _failure("HTTP request router should reject POST /mcp for a terminated session.")
+	var delete_after_delete_response: Dictionary = await router.route_request_async("DELETE", "/mcp", "", {"host": "localhost:3000", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": delete_session_id})
+	if int(delete_after_delete_response.get("status", 0)) != 404:
+		return _failure("HTTP request router should report terminated MCP sessions as not found on repeated DELETE /mcp.")
+
+	var response_post_router = HttpRequestRouterScript.new()
+	var response_post_service = ResponsePostService.new()
+	var response_post_context = HttpRequestRouterContextScript.new()
+	response_post_context.handle_mcp_request_async = Callable(response_post_service, "handle_mcp_request_async")
+	response_post_context.build_health_response = Callable(callbacks, "build_health_response")
+	response_post_context.build_tools_list_response = Callable(callbacks, "build_tools_list_response")
+	response_post_context.handle_editor_lifecycle_request = Callable(callbacks, "handle_editor_lifecycle_request")
+	response_post_context.handle_editor_lifecycle_post_request = Callable(callbacks, "handle_editor_lifecycle_post_request")
+	response_post_context.build_cors_response = Callable(callbacks, "build_cors_response")
+	response_post_router.configure(response_post_context)
+	var response_post_session_id := await _initialize_session(response_post_router, 44)
+	if response_post_session_id.is_empty():
+		return _failure("HTTP request router should establish a session before non-initialize response-mode POST requests.")
+	var json_preferred_request_post: Dictionary = await response_post_router.route_request_async(
+		"POST",
+		"/mcp",
+		JSON.stringify({"jsonrpc": "2.0", "id": 45, "method": "tools/list"}),
+		{"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": response_post_session_id}
+	)
+	if str(json_preferred_request_post.get("jsonrpc", "")) != "2.0" or not json_preferred_request_post.has("result"):
+		return _failure("HTTP request router should keep JSON response mode when application/json is the preferred POST response type.")
+	if json_preferred_request_post.has("_stream_mode"):
+		return _failure("HTTP request router should not switch JSON-preferred POST requests to SSE response mode.")
+	var sse_preferred_request_post: Dictionary = await response_post_router.route_request_async(
+		"POST",
+		"/mcp",
+		JSON.stringify({"jsonrpc": "2.0", "id": 46, "method": "tools/list"}),
+		{"host": "localhost:3000", "content-type": "application/json", "accept": "application/json;q=0.1, text/event-stream;q=1.0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": response_post_session_id}
+	)
+	if sse_preferred_request_post.has("_stream_mode"):
+		return _failure("HTTP request router should keep POST SSE responses as finite raw HTTP responses, not long-lived streams.")
+	if str(sse_preferred_request_post.get("_content_type", "")) != "text/event-stream; charset=utf-8":
+		return _failure("HTTP request router should mark POST SSE responses with text/event-stream content type.")
+	var sse_preferred_headers: Dictionary = sse_preferred_request_post.get("_headers", {})
+	if str(sse_preferred_headers.get("Cache-Control", "")) != "no-cache, no-transform":
+		return _failure("HTTP request router should disable buffering/cache for POST SSE responses.")
+	var sse_preferred_body := str(sse_preferred_request_post.get("_raw_body", ""))
+	if sse_preferred_body.find("event: message") == -1 or sse_preferred_body.find("\"jsonrpc\":\"2.0\"") == -1 or sse_preferred_body.find("\"id\":46") == -1:
+		return _failure("HTTP request router should wrap the POST JSON-RPC response as an SSE message event.")
+	var post_sse_session_id := str(sse_preferred_headers.get("Mcp-Session-Id", ""))
+	if post_sse_session_id != response_post_session_id:
+		return _failure("HTTP request router should echo the initialized session id for finite POST SSE responses.")
+	if sse_preferred_body.find("id: streamable-http-post-") == -1:
+		return _failure("HTTP request router should queue session POST SSE responses with resumable event ids.")
+	var wildcard_json_tie_request_post: Dictionary = await response_post_router.route_request_async(
+		"POST",
+		"/mcp",
+		JSON.stringify({"jsonrpc": "2.0", "id": 461, "method": "tools/list"}),
+		{"host": "localhost:3000", "content-type": "application/json", "accept": "*/*", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": response_post_session_id}
+	)
+	if wildcard_json_tie_request_post.has("_raw_body"):
+		return _failure("HTTP request router should keep JSON response mode when wildcard Accept does not prefer SSE.")
+	if str(wildcard_json_tie_request_post.get("jsonrpc", "")) != "2.0" or not wildcard_json_tie_request_post.has("result"):
+		return _failure("HTTP request router should return a JSON-RPC result when wildcard Accept keeps JSON response mode.")
+	var wildcard_sse_preferred_request_post: Dictionary = await response_post_router.route_request_async(
+		"POST",
+		"/mcp",
+		JSON.stringify({"jsonrpc": "2.0", "id": 462, "method": "tools/list"}),
+		{"host": "localhost:3000", "content-type": "application/json", "accept": "*/*;q=0.1, text/event-stream;q=1.0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": response_post_session_id}
+	)
+	if str(wildcard_sse_preferred_request_post.get("_content_type", "")) != "text/event-stream; charset=utf-8":
+		return _failure("HTTP request router should prefer finite SSE when wildcard Accept is lower quality than text/event-stream.")
+	var initialized_post_sse: Dictionary = await response_post_router.route_request_async(
+		"POST",
+		"/mcp",
+		JSON.stringify({"jsonrpc": "2.0", "id": 47, "method": "initialize", "params": {"protocolVersion": ProtocolFactsScript.get_protocol_version()}}),
+		{"host": "localhost:3000", "content-type": "application/json", "accept": "application/json;q=0.1, text/event-stream;q=1.0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()}
+	)
+	var initialized_post_sse_headers: Dictionary = initialized_post_sse.get("_headers", {})
+	var initialized_post_sse_body := str(initialized_post_sse.get("_raw_body", ""))
+	var initialized_post_sse_session_id := str(initialized_post_sse_headers.get("Mcp-Session-Id", ""))
+	if initialized_post_sse_session_id.is_empty():
+		return _failure("HTTP request router should issue a session id for finite initialize POST SSE responses.")
+	var initialized_post_sse_event_id := _extract_first_sse_event_id(initialized_post_sse_body)
+	if initialized_post_sse_event_id.is_empty() or initialized_post_sse_event_id.find("streamable-http-post-") == -1:
+		return _failure("HTTP request router should store finite initialize POST SSE responses with a queue event id.")
+	var seed_get_after_post_sse: Dictionary = await response_post_router.route_request_async(
+		"GET",
+		"/mcp",
+		"",
+		{"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": initialized_post_sse_session_id}
+	)
+	var seed_get_body := str(seed_get_after_post_sse.get("_raw_body", ""))
+	if seed_get_body.find("event: endpoint") == -1 or seed_get_body.find("event: open") == -1:
+		return _failure("HTTP request router should expose endpoint and open metadata on fresh GET SSE streams.")
+	var seed_get_event_id := _extract_first_sse_event_id_with_prefix(seed_get_body, "streamable-http-get-")
+	if seed_get_event_id.is_empty() or seed_get_event_id.find("streamable-http-get-") == -1:
+		return _failure("HTTP request router should expose a non-replayable GET SSE open event id before replaying queued POST events.")
+	var queued_post_sse: Dictionary = await response_post_router.route_request_async(
+		"POST",
+		"/mcp",
+		JSON.stringify({"jsonrpc": "2.0", "id": 48, "method": "tools/list"}),
+		{"host": "localhost:3000", "content-type": "application/json", "accept": "application/json;q=0.1, text/event-stream;q=1.0", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": initialized_post_sse_session_id}
+	)
+	if str((queued_post_sse.get("_headers", {}) as Dictionary).get("Mcp-Session-Id", "")) != initialized_post_sse_session_id:
+		return _failure("HTTP request router should echo known sessions for finite POST SSE responses.")
+	var get_after_post_sse_response: Dictionary = await response_post_router.route_request_async(
+		"GET",
+		"/mcp",
+		"",
+		{"host": "localhost:3000", "accept": "text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": initialized_post_sse_session_id, "last-event-id": initialized_post_sse_event_id}
+	)
+	var get_after_post_sse_body := str(get_after_post_sse_response.get("_raw_body", ""))
+	if get_after_post_sse_body.find("\"id\":48") == -1:
+		return _failure("HTTP request router should replay queued finite POST SSE responses through matched GET SSE probes.")
+	var routed_requests_before_response_envelope: int = response_post_service.routed_requests
+	var json_rpc_response_post: Dictionary = await response_post_router.route_request_async(
+		"POST",
+		"/mcp",
+		JSON.stringify({"jsonrpc": "2.0", "id": 44, "result": {"ok": true}}),
+		{"host": "localhost:3000", "content-type": "application/json", "accept": "text/event-stream, application/json", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version(), "mcp-session-id": response_post_session_id}
+	)
+	var json_rpc_response_headers: Dictionary = json_rpc_response_post.get("_headers", {})
+	if int(json_rpc_response_post.get("status", 0)) != 202 or not bool(json_rpc_response_post.get("_no_body", false)):
+		return _failure("HTTP request router should accept JSON-RPC response POST envelopes with 202 and no body.")
+	if str(json_rpc_response_headers.get("MCP-Protocol-Version", "")) != ProtocolFactsScript.get_protocol_version():
+		return _failure("HTTP request router should attach protocol headers to accepted response POST envelopes.")
+	if str(json_rpc_response_headers.get("Mcp-Session-Id", "")) != response_post_session_id:
+		return _failure("HTTP request router should echo the initialized session id for accepted response POST envelopes.")
+	if response_post_service.routed_requests != routed_requests_before_response_envelope:
+		return _failure("HTTP request router should not route accepted JSON-RPC response POST envelopes as requests.")
+
 	var allowed_origin_health: Dictionary = await router.route_request_async("GET", "/health", "", {"origin": "http://localhost:5173", "host": "localhost:3000"})
 	var allowed_origin_health_headers: Dictionary = allowed_origin_health.get("_headers", {})
 	if str(allowed_origin_health_headers.get("Access-Control-Allow-Origin", "")) != "http://localhost:5173":
 		return _failure("HTTP request router did not add CORS headers to allowed actual requests.")
 
-	var not_found_response: Dictionary = await router.route_request_async("GET", "/missing", "")
+	var not_found_response: Dictionary = await router.route_request_async("GET", "/missing", "", {"host": "localhost:3000"})
 	if int(not_found_response.get("status", 0)) != 404:
 		return _failure("HTTP request router did not return 404 for an unknown path.")
 
@@ -132,7 +666,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"details": {
 			"last_mcp_body_length": callbacks.last_mcp_body.length(),
 			"lifecycle_action": callbacks.last_lifecycle_action,
-			"not_found_status": int(not_found_response.get("status", 0))
+			"not_found_status": int(not_found_response.get("status", 0)),
+			"streamable_http_semantics": {
+				"post_accept_negotiation": true,
+				"get_sse_negotiation": true,
+				"protocol_version_headers": true,
+				"sse_resume_metadata": true,
+				"finite_post_sse": true,
+				"session_termination": true
+			}
 		}
 	}
 
@@ -143,3 +685,48 @@ func _failure(message: String) -> Dictionary:
 		"success": false,
 		"error": message
 	}
+
+
+func _initialize_session(router, id: int = 4) -> String:
+	var initialize_response: Dictionary = await router.route_request_async(
+		"POST",
+		"/mcp",
+		JSON.stringify({"jsonrpc": "2.0", "id": id, "method": "initialize", "params": {"protocolVersion": ProtocolFactsScript.get_protocol_version()}}),
+		{"host": "localhost:3000", "content-type": "application/json", "accept": "application/json, text/event-stream", "mcp-protocol-version": ProtocolFactsScript.get_protocol_version()}
+	)
+	return str((initialize_response.get("_headers", {}) as Dictionary).get("Mcp-Session-Id", ""))
+
+
+func _extract_first_sse_event_id(body: String) -> String:
+	for line in body.split("\n", false):
+		var normalized := str(line).strip_edges()
+		if normalized.begins_with("id: "):
+			return normalized.substr(4).strip_edges()
+	return ""
+
+
+func _extract_first_sse_event_id_with_prefix(body: String, prefix: String) -> String:
+	for line in body.split("\n", false):
+		var normalized := str(line).strip_edges()
+		if normalized.begins_with("id: "):
+			var event_id := normalized.substr(4).strip_edges()
+			if event_id.begins_with(prefix):
+				return event_id
+	return ""
+
+
+func _count_sse_events(body: String) -> int:
+	var count := 0
+	for line in body.split("\n", false):
+		if str(line).strip_edges().begins_with("event: "):
+			count += 1
+	return count
+
+
+func _count_sse_event_id(body: String, event_id: String) -> int:
+	var count := 0
+	for line in body.split("\n", false):
+		var normalized := str(line).strip_edges()
+		if normalized == "id: %s" % event_id:
+			count += 1
+	return count
