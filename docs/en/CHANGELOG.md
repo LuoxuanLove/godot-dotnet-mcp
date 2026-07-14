@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- Simplified the Settings layout into compact general and update cards, removed redundant update-policy and repository text, placed the Release/Development selector directly above the version list, reduced the table to three focused columns, and added true single-column behavior for ultra-narrow Docks.
+- Simplified the Settings layout into compact general and update cards, removed redundant update-policy and repository text, moved the Development branch selector above the update actions, grouped Release/Development with refresh metadata directly above the version list, reduced the table to three focused columns, and added true single-column behavior for ultra-narrow Docks.
 - Added a four-language Dock UI style guide covering information hierarchy, spacing, editor-native theme use, action priority, responsive behavior, accessibility, localization, and acceptance checks for every page.
 - Reworked the Settings update area into an integrated version manager with Release/Development channels, cached release/tag and branch commit tables, explicit row-level Switch actions, and one-click update guards that refuse rollback or divergent targets unless the user switches manually.
 - Persisted version refs and exact commit comparisons across editor restarts. Startup now restores cache only and never requests GitHub; an explicit Refresh List updates only the selected channel, and comparison uses exact local/cache facts before one-click update requests remote verification.
@@ -19,7 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Removed startup GitHub update-list and comparison requests, reduced each explicit list refresh to the two endpoint families required by the selected channel, and suppressed repeated unauthenticated retries while a known rate limit remains exhausted.
-- Separated the Settings update primary status from supplemental details so the same error is never rendered in both regions.
+- Removed the Settings update-details disclosure, kept actionable diagnostics in the wrapping primary status, and constrained refresh metadata with ellipsis plus a full-text tooltip so long failures and audit text cannot overflow the Dock.
 - Deferred Settings version-table Switch actions until after Tree mouse-selection events complete, preventing Godot from rejecting row rebuilds and flooding the Output panel with null item errors.
 
 ## [2.0.0] - 2026-07-04

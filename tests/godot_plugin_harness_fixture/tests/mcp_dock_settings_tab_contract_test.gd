@@ -266,10 +266,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should normalize stale automatic discovery status copy after Dock projection.")
 	if _find_label_containing(labels, "Current Version:") == null or _find_label_containing(labels, "1.0.1 (abcdef1)") == null:
 		return _failure("Settings tab should display the compact update summary after Dock projection.")
-	var details_button := tab_container.get_tab_control(5).find_child("DetailsButton", true, false) as Button
-	var details_panel := tab_container.get_tab_control(5).find_child("DetailsPanel", true, false) as PanelContainer
-	if _find_label_containing(labels, "Synced dev.") == null or details_button == null or details_button.visible or details_panel == null or details_panel.visible:
-		return _failure("Settings tab should keep completed sync status in one place and hide empty diagnostic details.")
+	if _find_label_containing(labels, "Synced dev.") == null or tab_container.get_tab_control(5).find_child("DetailsButton", true, false) != null or tab_container.get_tab_control(5).find_child("DetailsPanel", true, false) != null:
+		return _failure("Settings tab should keep completed sync status in one place without the removed update-details disclosure.")
 	var second_row := version_tree.get_root().get_first_child().get_next()
 	second_row.select(1)
 	version_tree.emit_signal("cell_selected")

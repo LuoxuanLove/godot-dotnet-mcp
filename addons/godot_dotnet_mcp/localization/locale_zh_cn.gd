@@ -683,7 +683,6 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_switch": "切换",
 	"settings_update_refresh_list": "刷新列表",
 	"settings_update_one_click": "一键更新",
-	"settings_update_details": "更新详情",
 	"settings_update_last_trigger": "上次触发：",
 	"settings_update_last_refresh": "上次刷新：",
 	"settings_update_rate_limit_reset": "限流恢复：",

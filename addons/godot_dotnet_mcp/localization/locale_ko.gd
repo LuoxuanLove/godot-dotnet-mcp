@@ -631,7 +631,6 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_switch": "전환",
 	"settings_update_refresh_list": "목록 새로 고침",
 	"settings_update_one_click": "원클릭 업데이트",
-	"settings_update_details": "업데이트 세부 정보",
 	"settings_update_last_trigger": "마지막 트리거:",
 	"settings_update_last_refresh": "마지막 새로 고침:",
 	"settings_update_rate_limit_reset": "속도 제한 초기화:",

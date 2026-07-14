@@ -464,7 +464,6 @@ const TRANSLATIONS: Dictionary = {
 	"settings_update_switch": "Переключить",
 	"settings_update_refresh_list": "Обновить список",
 	"settings_update_one_click": "Обновление в один клик",
-	"settings_update_details": "Сведения об обновлении",
 	"settings_update_last_trigger": "Последний запуск:",
 	"settings_update_last_refresh": "Последнее обновление:",
 	"settings_update_rate_limit_reset": "Сброс лимита:",

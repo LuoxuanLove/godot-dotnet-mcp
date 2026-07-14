@@ -128,6 +128,21 @@ visible = false
 vertical_alignment = 1
 text_overrun_behavior = 3
 
+[node name="CustomBranchRow" type="GridContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+columns = 2
+theme_override_constants/separation = 8
+
+[node name="CustomBranchLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CustomBranchRow"]
+unique_name_in_owner = true
+vertical_alignment = 1
+
+[node name="CustomBranchValue" type="OptionButton" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CustomBranchRow"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+fit_to_longest_item = false
+
 [node name="UpdateActionGrid" type="GridContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
@@ -159,7 +174,9 @@ theme_override_constants/margin_bottom = 8
 [node name="UpdatesStatus" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/StatusPanel/StatusMargin"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 0)
 autowrap_mode = 3
+clip_text = true
 
 [node name="UpdatesProgress" type="ProgressBar" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
 unique_name_in_owner = true
@@ -168,60 +185,26 @@ size_flags_horizontal = 3
 max_value = 100.0
 show_percentage = false
 
-[node name="DetailsButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+[node name="VersionToolbar" type="GridContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
 unique_name_in_owner = true
-visible = false
+size_flags_horizontal = 3
+columns = 2
+
+[node name="UpdateChannelTabs" type="TabBar" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionToolbar"]
+unique_name_in_owner = true
 size_flags_horizontal = 0
-toggle_mode = true
-flat = true
-alignment = 0
-text = ""
-
-[node name="DetailsPanel" type="PanelContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
-unique_name_in_owner = true
-visible = false
-size_flags_horizontal = 3
-
-[node name="DetailsMargin" type="MarginContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/DetailsPanel"]
-unique_name_in_owner = true
-theme_override_constants/margin_left = 10
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 10
-theme_override_constants/margin_bottom = 8
-
-[node name="DetailsBody" type="VBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/DetailsPanel/DetailsMargin"]
-unique_name_in_owner = true
-theme_override_constants/separation = 6
-
-[node name="UpdatesDetails" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/DetailsPanel/DetailsMargin/DetailsBody"]
-unique_name_in_owner = true
-autowrap_mode = 3
-
-[node name="UpdatesAudit" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/DetailsPanel/DetailsMargin/DetailsBody"]
-unique_name_in_owner = true
-autowrap_mode = 3
-
-[node name="UpdateChannelTabs" type="TabBar" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
-unique_name_in_owner = true
-size_flags_horizontal = 3
 tab_count = 2
 tab_0/title = ""
 tab_1/title = ""
 
-[node name="CustomBranchRow" type="GridContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+[node name="UpdatesAudit" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionToolbar"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
-columns = 2
-theme_override_constants/separation = 8
-
-[node name="CustomBranchLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CustomBranchRow"]
-unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 0)
+horizontal_alignment = 2
 vertical_alignment = 1
-
-[node name="CustomBranchValue" type="OptionButton" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/CustomBranchRow"]
-unique_name_in_owner = true
-size_flags_horizontal = 3
-fit_to_longest_item = false
+clip_text = true
+text_overrun_behavior = 3
 
 [node name="VersionTree" type="Tree" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
 unique_name_in_owner = true

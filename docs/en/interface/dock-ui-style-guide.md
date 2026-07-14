@@ -60,9 +60,9 @@ Prefer margins and ordinary container separation in `.tscn` scenes. Scripts may 
 - A card may keep one persistent description and one live status region. Omit the description when the controls, status, or empty state already explain the workflow, and never repeat the same instruction in both.
 - Idle guidance should name the next action. Loading state should identify the active scope, lock conflicting actions, and show progress when measurable.
 - Success text should be short. Error text must retain the cause and a recovery action when one is known.
-- Operational metadata such as trigger source, HTTP status, rate-limit reset, hashes, and comparison counts belongs in a collapsible details surface.
-- The persistent status region owns the primary result. Details are supplemental and must not repeat the same error or summary; open them automatically only when they add actionable diagnostic evidence.
-- Error and exhausted-rate-limit details may open automatically when they add that evidence; ordinary audit information stays collapsed.
+- Operational metadata such as trigger source, HTTP status, and refresh time may share a compact contextual row with the content it describes; constrain long values with ellipsis and expose the complete value through a tooltip.
+- The persistent status region owns the primary result and necessary actionable diagnostics. Do not repeat the same error or summary in another region.
+- Routine audit information remains visually secondary and must not expand the page or overflow the Dock.
 
 ## Lists, Tables, And Empty States
 
