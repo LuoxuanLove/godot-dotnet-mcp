@@ -122,12 +122,6 @@ unique_name_in_owner = true
 size_flags_horizontal = 3
 text_overrun_behavior = 3
 
-[node name="UpdateChannelStatus" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
-unique_name_in_owner = true
-visible = false
-vertical_alignment = 1
-text_overrun_behavior = 3
-
 [node name="CustomBranchRow" type="GridContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
@@ -190,13 +184,6 @@ unique_name_in_owner = true
 size_flags_horizontal = 3
 columns = 2
 
-[node name="UpdateChannelTabs" type="TabBar" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionToolbar"]
-unique_name_in_owner = true
-size_flags_horizontal = 0
-tab_count = 2
-tab_0/title = ""
-tab_1/title = ""
-
 [node name="UpdatesAudit" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionToolbar"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
@@ -206,16 +193,69 @@ vertical_alignment = 1
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="VersionTree" type="Tree" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+[node name="VersionPanels" type="GridContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
-size_flags_vertical = 1
+columns = 2
+
+[node name="StableVersionPanel" type="PanelContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="StableVersionBody" type="VBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/StableVersionPanel"]
+unique_name_in_owner = true
+theme_override_constants/separation = 8
+
+[node name="StableVersionHeader" type="HBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/StableVersionPanel/StableVersionBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="StableChannelButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/StableVersionPanel/StableVersionBody/StableVersionHeader"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+toggle_mode = true
+text = ""
+
+[node name="StableVersionTree" type="Tree" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/StableVersionPanel/StableVersionBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
 custom_minimum_size = Vector2(0, 220)
 columns = 3
 hide_root = true
 select_mode = 1
 
-[node name="VersionEmptyLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody"]
+[node name="StableVersionEmptyLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/StableVersionPanel/StableVersionBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+autowrap_mode = 3
+
+[node name="DevelopmentVersionPanel" type="PanelContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="DevelopmentVersionBody" type="VBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/DevelopmentVersionPanel"]
+unique_name_in_owner = true
+theme_override_constants/separation = 8
+
+[node name="DevelopmentVersionHeader" type="HBoxContainer" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/DevelopmentVersionPanel/DevelopmentVersionBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+
+[node name="DevelopmentChannelButton" type="Button" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/DevelopmentVersionPanel/DevelopmentVersionBody/DevelopmentVersionHeader"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+toggle_mode = true
+text = ""
+
+[node name="DevelopmentVersionTree" type="Tree" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/DevelopmentVersionPanel/DevelopmentVersionBody"]
+unique_name_in_owner = true
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 220)
+columns = 3
+hide_root = true
+select_mode = 1
+
+[node name="DevelopmentVersionEmptyLabel" type="Label" parent="Scroll/Margin/Content/UpdatesCard/UpdatesCardMargin/UpdatesCardBody/VersionPanels/DevelopmentVersionPanel/DevelopmentVersionBody"]
 unique_name_in_owner = true
 size_flags_horizontal = 3
 autowrap_mode = 3

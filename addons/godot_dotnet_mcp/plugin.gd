@@ -1424,36 +1424,30 @@ func _on_update_check_requested(background_refresh: bool = false, trigger_source
 
 
 func _build_update_refs_pending(serial: int, background_refresh: bool) -> Dictionary:
-	var source := _normalize_update_source(str(_state.settings.get("update_source", "latest_stable")))
-	var development := source == "custom_branch"
 	var selected_branch := _get_selected_update_branch()
-	var cached_branches := _to_string_array(_state.update_ref_branches)
-	var cached_releases := _to_string_array(_state.update_ref_releases)
 	var cached_commits := _duplicate_update_ref_commits(_state.update_ref_commits)
-	var cached_release_rows := _duplicate_update_ref_rows(_state.update_ref_release_rows)
 	var cached_branch_rows := _duplicate_update_branch_commit_rows(_state.update_ref_branch_commit_rows)
-	if development:
-		cached_branch_rows.erase(selected_branch)
 	var stable_releases: Array[String] = []
-	if development and not str(_state.update_ref_latest_stable_release).strip_edges().is_empty():
+	if not str(_state.update_ref_latest_stable_release).strip_edges().is_empty():
 		stable_releases.append(str(_state.update_ref_latest_stable_release).strip_edges())
+	cached_branch_rows.erase(selected_branch)
 	return {
 		"serial": serial,
 		"background": background_refresh,
-		"required_kinds": ["branches", "branch_commits"] if development else ["releases", "tags"],
+		"required_kinds": ["branches", "releases", "tags", "branch_commits"],
 		"successful_kinds": [],
-		"branch_done": not development,
-		"release_done": development,
-		"tag_done": development,
-		"branch_commits_done": not development,
+		"branch_done": false,
+		"release_done": false,
+		"tag_done": false,
+		"branch_commits_done": false,
 		"branch_commits_branch": selected_branch,
 		"errors": [],
-		"branches": [] if development else cached_branches,
-		"releases": cached_releases if development else [],
+		"branches": [],
+		"releases": [],
 		"stable_releases": stable_releases,
 		"tags": [],
 		"commits": cached_commits,
-		"release_rows": cached_release_rows if development else [],
+		"release_rows": [],
 		"tag_rows": [],
 		"branch_commit_rows": cached_branch_rows,
 		"branches_pages": 1,

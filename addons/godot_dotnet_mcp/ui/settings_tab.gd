@@ -16,6 +16,7 @@ const SettingsTabModelProjectionServiceScript = preload("res://addons/godot_dotn
 const LAYOUT_WIDTH_BUCKET := 48.0
 const SETTING_LABEL_WIDTH := 112.0
 const SETTING_FIELD_WIDTH := 180.0
+const ULTRA_NARROW_LAYOUT_WIDTH := 420.0
 const UPDATE_SELECTOR_POPUP_MAX_VISIBLE_ITEMS := 12
 const UPDATE_SELECTOR_POPUP_ROW_HEIGHT := 28.0
 const UPDATE_SELECTOR_POPUP_VERTICAL_PADDING := 12.0
@@ -43,8 +44,6 @@ const UPDATE_SWITCH_BUTTON_ID := 1
 @onready var _current_branch_value: Label = %CurrentBranchValue
 @onready var _current_version_label: Label = %CurrentVersionLabel
 @onready var _current_version_value: Label = %CurrentVersionValue
-@onready var _update_channel_tabs: TabBar = %UpdateChannelTabs
-@onready var _update_channel_status: Label = %UpdateChannelStatus
 @onready var _custom_branch_row: GridContainer = %CustomBranchRow
 @onready var _custom_branch_label: Label = %CustomBranchLabel
 @onready var _custom_branch_value: OptionButton = %CustomBranchValue
@@ -55,17 +54,21 @@ const UPDATE_SWITCH_BUTTON_ID := 1
 @onready var _updates_progress: ProgressBar = %UpdatesProgress
 @onready var _version_toolbar: GridContainer = %VersionToolbar
 @onready var _updates_audit: Label = %UpdatesAudit
-@onready var _version_tree: Tree = %VersionTree
-@onready var _version_empty_label: Label = %VersionEmptyLabel
+@onready var _version_panels: GridContainer = %VersionPanels
+@onready var _stable_channel_button: Button = %StableChannelButton
+@onready var _stable_version_tree: Tree = %StableVersionTree
+@onready var _stable_version_empty_label: Label = %StableVersionEmptyLabel
+@onready var _development_channel_button: Button = %DevelopmentChannelButton
+@onready var _development_version_tree: Tree = %DevelopmentVersionTree
+@onready var _development_version_empty_label: Label = %DevelopmentVersionEmptyLabel
 @onready var _check_button: Button = %CheckButton
 @onready var _prepare_button: Button = %PrepareButton
 @onready var _apply_button: Button = %ApplyButton
 
 var _language_syncing := false
 var _log_level_syncing := false
-var _channel_syncing := false
 var _custom_branch_syncing := false
-var _version_tree_syncing := false
+var _version_tree_syncing: Dictionary = {}
 var _current_scale := -1.0
 var _current_layout_key := -1
 var _layout_update_queued := false
@@ -81,10 +84,11 @@ func _ready() -> void:
 	_port_spin.value_changed.connect(_on_port_spin_changed)
 	_log_level_option.item_selected.connect(_on_log_level_option_selected)
 	_language_option.item_selected.connect(_on_language_option_selected)
-	_update_channel_tabs.tab_changed.connect(_on_update_channel_tab_changed)
 	_custom_branch_value.item_selected.connect(_on_custom_branch_option_selected)
-	_version_tree.button_clicked.connect(_on_version_tree_button_clicked)
-	_version_tree.cell_selected.connect(_on_version_tree_cell_selected)
+	_connect_version_tree(_stable_version_tree, "stable")
+	_connect_version_tree(_development_version_tree, "development")
+	_stable_channel_button.pressed.connect(_on_stable_channel_button_pressed)
+	_development_channel_button.pressed.connect(_on_development_channel_button_pressed)
 	_check_button.pressed.connect(_on_check_button_pressed)
 	_apply_button.pressed.connect(_on_apply_button_pressed)
 	_check_button.text = "Refresh List"
@@ -135,9 +139,6 @@ func apply_model(model: Dictionary) -> void:
 	_language_syncing = true
 	_apply_projected_options(_language_option, options.get("languages", []))
 	_language_syncing = false
-	_channel_syncing = true
-	_apply_update_channel_tabs(str(updates.get("active_channel", "stable")), localization)
-	_channel_syncing = false
 	_custom_branch_syncing = true
 	_apply_projected_options(_custom_branch_value, options.get("update_branches", []))
 	_custom_branch_syncing = false
@@ -145,8 +146,8 @@ func apply_model(model: Dictionary) -> void:
 
 	_current_branch_value.text = str(updates.get("current_branch", ""))
 	_current_version_value.text = _format_current_version_summary(updates, localization)
-	_current_branch_label.visible = str(updates.get("active_channel", "stable")) == "development"
-	_current_branch_value.visible = _current_branch_label.visible
+	_current_branch_label.visible = true
+	_current_branch_value.visible = true
 	_current_branch_value.tooltip_text = _current_branch_value.text
 	_current_version_value.tooltip_text = _current_version_value.text
 	_updates_status.text = _join_visible_update_status(
@@ -161,7 +162,12 @@ func apply_model(model: Dictionary) -> void:
 	_updates_progress.visible = bool(updates.get("progress_visible", false))
 	_updates_progress.value = clampf(float(updates.get("progress", 0.0)), 0.0, 1.0) * 100.0
 	_apply_update_source_rows(str(updates.get("source", "latest_stable")))
-	_apply_version_rows(updates.get("version_rows", []), str(updates.get("empty_text", "")), localization)
+	_stable_channel_button.text = _localized(localization, "settings_update_channel_stable", "Release")
+	_development_channel_button.text = _localized(localization, "settings_update_channel_development", "Development")
+	_stable_channel_button.button_pressed = str(updates.get("active_channel", "stable")) == "stable"
+	_development_channel_button.button_pressed = str(updates.get("active_channel", "stable")) == "development"
+	_apply_version_rows(_stable_version_tree, _stable_version_empty_label, updates.get("stable_version_rows", []), str(updates.get("stable_empty_text", "")), localization, "stable")
+	_apply_version_rows(_development_version_tree, _development_version_empty_label, updates.get("development_version_rows", []), str(updates.get("development_empty_text", "")), localization, "development")
 	_check_button.disabled = not bool(updates.get("check_enabled", false))
 	_prepare_button.disabled = true
 	_prepare_button.visible = false
@@ -188,8 +194,6 @@ func _has_required_controls() -> bool:
 		_current_branch_value,
 		_current_version_label,
 		_current_version_value,
-		_update_channel_tabs,
-		_update_channel_status,
 		_version_toolbar,
 		_custom_branch_row,
 		_custom_branch_label,
@@ -199,8 +203,13 @@ func _has_required_controls() -> bool:
 		_updates_status,
 		_updates_progress,
 		_updates_audit,
-		_version_tree,
-		_version_empty_label,
+		_version_panels,
+		_stable_channel_button,
+		_stable_version_tree,
+		_stable_version_empty_label,
+		_development_channel_button,
+		_development_version_tree,
+		_development_version_empty_label,
 		_check_button,
 		_prepare_button,
 		_apply_button,
@@ -223,7 +232,9 @@ func _apply_fill_width_flags() -> void:
 		_status_panel,
 		_updates_progress,
 		_version_toolbar,
-		_version_tree,
+		_version_panels,
+		_stable_version_tree,
+		_development_version_tree,
 		_check_button,
 		_prepare_button,
 		_apply_button,
@@ -268,58 +279,48 @@ func _format_current_version_summary(updates: Dictionary, localization) -> Strin
 	return "%s (%s)" % [version, commit.substr(0, mini(7, commit.length()))]
 
 
-func _apply_update_channel_tabs(active_channel: String, localization) -> void:
-	_update_channel_tabs.set_tab_title(0, _localized(localization, "settings_update_channel_stable", "Release"))
-	_update_channel_tabs.set_tab_title(1, _localized(localization, "settings_update_channel_development", "Development"))
-	var target_index := 1 if active_channel == "development" else 0
-	if _update_channel_tabs.current_tab != target_index:
-		_update_channel_tabs.current_tab = target_index
-	_update_channel_status.text = _get_update_channel_status_text(active_channel, localization)
-	_update_channel_status.visible = false
+func _connect_version_tree(tree: Tree, channel: String) -> void:
+	_version_tree_syncing[channel] = false
+	tree.button_clicked.connect(_on_version_tree_button_clicked.bind(channel))
+	tree.cell_selected.connect(_on_version_tree_cell_selected.bind(channel))
 
 
-func _get_update_channel_status_text(active_channel: String, localization) -> String:
-	if active_channel == "development":
-		return _localized(localization, "settings_update_channel_development_selected", "Development selected")
-	return _localized(localization, "settings_update_channel_stable_selected", "Stable selected")
-
-
-func _apply_version_rows(rows_value, empty_text: String, localization) -> void:
-	_version_tree_syncing = true
-	_version_tree.clear()
-	_version_tree.columns = 3
-	_version_tree.set_column_title(0, _localized(localization, "settings_update_col_version", "Version ID"))
-	_version_tree.set_column_title(1, _localized(localization, "settings_update_col_message", "Update"))
-	_version_tree.set_column_title(2, _localized(localization, "settings_update_col_action", "Action"))
-	_version_tree.column_titles_visible = true
-	_version_tree.set_column_expand(0, false)
-	_version_tree.set_column_custom_minimum_width(0, int(round(96.0 * _effective_scale())))
-	_version_tree.set_column_expand(1, true)
-	_version_tree.set_column_expand(2, false)
-	_version_tree.set_column_custom_minimum_width(2, int(round(84.0 * _effective_scale())))
-	var root := _version_tree.create_item()
+func _apply_version_rows(tree: Tree, empty_label: Label, rows_value, empty_text: String, localization, channel: String) -> void:
+	_version_tree_syncing[channel] = true
+	tree.clear()
+	tree.columns = 3
+	tree.set_column_title(0, _localized(localization, "settings_update_col_version", "Version ID"))
+	tree.set_column_title(1, _localized(localization, "settings_update_col_message", "Update"))
+	tree.set_column_title(2, _localized(localization, "settings_update_col_action", "Action"))
+	tree.column_titles_visible = true
+	tree.set_column_expand(0, false)
+	tree.set_column_custom_minimum_width(0, int(round(96.0 * _effective_scale())))
+	tree.set_column_expand(1, true)
+	tree.set_column_expand(2, false)
+	tree.set_column_custom_minimum_width(2, int(round(84.0 * _effective_scale())))
+	var root := tree.create_item()
 	if root == null:
-		_version_tree.visible = false
-		_version_empty_label.visible = true
-		_version_empty_label.text = empty_text
-		_version_tree_syncing = false
+		tree.visible = false
+		empty_label.visible = true
+		empty_label.text = empty_text
+		_version_tree_syncing[channel] = false
 		return
 	var row_count := 0
 	if rows_value is Array:
 		for raw_row in rows_value as Array:
 			if raw_row is Dictionary:
-				if _add_version_tree_row(root, raw_row as Dictionary, localization):
+				if _add_version_tree_row(tree, root, raw_row as Dictionary, localization):
 					row_count += 1
-	_version_tree.visible = row_count > 0
-	_version_empty_label.visible = row_count == 0
-	_version_empty_label.text = empty_text
-	_version_tree_syncing = false
+	tree.visible = row_count > 0
+	empty_label.visible = row_count == 0
+	empty_label.text = empty_text
+	_version_tree_syncing[channel] = false
 
 
-func _add_version_tree_row(root: TreeItem, row: Dictionary, localization) -> bool:
+func _add_version_tree_row(tree: Tree, root: TreeItem, row: Dictionary, localization) -> bool:
 	if root == null:
 		return false
-	var item := _version_tree.create_item(root)
+	var item := tree.create_item(root)
 	if item == null:
 		return false
 	item.set_text(0, str(row.get("id", "")))
@@ -344,7 +345,7 @@ func _add_version_tree_row(root: TreeItem, row: Dictionary, localization) -> boo
 
 func _apply_update_source_rows(source: String) -> void:
 	if _custom_branch_row != null:
-		_custom_branch_row.visible = source == "custom_branch"
+		_custom_branch_row.visible = true
 
 
 func _apply_update_selector_popup_limits() -> void:
@@ -401,12 +402,16 @@ func _on_log_level_option_selected(index: int) -> void:
 	log_level_changed.emit(str(_log_level_option.get_item_metadata(index)))
 
 
-func _on_update_channel_tab_changed(index: int) -> void:
-	if _channel_syncing:
-		return
-	var source := "custom_branch" if index == 1 else "latest_stable"
-	_apply_update_source_rows(source)
-	update_source_changed.emit(source)
+func _on_stable_channel_button_pressed() -> void:
+	_stable_channel_button.button_pressed = true
+	_development_channel_button.button_pressed = false
+	update_source_changed.emit("latest_stable")
+
+
+func _on_development_channel_button_pressed() -> void:
+	_stable_channel_button.button_pressed = false
+	_development_channel_button.button_pressed = true
+	update_source_changed.emit("custom_branch")
 
 
 func _on_custom_branch_option_selected(index: int) -> void:
@@ -426,22 +431,23 @@ func _on_apply_button_pressed() -> void:
 	update_apply_requested.emit()
 
 
-func _on_version_tree_button_clicked(item: TreeItem, _column: int, id: int, _mouse_button_index: int) -> void:
-	if _version_tree_syncing or id != UPDATE_SWITCH_BUTTON_ID:
+func _on_version_tree_button_clicked(item: TreeItem, _column: int, id: int, _mouse_button_index: int, channel: String) -> void:
+	if bool(_version_tree_syncing.get(channel, false)) or id != UPDATE_SWITCH_BUTTON_ID:
 		return
-	_queue_version_switch(item)
+	_queue_version_switch(item, channel)
 
 
-func _on_version_tree_cell_selected() -> void:
-	if _version_tree_syncing:
+func _on_version_tree_cell_selected(channel: String) -> void:
+	if bool(_version_tree_syncing.get(channel, false)):
 		return
-	var row := _get_version_target_row(_version_tree.get_selected())
+	var tree: Tree = _stable_version_tree if channel == "stable" else _development_version_tree
+	var row := _get_version_target_row(tree.get_selected())
 	if row.is_empty():
 		return
 	update_compare_target_selected.emit(str(row.get("kind", "branch")), str(row.get("ref", "")), str(row.get("commit", "")))
 
 
-func _queue_version_switch(item: TreeItem) -> void:
+func _queue_version_switch(item: TreeItem, _channel: String) -> void:
 	var row := _get_version_switch_row(item)
 	if row.is_empty():
 		return
@@ -513,7 +519,9 @@ func _apply_responsive_layout() -> void:
 	var scale: float = _current_scale if _current_scale > 0.0 else 1.0
 	var bucket_size: float = max(16.0, LAYOUT_WIDTH_BUCKET * scale)
 	var layout_bucket: int = int(floor(available_width / bucket_size))
-	var ultra_narrow_layout: bool = available_width < 360.0 * scale
+	# The dual version panels add a small intrinsic width even after they stack;
+	# use the effective Dock width so the remaining form controls also stack.
+	var ultra_narrow_layout: bool = available_width < ULTRA_NARROW_LAYOUT_WIDTH * scale
 	var narrow_layout: bool = available_width < 560.0 * scale
 	var layout_key := layout_bucket * 100 + (1 if ultra_narrow_layout else 0) + (2 if narrow_layout else 0)
 	if _current_layout_key == layout_key:
@@ -546,7 +554,9 @@ func _apply_responsive_layout() -> void:
 	for button in [_check_button, _prepare_button, _apply_button]:
 		button.custom_minimum_size.x = 0.0
 		button.custom_minimum_size.y = 0.0
-	_version_tree.custom_minimum_size.y = (180.0 if ultra_narrow_layout else 220.0) * scale
+	_version_panels.columns = 1 if narrow_layout else 2
+	for tree in [_stable_version_tree, _development_version_tree]:
+		tree.custom_minimum_size.y = (180.0 if ultra_narrow_layout else 220.0) * scale
 
 
 func _apply_visual_style(scale: float) -> void:
@@ -554,7 +564,6 @@ func _apply_visual_style(scale: float) -> void:
 	_general_card.add_theme_stylebox_override("panel", _make_theme_panel_style(scale))
 	_updates_card.add_theme_stylebox_override("panel", _make_theme_panel_style(scale))
 	_status_panel.add_theme_stylebox_override("panel", _make_inset_panel_style())
-	_apply_channel_tab_style(scale)
 	for card_body in [_general_card_body, _updates_card_body]:
 		card_body.add_theme_constant_override("separation", int(round(10 * scale)))
 	for inset_margin in [_status_margin]:
@@ -571,33 +580,6 @@ func _apply_visual_style(scale: float) -> void:
 		label.add_theme_color_override("font_color", _get_description_text_color())
 	_updates_audit.add_theme_color_override("font_color", _get_meta_text_color())
 	end_bulk_theme_override()
-
-
-func _apply_channel_tab_style(scale: float) -> void:
-	if _update_channel_tabs == null:
-		return
-	_update_channel_tabs.add_theme_stylebox_override("tab_selected", _make_channel_tab_style(scale, true))
-	_update_channel_tabs.add_theme_stylebox_override("tab_hovered", _make_channel_tab_style(scale, false, true))
-	_update_channel_tabs.add_theme_stylebox_override("tab_unselected", _make_channel_tab_style(scale, false))
-	_update_channel_tabs.add_theme_color_override("font_selected_color", _get_accent_color())
-	_update_channel_tabs.add_theme_color_override("font_hovered_color", get_theme_color("font_color", "Label"))
-	_update_channel_tabs.add_theme_color_override("font_unselected_color", get_theme_color("font_color", "Label"))
-
-
-func _make_channel_tab_style(scale: float, selected: bool, hovered: bool = false) -> StyleBox:
-	var style := StyleBoxFlat.new()
-	var accent := _get_accent_color()
-	var base := get_theme_color("dark_color_2", "Editor") if has_theme_color("dark_color_2", "Editor") else Color(0.12, 0.12, 0.12, 1.0)
-	style.bg_color = accent.darkened(0.65) if selected else (base.lightened(0.12) if hovered else base)
-	style.border_color = accent if selected else base.lightened(0.35)
-	style.border_width_bottom = int(round((3.0 if selected else 1.0) * scale))
-	style.corner_radius_top_left = int(round(4.0 * scale))
-	style.corner_radius_top_right = int(round(4.0 * scale))
-	style.content_margin_left = 12.0 * scale
-	style.content_margin_right = 12.0 * scale
-	style.content_margin_top = 6.0 * scale
-	style.content_margin_bottom = 6.0 * scale
-	return style
 
 
 func _make_theme_panel_style(_scale: float) -> StyleBox:
