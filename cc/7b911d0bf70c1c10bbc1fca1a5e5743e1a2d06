@@ -1,0 +1,29 @@
+addons/godot_dotnet_mcp/plugin/runtime/plugin_update_refs_discovery_service.gd
+  s_d588252f8a516b::t_335d35ba95a7b3 142-143,188-191
+docs/ko/변경-로그.md
+  s_d588252f8a516b::t_335d35ba95a7b3 14
+tests/godot_plugin_harness_fixture/tests/plugin_update_refs_discovery_service_contract_test.gd
+  s_d588252f8a516b::t_335d35ba95a7b3 202-204
+docs/en/CHANGELOG.md
+  s_d588252f8a516b::t_335d35ba95a7b3 14
+docs/zh-CN/变更日志.md
+  s_d588252f8a516b::t_335d35ba95a7b3 15
+docs/ja/変更履歴.md
+  s_d588252f8a516b::t_335d35ba95a7b3 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "cc7b911d0bf70c1c10bbc1fca1a5e5743e1a2d06",
+  "prompts": {},
+  "sessions": {
+    "s_d588252f8a516b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f5fb7-ff55-7691-97bd-6d013e309f76",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
