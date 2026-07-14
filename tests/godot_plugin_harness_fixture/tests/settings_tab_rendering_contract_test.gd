@@ -223,7 +223,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should render the version management table for discovered stable releases.")
 	if custom_branch_row.get_index() + 1 != action_grid.get_index():
 		return _failure("Settings tab should place the Development branch selector directly above the update actions.")
-	if version_toolbar == null or version_toolbar.get_index() + 1 != version_tree.get_index() or channel_tabs.get_parent() != version_toolbar or audit_text.get_parent() != version_toolbar:
+	if version_toolbar == null or audit_text == null or version_toolbar.get_index() + 1 != version_tree.get_index() or channel_tabs.get_parent() != version_toolbar or audit_text.get_parent() != version_toolbar:
 		return _failure("Settings tab should group channel selection and refresh audit metadata in one toolbar directly above the version table.")
 	if version_tree.select_mode != Tree.SELECT_ROW:
 		return _failure("Settings tab version management should keep row selection enabled.")
@@ -402,7 +402,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	await tree.process_frame
 	if status_text == null or not status_text.text.contains("Background version refresh failed") or status_text.autowrap_mode == TextServer.AUTOWRAP_OFF or not status_text.clip_text or status_text.tooltip_text != status_text.text:
 		return _failure("Settings tab should keep background errors visible in the wrapping primary status without restoring update details or overflowing the Dock.")
-	if audit_text == null or audit_text.text.is_empty() or not audit_text.text.contains("HTTP 503") or not audit_text.clip_text or audit_text.text_overrun_behavior == TextServer.OVERRUN_NO_TRIMMING or audit_text.tooltip_text != audit_text.text:
+	if audit_text == null or audit_text.text.is_empty() or not audit_text.text.contains("HTTP 503") or audit_text.autowrap_mode != TextServer.AUTOWRAP_OFF or not audit_text.clip_text or audit_text.text_overrun_behavior == TextServer.OVERRUN_NO_TRIMMING or audit_text.tooltip_text != audit_text.text:
 		return _failure("Settings tab should constrain long update audit metadata and preserve its full text in a tooltip.")
 
 	return {"name": "settings_tab_rendering_contracts", "success": true, "error": ""}
