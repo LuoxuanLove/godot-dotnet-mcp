@@ -811,6 +811,7 @@ func _build_dock_refresh_status_signature() -> String:
 		"update_selection_refresh_pending_ref",
 		"update_sync_state",
 		"update_sync_status",
+		"update_sync_progress",
 		"update_sync_pending_target_ref",
 		"update_sync_pending_target_kind"
 	]:
@@ -903,6 +904,7 @@ func _build_dock_refresh_status_signature_data() -> Dictionary:
 		"update_selection_refresh_pending_ref": str(_get_state_value("update_selection_refresh_pending_ref", "")),
 		"update_sync_state": str(_get_state_value("update_sync_state", "idle")),
 		"update_sync_status": str(_get_state_value("update_sync_status", "")),
+		"update_sync_progress": float(_get_state_value("update_sync_progress", 0.0)),
 		"update_sync_pending_target_ref": str(_update_sync_pending_target_ref),
 		"update_sync_pending_target_kind": str(_update_sync_pending_target_kind)
 	}
@@ -1404,28 +1406,33 @@ func _on_update_check_requested(background_refresh: bool = false, trigger_source
 
 
 func _build_update_refs_pending(serial: int, background_refresh: bool) -> Dictionary:
+	var source := _normalize_update_source(str(_state.settings.get("update_source", "latest_stable")))
+	var development := source == "custom_branch"
 	var selected_branch := _get_selected_update_branch()
+	var cached_branches := _to_string_array(_state.update_ref_branches)
+	var cached_releases := _to_string_array(_state.update_ref_releases)
 	var cached_commits := _duplicate_update_ref_commits(_state.update_ref_commits)
+	var cached_release_rows := _duplicate_update_ref_rows(_state.update_ref_release_rows)
 	var cached_branch_rows := _duplicate_update_branch_commit_rows(_state.update_ref_branch_commit_rows)
-	var stable_releases: Array[String] = []
-	cached_branch_rows.erase(selected_branch)
+	if development:
+		cached_branch_rows.erase(selected_branch)
 	var pending := {
 		"serial": serial,
 		"background": background_refresh,
-		"required_kinds": ["branches", "releases", "tags", "branch_commits"],
+		"required_kinds": ["branches", "branch_commits"] if development else ["releases", "tags"],
 		"successful_kinds": [],
-		"branch_done": false,
-		"release_done": false,
-		"tag_done": false,
-		"branch_commits_done": false,
+		"branch_done": not development,
+		"release_done": development,
+		"tag_done": development,
+		"branch_commits_done": not development,
 		"branch_commits_branch": selected_branch,
 		"errors": [],
-		"branches": [],
-		"releases": [],
-		"stable_releases": stable_releases,
+		"branches": [] if development else cached_branches,
+		"releases": cached_releases if development else [],
+		"stable_releases": [],
 		"tags": [],
 		"commits": cached_commits,
-		"release_rows": [],
+		"release_rows": cached_release_rows if development else [],
 		"tag_rows": [],
 		"branch_commit_rows": cached_branch_rows,
 		"commit_histories": {},
@@ -1451,6 +1458,9 @@ func _on_update_sync_requested() -> void:
 		_state.update_sync_progress = 0.0
 		_refresh_dock()
 		return
+	if _should_refresh_update_refs_for_one_click():
+		_start_one_click_update_refs_refresh(target)
+		return
 	var cached_guard_message := _get_one_click_cached_target_guard_message(target)
 	if not cached_guard_message.is_empty():
 		_state.update_sync_state = "error"
@@ -1474,6 +1484,33 @@ func _on_update_sync_requested() -> void:
 		_ensure_pending_update_sync_verification()
 		return
 	_request_update_sync(target, "dock")
+
+
+func _should_refresh_update_refs_for_one_click() -> bool:
+	if _state == null:
+		return false
+	if not str(_state.update_selected_target_ref).strip_edges().is_empty() and not str(_state.update_selected_target_commit).strip_edges().is_empty():
+		return false
+	return str(_state.update_refs_state) != "loading" and str(_state.update_refs_refresh_state) != "loading"
+
+
+func _start_one_click_update_refs_refresh(target: Dictionary) -> void:
+	if _state == null:
+		return
+	_clear_update_target_selection()
+	_reset_update_compare_state()
+	_prepare_pending_update_sync(target)
+	if not _update_sync_after_refs_discovery_pending:
+		_refresh_dock()
+		return
+	_update_sync_pending_refs_refresh_required = true
+	_state.update_sync_status = _get_localized_text("settings_update_sync_refreshing_refs")
+	_state.update_sync_progress = 0.04
+	_refresh_dock()
+	_on_update_check_requested(false, "one_click")
+	if str(_state.update_refs_state) == "error" and _update_sync_after_refs_discovery_pending:
+		_fail_pending_update_sync_after_refs_discovery(str(_state.update_refs_error))
+		_refresh_dock()
 
 
 func _on_update_switch_requested(kind: String, target_ref: String, target_commit: String = "") -> void:

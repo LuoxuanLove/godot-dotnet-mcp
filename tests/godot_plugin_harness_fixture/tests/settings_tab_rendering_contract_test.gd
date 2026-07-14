@@ -197,21 +197,16 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var port_spin := _instance.find_child("PortSpin", true, false) as SpinBox
 	var log_option := _instance.find_child("LogLevelOption", true, false) as OptionButton
 	var language_option := _instance.find_child("LanguageOption", true, false) as OptionButton
-	var stable_channel_button := _instance.find_child("StableChannelButton", true, false) as Button
-	var development_channel_button := _instance.find_child("DevelopmentChannelButton", true, false) as Button
+	var channel_tabs := _instance.find_child("UpdateChannelTabs", true, false) as TabBar
+	var channel_status := _instance.find_child("UpdateChannelStatus", true, false) as Label
 	var custom_branch_row := _instance.find_child("CustomBranchRow", true, false) as GridContainer
 	var custom_branch := _instance.find_child("CustomBranchValue", true, false) as OptionButton
 	var action_grid := _instance.find_child("UpdateActionGrid", true, false) as GridContainer
 	var status_text := _instance.find_child("UpdatesStatus", true, false) as Label
+	var progress_bar := _instance.find_child("UpdatesProgress", true, false) as ProgressBar
 	var version_toolbar := _instance.find_child("VersionToolbar", true, false) as GridContainer
 	var audit_text := _instance.find_child("UpdatesAudit", true, false) as Label
-	var version_panels := _instance.find_child("VersionPanels", true, false) as GridContainer
-	var stable_version_panel := _instance.find_child("StableVersionPanel", true, false) as PanelContainer
-	var stable_version_body := _instance.find_child("StableVersionBody", true, false) as VBoxContainer
-	var stable_version_tree := _instance.find_child("StableVersionTree", true, false) as Tree
-	var development_version_panel := _instance.find_child("DevelopmentVersionPanel", true, false) as PanelContainer
-	var development_version_body := _instance.find_child("DevelopmentVersionBody", true, false) as VBoxContainer
-	var development_version_tree := _instance.find_child("DevelopmentVersionTree", true, false) as Tree
+	var version_tree := _instance.find_child("VersionTree", true, false) as Tree
 	if _instance.find_child("SourceOption", true, false) != null or _instance.find_child("ReleaseTagRow", true, false) != null or _instance.find_child("ReleaseTagValue", true, false) != null or _instance.find_child("CustomBranchValue", true, false) is LineEdit:
 		return _failure("Settings tab should not render removed source/release controls or manual LineEdit controls for update refs.")
 	if port_spin == null or int(port_spin.value) != 4102:
@@ -220,35 +215,26 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should render and select the current log level.")
 	if language_option == null or language_option.get_item_count() != 2 or str(language_option.get_item_metadata(language_option.selected)) != "zh_CN":
 		return _failure("Settings tab should render and select the current language.")
-	if stable_channel_button == null or development_channel_button == null or not stable_channel_button.button_pressed or development_channel_button.button_pressed or stable_channel_button.text != "Release" or development_channel_button.text != "Development":
-		return _failure("Settings tab should render independent Release and Development source controls.")
+	if channel_tabs == null or channel_tabs.get_tab_count() != 2 or channel_tabs.current_tab != 0 or channel_tabs.get_tab_title(0) != "Release" or channel_tabs.get_tab_title(1) != "Development":
+		return _failure("Settings tab should render Release / Development channel choices.")
+	if channel_status == null or channel_status.visible or channel_status.text != "Release selected":
+		return _failure("Settings tab should keep the accessible selected-channel status hidden from the layout.")
 	if custom_branch == null or custom_branch.get_item_count() < 2 or str(custom_branch.get_item_metadata(0)) != "dev" or str(custom_branch.get_item_metadata(custom_branch.selected)) != "dev":
 		return _failure("Settings tab should render discovered custom branch options with dev pinned first.")
-	if not custom_branch_row.visible:
-		return _failure("Settings tab should keep the Development branch selector available while both channels are visible.")
-	if version_panels == null or stable_version_panel == null or stable_version_body == null or stable_version_tree == null or development_version_panel == null or development_version_body == null or development_version_tree == null or not stable_version_tree.visible or stable_version_tree.get_root() == null or stable_version_tree.get_root().get_first_child() == null or not development_version_tree.visible or development_version_tree.get_root() == null or development_version_tree.get_root().get_first_child() == null:
-		return _failure("Settings tab should render stable and development version tables at the same time.")
-	if version_panels.size_flags_vertical != Control.SIZE_EXPAND_FILL or stable_version_panel.size_flags_vertical != Control.SIZE_EXPAND_FILL or stable_version_body.size_flags_vertical != Control.SIZE_EXPAND_FILL or stable_version_tree.size_flags_vertical != Control.SIZE_EXPAND_FILL or development_version_panel.size_flags_vertical != Control.SIZE_EXPAND_FILL or development_version_body.size_flags_vertical != Control.SIZE_EXPAND_FILL or development_version_tree.size_flags_vertical != Control.SIZE_EXPAND_FILL:
-		return _failure("Settings tab version panels and trees should expand vertically with the Dock.")
-	if version_toolbar == null or audit_text == null:
-		return _failure("Settings tab should keep the refresh audit toolbar and dual version panels.")
-	if version_toolbar.get_index() + 1 != version_panels.get_index():
-		return _failure("Settings tab should place both version panels directly below the refresh audit toolbar (toolbar=%d panels=%d)." % [version_toolbar.get_index(), version_panels.get_index()])
-	if not [1, 2].has(version_panels.columns):
-		return _failure("Settings tab should keep a valid dual-panel layout (columns=%d)." % version_panels.columns)
+	if custom_branch_row.visible:
+		return _failure("Settings tab should hide the branch selector while the Release channel is active.")
+	if version_tree == null or not version_tree.visible or version_tree.get_root() == null or version_tree.get_root().get_first_child() == null:
+		return _failure("Settings tab should render the selected channel version table.")
+	if version_toolbar == null or audit_text == null or version_toolbar.get_index() + 1 != version_tree.get_index() or channel_tabs.get_parent() != version_toolbar or audit_text.get_parent() != version_toolbar:
+		return _failure("Settings tab should group channel choices and refresh audit metadata above the version table.")
 	_instance.size = Vector2(900, 900)
 	(_instance.find_child("Content", true, false) as VBoxContainer).size = Vector2(900, 900)
 	_instance.call("_apply_responsive_layout")
-	if version_panels.columns != 2:
-		return _failure("Settings tab should place stable and development panels side by side at wide Dock widths.")
-	if stable_version_tree.select_mode != Tree.SELECT_ROW or development_version_tree.select_mode != Tree.SELECT_ROW:
-		return _failure("Settings tab version management should keep row selection enabled in both panels.")
-	var stable_row := stable_version_tree.get_root().get_first_child()
-	if stable_version_tree.columns != 3 or stable_row.get_button_count(2) == 0 or stable_row.get_next() == null or stable_row.get_next().get_button_count(2) == 0:
-		return _failure("Settings tab should render Switch actions for non-current stable versions.")
-	var development_row := development_version_tree.get_root().get_first_child()
-	if development_version_tree.columns != 3 or development_row.get_button_count(2) == 0:
-		return _failure("Settings tab should render Switch actions for non-current development versions.")
+	if version_tree.select_mode != Tree.SELECT_ROW:
+		return _failure("Settings tab version management should keep row selection enabled in the active channel list.")
+	var first_row := version_tree.get_root().get_first_child()
+	if version_tree.columns != 3 or first_row.get_button_count(2) == 0 or first_row.get_next() == null or first_row.get_next().get_button_count(2) == 0:
+		return _failure("Settings tab should render Switch actions for non-current versions.")
 	if recorder.update_source != "" or recorder.update_custom_branch != "" or recorder.update_interaction_refresh_count != 0 or recorder.update_check_count != 0:
 		return _failure("Settings tab should not emit update setting changes while applying a model.")
 
@@ -281,12 +267,14 @@ func run_case(tree: SceneTree) -> Dictionary:
 	custom_branch.emit_signal("pressed")
 	if recorder.update_interaction_refresh_count != 0 or recorder.update_source != "" or recorder.update_custom_branch != "":
 		return _failure("Settings tab should not request update refresh when selectors are opened.")
-	stable_channel_button.emit_signal("pressed")
-	if recorder.update_source != "latest_stable" or not stable_channel_button.button_pressed or development_channel_button.button_pressed:
-		return _failure("Settings tab should route the stable source control without hiding either version panel.")
-	development_channel_button.emit_signal("pressed")
-	if recorder.update_source != "custom_branch" or stable_channel_button.button_pressed or not development_channel_button.button_pressed:
-		return _failure("Settings tab should route the development source control without hiding either version panel.")
+	channel_tabs.current_tab = 0
+	channel_tabs.emit_signal("tab_changed", 0)
+	if recorder.update_source != "latest_stable" or custom_branch_row.visible:
+		return _failure("Settings tab should hide the branch selector while Release is selected.")
+	channel_tabs.current_tab = 1
+	channel_tabs.emit_signal("tab_changed", 1)
+	if recorder.update_source != "custom_branch" or not custom_branch_row.visible:
+		return _failure("Settings tab should show the branch selector after choosing Development.")
 	_instance.apply_model({
 		"localization": FakeLocalization.new(),
 		"editor_scale": 1.0,
@@ -312,18 +300,18 @@ func run_case(tree: SceneTree) -> Dictionary:
 		}
 	})
 	await tree.process_frame
-	var dev_first_row := development_version_tree.get_root().get_first_child()
+	var dev_first_row := version_tree.get_root().get_first_child()
 	var dev_current_row := dev_first_row.get_next()
 	if dev_first_row == null or dev_first_row.get_button_count(2) == 0 or dev_current_row == null or dev_current_row.get_text(2) != "Current" or dev_current_row.get_button_count(2) != 0:
 		return _failure("Settings tab should highlight the current commit row and suppress Switch for the already-current version.")
 	dev_current_row.select(0)
-	development_version_tree.emit_signal("cell_selected")
+	version_tree.emit_signal("cell_selected")
 	if recorder.update_compare_kind != "branch" or recorder.update_compare_ref != "feature/settings" or recorder.update_compare_commit != "abcdef123456" or not recorder.update_switch_ref.is_empty():
 		return _failure("Selecting a version row should set the full-row comparison target without switching it.")
 	custom_branch.select(1)
 	custom_branch.emit_signal("item_selected", 1)
-	var first_row := development_version_tree.get_root().get_first_child()
-	development_version_tree.emit_signal("button_clicked", first_row, 2, 1, MOUSE_BUTTON_LEFT)
+	var selected_first_row := version_tree.get_root().get_first_child()
+	version_tree.emit_signal("button_clicked", selected_first_row, 2, 1, MOUSE_BUTTON_LEFT)
 	if not recorder.update_switch_ref.is_empty():
 		return _failure("Settings tab should defer table row switch requests until after Tree mouse selection events complete.")
 	await tree.process_frame
@@ -355,8 +343,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"plugin_freshness": {}
 	})
 	await tree.process_frame
-	var disabled_row := development_version_tree.get_root().get_first_child()
-	development_version_tree.emit_signal("button_clicked", disabled_row, 2, 1, MOUSE_BUTTON_LEFT)
+	var disabled_row := version_tree.get_root().get_first_child()
+	version_tree.emit_signal("button_clicked", disabled_row, 2, 1, MOUSE_BUTTON_LEFT)
 	await tree.process_frame
 	if recorder.update_switch_ref != previous_switch_ref:
 		return _failure("Settings tab should ignore disabled version rows instead of emitting an empty manual switch target.")
@@ -390,16 +378,16 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_instance.call("_apply_responsive_layout")
 	await tree.process_frame
 	await tree.process_frame
-	if general_form.columns != 1 or custom_branch_row.columns != 1 or action_grid.columns != 1 or version_toolbar.columns != 1 or version_panels.columns != 1:
-		return _failure("Settings tab should stack fields and actions at ultra-narrow Dock widths (general=%d branch=%d actions=%d toolbar=%d panels=%d width=%.1f content=%.1f)." % [general_form.columns, custom_branch_row.columns, action_grid.columns, version_toolbar.columns, version_panels.columns, _instance.size.x, (_instance.find_child("Content", true, false) as VBoxContainer).size.x])
+	if general_form.columns != 1 or custom_branch_row.columns != 1 or action_grid.columns != 1 or version_toolbar.columns != 1 or channel_tabs.get_parent() != version_toolbar:
+		return _failure("Settings tab should stack fields and actions at ultra-narrow Dock widths (general=%d branch=%d actions=%d toolbar=%d tabs_parent=%s content=%.1f instance=%.1f)." % [general_form.columns, custom_branch_row.columns, action_grid.columns, version_toolbar.columns, str(channel_tabs.get_parent() == version_toolbar), (_instance.find_child("Content", true, false) as VBoxContainer).size.x, _instance.size.x])
 	_instance.size = Vector2(520, 900)
 	_instance.custom_minimum_size.x = 0.0
 	(_instance.find_child("Content", true, false) as VBoxContainer).size = Vector2(520, 900)
 	_instance.call("_apply_responsive_layout")
 	await tree.process_frame
 	await tree.process_frame
-	if general_form.columns != 2 or custom_branch_row.columns != 2 or action_grid.columns != 2 or version_toolbar.columns != 2 or version_panels.columns != 1:
-		return _failure("Settings tab should restore compact two-column forms and actions while stacking version panels at the narrow breakpoint (general=%d branch=%d actions=%d toolbar=%d panels=%d width=%.1f)." % [general_form.columns, custom_branch_row.columns, action_grid.columns, version_toolbar.columns, version_panels.columns, _instance.size.x])
+	if general_form.columns != 2 or custom_branch_row.columns != 2 or action_grid.columns != 2 or version_toolbar.columns != 2:
+		return _failure("Settings tab should restore compact two-column forms and actions above the ultra-narrow breakpoint.")
 	_instance.apply_model({
 		"localization": FakeLocalization.new(),
 		"editor_scale": 1.0,
@@ -421,6 +409,23 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should keep background errors visible in the wrapping primary status without restoring update details or overflowing the Dock.")
 	if audit_text == null or audit_text.text.is_empty() or not audit_text.text.contains("HTTP 503") or audit_text.autowrap_mode != TextServer.AUTOWRAP_OFF or not audit_text.clip_text or audit_text.text_overrun_behavior == TextServer.OVERRUN_NO_TRIMMING or audit_text.tooltip_text != audit_text.text:
 		return _failure("Settings tab should constrain long update audit metadata and preserve its full text in a tooltip.")
+	_instance.apply_model({
+		"localization": FakeLocalization.new(),
+		"editor_scale": 1.0,
+		"settings": {"port": 4102, "update_source": "custom_branch", "update_custom_branch": "dev"},
+		"current_log_level": "error",
+		"current_language": "zh_CN",
+		"log_levels": ["debug", "info", "warning", "error"],
+		"update_refs_state": "success",
+		"update_refs_commits": {"dev": "new-head-sha"},
+		"update_sync_state": "loading",
+		"update_sync_status": "Syncing dev...",
+		"update_sync_progress": 0.42,
+		"plugin_freshness": {}
+	})
+	await tree.process_frame
+	if not status_text.visible or not status_text.text.contains("Syncing dev...") or not progress_bar.visible or not is_equal_approx(progress_bar.value, 42.0):
+		return _failure("Settings tab should keep the active sync status text and progress visible while one-click update is running.")
 
 	return {"name": "settings_tab_rendering_contracts", "success": true, "error": ""}
 

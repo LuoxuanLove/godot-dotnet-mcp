@@ -12,11 +12,8 @@ func project(model: Dictionary) -> Dictionary:
 	var settings: Dictionary = model.get("settings", {})
 	var update_settings := _project_update_settings(settings)
 	var freshness: Dictionary = model.get("plugin_freshness", {})
-	var stable_version_rows := _build_stable_rows(model, localization)
-	var development_version_rows := _build_development_rows(model, update_settings, localization)
-	_mark_selected_update_row(stable_version_rows, model, update_settings)
-	_mark_selected_update_row(development_version_rows, model, update_settings)
-	var version_rows := development_version_rows if _resolve_update_channel(update_settings) == "development" else stable_version_rows
+	var version_rows := _build_version_rows(model, update_settings, localization)
+	_mark_selected_update_row(version_rows, model, update_settings)
 	var update_status_text := _build_update_status_text(model, update_settings, localization)
 	var update_details_text := _build_update_details_text(model, update_settings, localization, update_status_text)
 
@@ -42,10 +39,6 @@ func project(model: Dictionary) -> Dictionary:
 			"current_version": _resolve_current_version(model, freshness, localization),
 			"current_commit": _read_freshness_value(freshness, ["sync", "source_git_commit"]),
 			"version_rows": version_rows,
-			"stable_version_rows": stable_version_rows,
-			"development_version_rows": development_version_rows,
-			"stable_empty_text": _build_update_channel_empty_text(model, "stable", localization),
-			"development_empty_text": _build_update_channel_empty_text(model, "development", localization),
 			"empty_text": _build_update_table_empty_text(model, update_settings, localization),
 			"audit_text": _build_update_audit_text(model, localization),
 			"details_text": update_details_text,
@@ -124,6 +117,12 @@ func _resolve_current_branch(model: Dictionary, update_settings: Dictionary) -> 
 	if not sync_ref.is_empty():
 		return sync_ref
 	return str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH))
+
+
+func _build_version_rows(model: Dictionary, update_settings: Dictionary, localization) -> Array:
+	if _resolve_update_channel(update_settings) == "development":
+		return _build_development_rows(model, update_settings, localization)
+	return _build_stable_rows(model, localization)
 
 
 func _mark_selected_update_row(rows: Array, model: Dictionary, update_settings: Dictionary) -> void:
@@ -217,13 +216,9 @@ func _format_update_row_date(date_text: String) -> String:
 
 
 func _build_update_table_empty_text(model: Dictionary, update_settings: Dictionary, localization) -> String:
-	return _build_update_channel_empty_text(model, _resolve_update_channel(update_settings), localization)
-
-
-func _build_update_channel_empty_text(model: Dictionary, channel: String, localization) -> String:
 	if str(model.get("update_refs_state", "idle")) == "loading":
 		return _get_localized_text(localization, "settings_update_refs_loading", "Loading update refs.")
-	if channel == "development":
+	if _resolve_update_channel(update_settings) == "development":
 		return _get_localized_text(localization, "settings_update_branch_unavailable", "Click Refresh List to load commits for the selected branch.")
 	return _get_localized_text(localization, "settings_update_release_unavailable", "Click Refresh List to load stable releases and tags.")
 
@@ -366,7 +361,10 @@ func _build_update_sync_status_text(model: Dictionary, update_settings: Dictiona
 				status = _get_localized_text(localization, "settings_update_sync_success", "Update sync completed.")
 			return status
 		"error":
-			return _get_localized_text(localization, "settings_update_sync_error", "Update sync failed.")
+			var error := str(model.get("update_sync_error", "")).strip_edges()
+			if error.is_empty():
+				error = _get_localized_text(localization, "settings_update_sync_error", "Update sync failed.")
+			return error
 		_:
 			return _build_update_refs_status_text(model, update_settings, localization)
 
@@ -453,6 +451,8 @@ func _is_update_check_enabled(model: Dictionary) -> bool:
 
 func _is_update_sync_enabled(model: Dictionary, update_settings: Dictionary) -> bool:
 	if str(model.get("update_sync_state", "idle")) == "loading":
+		return false
+	if str(model.get("update_refs_state", "idle")) == "loading":
 		return false
 	if not str(model.get("update_selected_target_ref", "")).strip_edges().is_empty():
 		return true

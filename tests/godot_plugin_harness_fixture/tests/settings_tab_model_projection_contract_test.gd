@@ -120,10 +120,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("Settings projection should keep update details collapsed when rate-limit state is absent.")
 	if str(updates.get("source", "")) != "custom_branch" or not bool(updates.get("show_branch_row", false)):
 		return _failure("Settings projection should expose only the branch target row for custom branch sources.")
-	var stable_version_rows: Array = updates.get("stable_version_rows", [])
-	var development_version_rows: Array = updates.get("development_version_rows", [])
-	if stable_version_rows.size() != 2 or development_version_rows.size() != 1 or (updates.get("version_rows", []) as Array).size() != development_version_rows.size():
-		return _failure("Settings projection should keep stable and development version rows available together while preserving the active-channel compatibility projection.")
+	var version_rows: Array = updates.get("version_rows", [])
+	if version_rows.size() != 1 or str((version_rows[0] as Dictionary).get("ref", "")) != "feature/settings":
+		return _failure("Settings projection should keep only the selected Development channel rows in the active list.")
 	var status_text := str(updates.get("status_text", ""))
 	var details_text := str(updates.get("details_text", ""))
 	if not status_text.contains("Synced feature/settings.") or status_text.contains("Current plugin") or not details_text.is_empty():

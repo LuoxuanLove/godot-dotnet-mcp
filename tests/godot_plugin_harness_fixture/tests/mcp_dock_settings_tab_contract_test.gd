@@ -230,19 +230,18 @@ func run_case(tree: SceneTree) -> Dictionary:
 	port_spin.value = 3200
 	if recorder.port != 3200:
 		return _failure("Settings tab port changes should route through the existing Dock port_changed signal.")
-	var stable_channel_button := tab_container.get_tab_control(5).find_child("StableChannelButton", true, false) as Button
-	var development_channel_button := tab_container.get_tab_control(5).find_child("DevelopmentChannelButton", true, false) as Button
+	var channel_tabs := tab_container.get_tab_control(5).find_child("UpdateChannelTabs", true, false) as TabBar
+	var channel_status := tab_container.get_tab_control(5).find_child("UpdateChannelStatus", true, false) as Label
 	var custom_branch_row := tab_container.get_tab_control(5).find_child("CustomBranchRow", true, false) as GridContainer
 	var custom_branch_value := tab_container.get_tab_control(5).find_child("CustomBranchValue", true, false) as OptionButton
-	var stable_version_tree := tab_container.get_tab_control(5).find_child("StableVersionTree", true, false) as Tree
-	var development_version_tree := tab_container.get_tab_control(5).find_child("DevelopmentVersionTree", true, false) as Tree
+	var version_tree := tab_container.get_tab_control(5).find_child("VersionTree", true, false) as Tree
 	var check_button := tab_container.get_tab_control(5).find_child("CheckButton", true, false) as Button
 	var prepare_button := tab_container.get_tab_control(5).find_child("PrepareButton", true, false) as Button
 	var apply_button := tab_container.get_tab_control(5).find_child("ApplyButton", true, false) as Button
-	if stable_channel_button == null or development_channel_button == null or custom_branch_value == null or stable_version_tree == null or development_version_tree == null or check_button == null or prepare_button == null or apply_button == null:
+	if channel_tabs == null or channel_status == null or custom_branch_value == null or version_tree == null or check_button == null or prepare_button == null or apply_button == null:
 		return _failure("Settings tab update controls should exist in the Settings tab.")
-	if stable_channel_button.text != "Release" or development_channel_button.text != "Development" or not development_channel_button.button_pressed or stable_channel_button.button_pressed:
-		return _failure("Settings tab should expose independent Release and Development source controls.")
+	if channel_tabs.get_tab_title(0) != "Release" or channel_tabs.get_tab_title(1) != "Development" or channel_tabs.current_tab != 1 or channel_status.visible or channel_status.text != "Development selected":
+		return _failure("Settings tab should expose Release and Development channel choices with the selected state preserved.")
 	if tab_container.get_tab_control(5).find_child("SourceOption", true, false) != null:
 		return _failure("Settings tab should not expose the removed update source selector.")
 	if custom_branch_value.get_item_count() < 2 or str(custom_branch_value.get_item_metadata(0)) != "dev" or str(custom_branch_value.get_item_metadata(custom_branch_value.selected)) != "dev":
@@ -251,10 +250,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should show only the branch target row for custom branch update sources.")
 	if tab_container.get_tab_control(5).find_child("ReleaseTagValue", true, false) != null or tab_container.get_tab_control(5).find_child("CustomBranchValue", true, false) is LineEdit:
 		return _failure("Settings tab update refs should not use manual LineEdit controls.")
-	if not stable_version_tree.visible or stable_version_tree.get_root() == null or stable_version_tree.get_root().get_first_child() == null or not development_version_tree.visible or development_version_tree.get_root() == null or development_version_tree.get_root().get_first_child() == null:
-		return _failure("Settings tab should show stable and development rows simultaneously.")
-	if stable_version_tree.select_mode != Tree.SELECT_ROW or development_version_tree.select_mode != Tree.SELECT_ROW:
-		return _failure("Settings tab should highlight selected version rows instead of individual cells.")
+	if not version_tree.visible or version_tree.get_root() == null or version_tree.get_root().get_first_child() == null or version_tree.select_mode != Tree.SELECT_ROW:
+		return _failure("Settings tab should show the selected channel rows with row selection.")
 	if not check_button.visible or check_button.disabled or check_button.text != "Refresh List":
 		return _failure("Settings tab Refresh List should be visible and enabled because refs refresh is manual.")
 	if prepare_button.visible or not prepare_button.disabled or not prepare_button.text.is_empty():
@@ -270,9 +267,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should display the compact update summary after Dock projection.")
 	if _find_label_containing(labels, "Synced dev.") == null or tab_container.get_tab_control(5).find_child("DetailsButton", true, false) != null or tab_container.get_tab_control(5).find_child("DetailsPanel", true, false) != null:
 		return _failure("Settings tab should keep completed sync status in one place without the removed update-details disclosure.")
-	var second_row := development_version_tree.get_root().get_first_child().get_next()
+	var second_row := version_tree.get_root().get_first_child().get_next()
 	second_row.select(1)
-	development_version_tree.emit_signal("cell_selected")
+	version_tree.emit_signal("cell_selected")
 	if recorder.update_compare_kind != "branch" or recorder.update_compare_ref != "dev" or recorder.update_compare_commit != "fedcba9876543210" or not recorder.update_switch_ref.is_empty():
 		return _failure("Selecting any cell in a version row should set the comparison target without switching versions.")
 	custom_branch_value.emit_signal("pressed")
@@ -312,16 +309,18 @@ func run_case(tree: SceneTree) -> Dictionary:
 	await tree.process_frame
 	if not check_button.visible or check_button.disabled or check_button.text != "Refresh List" or prepare_button.visible or not prepare_button.disabled or not prepare_button.text.is_empty() or apply_button.text != "One-click Update":
 		return _failure("MCP Dock should preserve visible manual Check while normalizing stale hidden update controls.")
-	stable_channel_button.emit_signal("pressed")
-	if recorder.update_source != "latest_stable" or not stable_channel_button.button_pressed or development_channel_button.button_pressed:
-		return _failure("Settings tab should route the stable source control without hiding either version panel.")
-	development_channel_button.emit_signal("pressed")
-	if recorder.update_source != "custom_branch" or stable_channel_button.button_pressed or not development_channel_button.button_pressed:
-		return _failure("Settings tab should route the development source control without hiding either version panel.")
+	channel_tabs.current_tab = 0
+	channel_tabs.emit_signal("tab_changed", 0)
+	if recorder.update_source != "latest_stable":
+		return _failure("Settings tab should route the Release channel choice.")
+	channel_tabs.current_tab = 1
+	channel_tabs.emit_signal("tab_changed", 1)
+	if recorder.update_source != "custom_branch":
+		return _failure("Settings tab should route the Development channel choice.")
 	custom_branch_value.select(1)
 	custom_branch_value.emit_signal("item_selected", 1)
-	var first_row := development_version_tree.get_root().get_first_child()
-	development_version_tree.emit_signal("button_clicked", first_row, 2, 1, MOUSE_BUTTON_LEFT)
+	var first_row := version_tree.get_root().get_first_child()
+	version_tree.emit_signal("button_clicked", first_row, 2, 1, MOUSE_BUTTON_LEFT)
 	if not recorder.update_switch_ref.is_empty():
 		return _failure("Settings tab Switch should defer through MCP Dock until after Tree mouse selection events complete.")
 	await tree.process_frame

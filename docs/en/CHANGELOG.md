@@ -8,10 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- Simplified the Settings layout into compact general and update cards, removed redundant update-policy and repository text, moved the Development branch selector above the update actions, and now show stable and development version histories together in side-by-side panels on wide Docks (stacked on narrow Docks) instead of hiding one channel behind navigation controls.
+- Simplified the Settings layout into compact general and update cards, removed redundant update-policy and repository text, moved the Development branch selector above the update actions, and restored adjacent Release/Development channel selectors with one active version-history list instead of rendering both histories together.
 - Added a four-language Dock UI style guide covering information hierarchy, spacing, editor-native theme use, action priority, responsive behavior, accessibility, localization, and acceptance checks for every page.
-- Reworked the Settings update area into an integrated version manager with stable and development panels, cached release/tag and branch commit tables, independent source controls, explicit row-level Switch actions, and one-click update guards that refuse rollback or divergent targets unless the user switches manually.
-- Persisted version refs and complete local commit histories across editor restarts. Startup now restores cache only and never requests GitHub; an explicit Refresh List refreshes stable release/tag data, the selected development branch commit data, and the histories used for local one-click verification in the same request cycle.
+- Reworked the Settings update area into an integrated version manager with adjacent Release/Development channel selectors, one active cached release/tag or branch-commit table, independent source controls, explicit row-level Switch actions, and one-click update guards that refuse rollback or divergent targets unless the user switches manually.
+- Persisted version refs and complete local commit histories across editor restarts. Startup now restores cache only and never requests GitHub; Refresh List refreshes only the selected channel, while one-click update refreshes the active channel before syncing its latest target.
 - Changed Refresh List to gather bounded, paginated commit histories for the installed source and selected target, calculate ahead/behind counts locally, and make one-click update rely on that refreshed local verification instead of GitHub's Compare endpoint.
 - Made version selection highlight the whole row and set that exact ref/commit as the comparison target without switching versions or making a network request.
 - Unified the Dock Resources and Prompts tabs around a single Tools-style tree, removing separate Catalog/Diagnostics view toggles while keeping protocol metadata in the selected-entry detail pane.
@@ -19,7 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- Removed startup GitHub update-list and comparison requests, made each explicit list refresh cover both stable release/tag and development branch-commit endpoint families, and suppressed repeated unauthenticated retries while a known rate limit remains exhausted.
+- Removed startup GitHub update-list and comparison requests, made each explicit list refresh cover only the selected stable release/tag or development branch-commit endpoint family, made one-click update use the refreshed latest target, and suppressed repeated unauthenticated retries while a known rate limit remains exhausted.
 - Removed the Settings update-details disclosure, kept actionable diagnostics in the wrapping primary status, and constrained refresh metadata with ellipsis plus a full-text tooltip so long failures and audit text cannot overflow the Dock.
 - Deferred Settings version-table Switch actions until after Tree mouse-selection events complete, preventing Godot from rejecting row rebuilds and flooding the Output panel with null item errors.
 - Fixed update verification after a hot reload: legacy runtime state now falls back safely while refreshed commit histories replace the removed remote comparison cache.

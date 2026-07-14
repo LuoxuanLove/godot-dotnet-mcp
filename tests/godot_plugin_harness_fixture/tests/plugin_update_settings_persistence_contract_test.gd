@@ -143,6 +143,27 @@ class SyncStartProbePlugin extends PluginScript:
 		archive_requests.append({"target": target.duplicate(true), "serial": serial})
 
 
+class OneClickRefreshProbePlugin extends SyncStartProbePlugin:
+	var discovery_request_count := 0
+
+	func _on_update_check_requested(_background_refresh: bool = false, _trigger_source: String = "manual") -> void:
+		discovery_request_count += 1
+		_state.update_refs_state = "success"
+		_state.update_refs_refresh_state = "idle"
+		_state.update_ref_commits = {"dev": "new-head-sha"}
+		_state.update_ref_branch_commit_rows = {"dev": [
+			{"kind": "branch", "ref": "dev", "commit": "new-head-sha", "title": "Newest", "date": ""}
+		]}
+		_update_refs_discovery_loaded = true
+		_state.update_compare_state = "success"
+		_state.update_compare_refresh_state = "idle"
+		_state.update_compare_target_ref = "dev"
+		_state.update_compare_target_commit = "new-head-sha"
+		_state.update_compare_ahead_by = 1
+		_state.update_compare_behind_by = 0
+		_continue_pending_update_sync_after_refs_discovery()
+
+
 class PendingSyncProbePlugin extends SyncStartProbePlugin:
 	var version_requests: Array[Dictionary] = []
 	var refs_refresh_requests: Array[bool] = []
@@ -613,6 +634,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	dock_sync_probe._state.settings["update_source"] = "custom_branch"
 	dock_sync_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
 	_mark_update_target_verified(dock_sync_probe, "refactor/v2.0.0")
+	dock_sync_probe._state.update_selected_target_kind = "branch"
+	dock_sync_probe._state.update_selected_target_ref = "refactor/v2.0.0"
+	dock_sync_probe._state.update_selected_target_commit = "target-sha"
 	dock_sync_probe._on_update_sync_requested()
 	var tool_sync_probe := SyncStartProbePlugin.new()
 	tool_sync_probe._state.settings["update_source"] = "custom_branch"
@@ -777,9 +801,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var foreground_request_kinds: Array[String] = []
 	for request in foreground_refs_probe.refs_requests:
 		foreground_request_kinds.append(str(request.get("kind", "")))
-	if foreground_refs_probe._state.update_refs_refresh_state != "idle" or foreground_refs_probe._state.update_refs_refresh_serial != foreground_refs_probe._update_refs_request_serial or not foreground_refs_probe._update_refs_background_serials.is_empty() or foreground_refs_probe.refs_requests.size() != 4 or not foreground_request_kinds.has("branches") or not foreground_request_kinds.has("releases") or not foreground_request_kinds.has("tags") or not foreground_request_kinds.has("branch_commits") or not (foreground_refs_probe._update_refs_pending.get("stable_releases", []) as Array).is_empty():
+	if foreground_refs_probe._state.update_refs_refresh_state != "idle" or foreground_refs_probe._state.update_refs_refresh_serial != foreground_refs_probe._update_refs_request_serial or not foreground_refs_probe._update_refs_background_serials.is_empty() or foreground_refs_probe.refs_requests.size() != 2 or not foreground_request_kinds.has("releases") or not foreground_request_kinds.has("tags") or foreground_request_kinds.has("branches") or foreground_request_kinds.has("branch_commits") or not (foreground_refs_probe._update_refs_pending.get("stable_releases", []) as Array).is_empty():
 		foreground_refs_probe.free()
-		return _failure("plugin.gd should refresh stable and development endpoints together without prepending a cached stable release to the fresh release result.")
+		return _failure("plugin.gd should refresh only the active stable channel endpoints without prepending a cached stable release to the fresh result.")
 	foreground_refs_probe.free()
 
 	var foreground_preserve_probe := ForegroundRefsProbePlugin.new()
@@ -797,10 +821,29 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var preserve_request_kinds: Array[String] = []
 	for request in foreground_preserve_probe.refs_requests:
 		preserve_request_kinds.append(str(request.get("kind", "")))
-	if foreground_preserve_probe._state.update_refs_state != "loading" or foreground_preserve_probe._state.update_ref_branches != preserved_branches or foreground_preserve_probe._state.update_ref_releases != preserved_releases or str(foreground_preserve_probe._state.update_ref_commits.get("cached/branch", "")) != "cached-sha" or foreground_preserve_probe.refs_requests.size() != 4 or not preserve_request_kinds.has("branches") or not preserve_request_kinds.has("releases") or not preserve_request_kinds.has("tags") or not preserve_request_kinds.has("branch_commits"):
+	if foreground_preserve_probe._state.update_refs_state != "loading" or foreground_preserve_probe._state.update_ref_branches != preserved_branches or foreground_preserve_probe._state.update_ref_releases != preserved_releases or str(foreground_preserve_probe._state.update_ref_commits.get("cached/branch", "")) != "cached-sha" or foreground_preserve_probe.refs_requests.size() != 2 or not preserve_request_kinds.has("branches") or not preserve_request_kinds.has("branch_commits") or preserve_request_kinds.has("releases") or preserve_request_kinds.has("tags"):
 		foreground_preserve_probe.free()
-		return _failure("plugin.gd should preserve cached data while refreshing both version panels.")
+		return _failure("plugin.gd should preserve cached data while refreshing only the active development channel.")
 	foreground_preserve_probe.free()
+
+	var one_click_refresh_probe := OneClickRefreshProbePlugin.new()
+	one_click_refresh_probe._state.settings["update_source"] = "custom_branch"
+	one_click_refresh_probe._state.settings["update_custom_branch"] = "dev"
+	one_click_refresh_probe._state.update_refs_state = "success"
+	one_click_refresh_probe._update_refs_discovery_loaded = true
+	one_click_refresh_probe._state.update_ref_commits = {"dev": "old-head-sha"}
+	one_click_refresh_probe._state.update_ref_branch_commit_rows = {"dev": [
+		{"kind": "branch", "ref": "dev", "commit": "old-head-sha", "title": "Cached", "date": ""}
+	]}
+	one_click_refresh_probe._on_update_sync_requested()
+	if one_click_refresh_probe.discovery_request_count != 1 or one_click_refresh_probe.archive_requests.size() != 1:
+		one_click_refresh_probe.free()
+		return _failure("plugin.gd one-click update should refresh the active channel before starting archive sync.")
+	var one_click_target: Dictionary = (one_click_refresh_probe.archive_requests[0] as Dictionary).get("target", {})
+	if str(one_click_target.get("ref", "")) != "dev" or str(one_click_target.get("commit", "")) != "new-head-sha" or str(one_click_refresh_probe._state.update_sync_state) != "loading" or str(one_click_refresh_probe._state.update_sync_status).is_empty() or one_click_refresh_probe._state.update_sync_progress <= 0.0:
+		one_click_refresh_probe.free()
+		return _failure("plugin.gd one-click update should sync the refreshed head and retain a visible loading status and progress.")
+	one_click_refresh_probe.free()
 
 	var paged_refresh_probe := ForegroundRefsProbePlugin.new()
 	paged_refresh_probe._state.settings["update_source"] = "custom_branch"
@@ -808,9 +851,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	paged_refresh_probe._on_update_check_requested(false)
 	var next_page_headers := PackedStringArray(['Link: <https://api.github.test/branches?page=2>; rel="next"'])
 	paged_refresh_probe._on_update_refs_request_completed(HTTPRequest.RESULT_SUCCESS, 200, next_page_headers, '[{"name":"dev","commit":{"sha":"page-1-sha"}}]'.to_utf8_buffer(), "branches", 1)
-	if (paged_refresh_probe._update_refs_pending.get("successful_kinds", []) as Array).has("branches") or bool(paged_refresh_probe._update_refs_pending.get("branch_done", false)) or paged_refresh_probe.refs_requests.size() != 5:
+	if (paged_refresh_probe._update_refs_pending.get("successful_kinds", []) as Array).has("branches") or bool(paged_refresh_probe._update_refs_pending.get("branch_done", false)) or paged_refresh_probe.refs_requests.size() != 3:
+		var paged_successful := str(paged_refresh_probe._update_refs_pending.get("successful_kinds", []))
+		var paged_branch_done := str(paged_refresh_probe._update_refs_pending.get("branch_done", false))
+		var paged_request_count := paged_refresh_probe.refs_requests.size()
 		paged_refresh_probe.free()
-		return _failure("plugin.gd should not mark a paginated endpoint successful until its final page completes.")
+		return _failure("plugin.gd should not mark a paginated endpoint successful until its final page completes: successful=%s branch_done=%s requests=%d." % [paged_successful, paged_branch_done, paged_request_count])
 	paged_refresh_probe._on_update_refs_request_completed(HTTPRequest.RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray(), "branches", 1)
 	if (paged_refresh_probe._update_refs_pending.get("successful_kinds", []) as Array).has("branches"):
 		paged_refresh_probe.free()
@@ -1289,6 +1335,9 @@ func _run_shared_update_sync_entry_contract() -> Dictionary:
 	probe._state.settings["update_source"] = "custom_branch"
 	probe._state.settings["update_custom_branch"] = "feature/sync-entry"
 	_mark_update_target_verified(probe, "feature/sync-entry")
+	probe._state.update_selected_target_kind = "branch"
+	probe._state.update_selected_target_ref = "feature/sync-entry"
+	probe._state.update_selected_target_commit = "target-sha"
 	probe._on_update_sync_requested()
 	if probe.archive_requests.size() != 1:
 		probe.free()
