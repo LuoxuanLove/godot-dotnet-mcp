@@ -1,0 +1,71 @@
+docs/ko/변경-로그.md
+  s_ff5170bebb0816::t_27e4b733f05ecf 11,13-14,22
+addons/godot_dotnet_mcp/ui/settings_tab_model_projection.gd
+  s_ff5170bebb0816::t_a18775c658cd03 455
+  s_ff5170bebb0816::t_cab7c074189817 456
+  s_ff5170bebb0816::t_5403f17cf986af 15-16,122-127,221
+  s_ff5170bebb0816::t_d2acb9c99b6807 364-367
+docs/ja/変更履歴.md
+  s_ff5170bebb0816::t_27e4b733f05ecf 11,13-14,22
+docs/en/process/release-notes/release-notes-v2.0.0.md
+  s_ff5170bebb0816::t_d2acb9c99b6807 43,45,81
+tests/godot_plugin_harness_fixture/tests/settings_tab_model_projection_contract_test.gd
+  s_ff5170bebb0816::t_71845b7bf5b608 123-125
+tests/godot_plugin_harness_fixture/tests/plugin_update_settings_persistence_contract_test.gd
+  s_ff5170bebb0816::t_aab8010c3c40e9 146-166,804,806,824,826,829,834,836,839,841,845
+  s_ff5170bebb0816::t_5f7889ac46c6e5 854
+  s_ff5170bebb0816::t_21c769ea7e9816 1338-1340
+  s_ff5170bebb0816::t_1733bb4736e943 830-833,835,837-838,840,842-844,846-847
+  s_ff5170bebb0816::t_2e838c86e2ec03 637-639
+  s_ff5170bebb0816::t_5b47e7835f2b20 855-857,859
+tests/godot_plugin_harness_fixture/tests/settings_tab_rendering_contract_test.gd
+  s_ff5170bebb0816::t_5bc8f4823df44e 381
+  s_ff5170bebb0816::t_9e6b4fdc74ecf2 412-428
+  s_ff5170bebb0816::t_cab7c074189817 206,234
+  s_ff5170bebb0816::t_c7ce2ee432000f 313-314
+  s_ff5170bebb0816::t_aa58d8e9527cbb 272
+  s_ff5170bebb0816::t_eb48f6d8301863 382
+  s_ff5170bebb0816::t_0b37a9eab3d736 200-201,209,218-221,224-229,233,235-237,270-271,273-277,303,308,346-347,389-390
+addons/godot_dotnet_mcp/ui/settings_tab.gd
+  s_ff5170bebb0816::t_e7d89874cb5bf3 573,577-601
+  s_ff5170bebb0816::t_64233c2eb6121d 47-48,59-60,67,69,85,87-88
+  s_ff5170bebb0816::t_4e9664535b6b33 139-141,149-150,165,192-193,203-204,227
+  s_ff5170bebb0816::t_13b3018d61a676 272-301,303-306,312,314-317,320,323
+  s_ff5170bebb0816::t_b37f544c7a4922 348,405-410,430-431,433,436-437,439,445,550
+  s_ff5170bebb0816::t_79a97353c4ea63 602-603
+addons/godot_dotnet_mcp/ui/settings_panel.tscn
+  s_ff5170bebb0816::t_0753aa61b112b9 125-130,193-199,209,212,218
+docs/en/CHANGELOG.md
+  s_ff5170bebb0816::t_27e4b733f05ecf 11,13-14,22
+docs/zh-CN/变更日志.md
+  s_ff5170bebb0816::t_27e4b733f05ecf 12,14-15,23
+addons/godot_dotnet_mcp/plugin.gd
+  s_ff5170bebb0816::t_fd9303491762f6 1492-1493
+  s_ff5170bebb0816::t_9a5b5d21471161 814,907,1409-1410,1412-1413,1415,1417-1418,1422,1424-1427,1430-1432,1435,1461-1463,1489-1491,1494-1513
+  s_ff5170bebb0816::t_9d35f846ee8015 1514-1515
+docs/ja/プロセス/リリースノート/リリースノート-v2.0.0.md
+  s_ff5170bebb0816::t_d2acb9c99b6807 43,45,81
+tests/godot_plugin_harness_fixture/tests/mcp_dock_settings_tab_contract_test.gd
+  s_ff5170bebb0816::t_513d224289db38 322-323
+  s_ff5170bebb0816::t_ebd2a66abd85d1 233-234,237,241,243-244,253-254,270,272,312-319
+docs/zh-CN/流程/发布说明/发布说明-v2.0.0.md
+  s_ff5170bebb0816::t_d2acb9c99b6807 43,45,81
+docs/ko/프로세스/릴리스-노트/릴리스-노트-v2.0.0.md
+  s_ff5170bebb0816::t_d2acb9c99b6807 43,45,81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "6422d364ab79e114928a51aefac15984eda3f90d",
+  "prompts": {},
+  "sessions": {
+    "s_ff5170bebb0816": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f61a6-db23-7b80-9810-9fd6ce0292c8",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
