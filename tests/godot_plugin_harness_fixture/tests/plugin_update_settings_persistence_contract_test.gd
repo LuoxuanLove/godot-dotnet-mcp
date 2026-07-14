@@ -47,7 +47,6 @@ class LoadingDiscoveryProbePlugin extends FocusRestoreProbePlugin:
 class RefreshProbePlugin extends PluginScript:
 	var discovery_request_count := 0
 	var discovery_background_flags: Array[bool] = []
-	var compare_requests: Array = []
 	var request_parent := Node.new()
 
 	func _get_update_request_parent() -> Node:
@@ -66,18 +65,6 @@ class RefreshProbePlugin extends PluginScript:
 
 	func _resolve_current_update_commit() -> String:
 		return "current-sync-sha"
-
-	func _start_update_compare_request(base_commit: String, compare_head: String, target_commit: String = "", background_refresh: bool = false) -> void:
-		_update_compare_request_serial += 1
-		var serial := _update_compare_request_serial
-		compare_requests.append({"base": base_commit, "head": compare_head, "target_commit": target_commit, "background": background_refresh, "serial": serial})
-		if background_refresh:
-			_state.update_compare_refresh_state = "loading"
-			_state.update_compare_refresh_serial = serial
-			_update_compare_background_serials[serial] = true
-		else:
-			_state.update_compare_state = "loading"
-
 
 class RequestParentProbePlugin extends PluginScript:
 	var update_check_count := 0
@@ -113,7 +100,7 @@ class SyncReloadProbePlugin extends PluginScript:
 	func _write_update_sync_marker(_target: Dictionary, _written: int) -> int:
 		return marker_error
 
-	func _refresh_update_compare_for_current_target(_background_refresh: bool = false, _allow_remote_request: bool = true) -> bool:
+	func _refresh_update_compare_for_current_target() -> bool:
 		compare_refresh_count += 1
 		return true
 
@@ -157,7 +144,6 @@ class SyncStartProbePlugin extends PluginScript:
 
 
 class PendingSyncProbePlugin extends SyncStartProbePlugin:
-	var compare_requests: Array[Dictionary] = []
 	var version_requests: Array[Dictionary] = []
 	var refs_refresh_requests: Array[bool] = []
 	var dock_refresh_count := 0
@@ -180,23 +166,6 @@ class PendingSyncProbePlugin extends SyncStartProbePlugin:
 			"target_ref": target_ref,
 			"target_kind": target_kind
 		})
-
-	func _start_update_compare_request(base_commit: String, compare_head: String, target_commit: String = "", background_refresh: bool = false) -> void:
-		_update_compare_request_serial += 1
-		var serial := _update_compare_request_serial
-		compare_requests.append({
-			"base": base_commit,
-			"head": compare_head,
-			"target_commit": target_commit,
-			"background": background_refresh,
-			"serial": serial
-		})
-		if background_refresh:
-			_state.update_compare_refresh_state = "loading"
-			_state.update_compare_refresh_serial = serial
-			_update_compare_background_serials[serial] = true
-		else:
-			_state.update_compare_state = "loading"
 
 	func _refresh_dock() -> void:
 		dock_refresh_count += 1
@@ -300,40 +269,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"versions": {"v2.0.0": "2.0.0"},
 		"release_rows": [{"kind": "tag", "ref": "v2.0.0", "commit": "tag-sha", "title": "Release 2.0.0", "date": "2026-07-08T00:00:00Z", "stable": true}],
 		"branch_commit_rows": {"dev": [{"kind": "branch", "ref": "dev", "commit": "dev-sha", "title": "dev head", "date": "2026-07-08T00:00:00Z"}]},
-		"compare_cache": {
-			"valid": {"base_commit": "base-sha", "target_kind": "branch", "target_ref": "dev", "target_commit": "dev-sha", "ahead_by": 2, "behind_by": 0, "checked_unix": 10},
-			"invalid": {"base_commit": "base-sha", "target_kind": "branch", "target_ref": "dev", "target_commit": "", "ahead_by": -1, "behind_by": 0},
-			"movable-tag": {"base_commit": "base-sha", "target_kind": "tag", "target_ref": "v2.0.0", "target_commit": "", "ahead_by": 1, "behind_by": 0}
+		"commit_histories": {
+			"dev-sha": {"head_commit": "dev-sha", "commits": ["dev-sha", "base-sha"], "complete": true, "checked_unix": 10},
+			"incomplete": {"head_commit": "incomplete", "commits": ["incomplete"], "complete": false}
 		}
 	})
-	var normalized_compare_key := "\n".join(["base-sha", "branch", "dev", "dev-sha"])
-	var normalized_compare_cache: Dictionary = normalized_cache.get("compare_cache", {})
-	if int(normalized_cache.get("format_version", 0)) != 2 or (normalized_cache.get("branches", []) as Array).size() != 1 or str((normalized_cache.get("commits", {}) as Dictionary).get("dev", "")) != "dev-sha" or (normalized_cache.get("release_rows", []) as Array).size() != 1 or normalized_compare_cache.size() != 1 or not normalized_compare_cache.has(normalized_compare_key) or normalized_compare_cache.has("valid"):
+	var normalized_histories: Dictionary = normalized_cache.get("commit_histories", {})
+	if int(normalized_cache.get("format_version", 0)) != 3 or (normalized_cache.get("branches", []) as Array).size() != 1 or str((normalized_cache.get("commits", {}) as Dictionary).get("dev", "")) != "dev-sha" or (normalized_cache.get("release_rows", []) as Array).size() != 1 or normalized_histories.size() != 1 or not normalized_histories.has("dev-sha") or normalized_histories.has("incomplete"):
 		return _failure("settings_store.gd should normalize persisted update refs cache into stable arrays, dictionaries, and table rows.")
-	var compare_only_cache: Dictionary = settings_store.normalize_update_refs_cache({
-		"compare_cache": {
-			"valid-int": {"base_commit": "base-int", "target_kind": "branch", "target_ref": "dev", "target_commit": "int-sha", "ahead_by": 2, "behind_by": 0},
-			"valid-float": {"base_commit": "base-float", "target_kind": "tag", "target_ref": "v2.0.0", "target_commit": "float-sha", "ahead_by": 2.0, "behind_by": 0.0},
-			"numeric-string": {"base_commit": "base-string", "target_kind": "branch", "target_ref": "dev", "target_commit": "string-sha", "ahead_by": "2", "behind_by": 0},
-			"invalid-string": {"base_commit": "base-invalid-string", "target_kind": "branch", "target_ref": "dev", "target_commit": "invalid-string-sha", "ahead_by": "bogus", "behind_by": 0},
-			"boolean": {"base_commit": "base-boolean", "target_kind": "branch", "target_ref": "dev", "target_commit": "boolean-sha", "ahead_by": true, "behind_by": 0},
-			"null": {"base_commit": "base-null", "target_kind": "branch", "target_ref": "dev", "target_commit": "null-sha", "ahead_by": null, "behind_by": 0},
-			"fractional": {"base_commit": "base-fractional", "target_kind": "branch", "target_ref": "dev", "target_commit": "fractional-sha", "ahead_by": 1.5, "behind_by": 0},
-			"negative": {"base_commit": "base-negative", "target_kind": "branch", "target_ref": "dev", "target_commit": "negative-sha", "ahead_by": -1, "behind_by": 0},
-			"nan": {"base_commit": "base-nan", "target_kind": "branch", "target_ref": "dev", "target_commit": "nan-sha", "ahead_by": NAN, "behind_by": 0},
-			"infinity": {"base_commit": "base-infinity", "target_kind": "branch", "target_ref": "dev", "target_commit": "infinity-sha", "ahead_by": INF, "behind_by": 0}
-		}
-	})
-	var compare_only_entries: Dictionary = compare_only_cache.get("compare_cache", {})
-	var valid_int_key := "\n".join(["base-int", "branch", "dev", "int-sha"])
-	var valid_float_key := "\n".join(["base-float", "tag", "v2.0.0", "float-sha"])
-	if compare_only_cache.is_empty() or compare_only_entries.size() != 2 or not compare_only_entries.has(valid_int_key) or not compare_only_entries.has(valid_float_key):
-		return _failure("settings_store.gd should preserve compare-only caches while rejecting malformed comparison counts.")
-	settings_store.save_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH, compare_only_cache)
-	var compare_only_round_trip: Dictionary = settings_store.load_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH)
-	var round_trip_entries: Dictionary = compare_only_round_trip.get("compare_cache", {})
-	if round_trip_entries.size() != 2 or not round_trip_entries.has(valid_int_key) or not round_trip_entries.has(valid_float_key) or int((round_trip_entries.get(valid_float_key, {}) as Dictionary).get("ahead_by", -1)) != 2:
-		return _failure("settings_store.gd should save and restore exact comparison results without a refs snapshot.")
+	settings_store.save_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH, normalized_cache)
+	var history_round_trip: Dictionary = settings_store.load_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH)
+	if not (history_round_trip.get("commit_histories", {}) as Dictionary).has("dev-sha"):
+		return _failure("settings_store.gd should save and restore complete local commit histories.")
 	_plugin = PluginScript.new()
 	if _plugin == null:
 		return _failure("plugin.gd should instantiate for update settings persistence contracts.")
@@ -387,19 +334,36 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	row_selection_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
 	row_selection_probe._state.update_refs_state = "success"
 	row_selection_probe._state.update_ref_commits = {"refactor/v2.0.0": "current-sync-sha"}
+	row_selection_probe._state.update_ref_branch_commit_rows = {"refactor/v2.0.0": [
+		{"kind": "branch", "ref": "refactor/v2.0.0", "commit": "current-sync-sha", "title": "Current", "date": ""},
+		{"kind": "branch", "ref": "refactor/v2.0.0", "commit": "older-sha", "title": "Older", "date": ""}
+	]}
+	row_selection_probe._update_commit_histories_fallback = {
+		"current-sync-sha": {"head_commit": "current-sync-sha", "commits": ["current-sync-sha", "older-sha", "base-sha"], "complete": true},
+		"older-sha": {"head_commit": "older-sha", "commits": ["older-sha", "base-sha"], "complete": true}
+	}
 	row_selection_probe._update_refs_discovery_loaded = true
 	row_selection_probe._on_update_compare_target_selected("branch", "refactor/v2.0.0", "current-sync-sha")
-	if row_selection_probe._state.update_compare_state != "success" or row_selection_probe._state.update_compare_ahead_by != 0 or row_selection_probe._state.update_compare_behind_by != 0 or not row_selection_probe.compare_requests.is_empty():
+	if row_selection_probe._state.update_compare_state != "success" or row_selection_probe._state.update_compare_ahead_by != 0 or row_selection_probe._state.update_compare_behind_by != 0:
 		row_selection_probe.free()
 		return _failure("plugin.gd should compare an identical selected row locally without a GitHub request.")
 	row_selection_probe._on_update_compare_target_selected("branch", "refactor/v2.0.0", "older-sha")
-	if row_selection_probe._state.update_compare_state != "unverified" or not row_selection_probe.compare_requests.is_empty() or row_selection_probe._state.update_selected_target_commit != "older-sha":
+	if row_selection_probe._state.update_compare_state != "success" or row_selection_probe._state.update_compare_ahead_by != 0 or row_selection_probe._state.update_compare_behind_by != 1:
+		var compare_state: String = str(row_selection_probe._state.update_compare_state)
+		var compare_ahead: int = int(row_selection_probe._state.update_compare_ahead_by)
+		var compare_behind: int = int(row_selection_probe._state.update_compare_behind_by)
+		var selected_commit: String = str(row_selection_probe._state.update_selected_target_commit)
 		row_selection_probe.free()
-		return _failure("plugin.gd row selection should defer non-cached online comparison until an update is requested.")
+		return _failure("plugin.gd row selection should compare a historic commit from refreshed local history: state=%s, ahead=%s, behind=%s, selected=%s" % [
+			compare_state,
+			compare_ahead,
+			compare_behind,
+			selected_commit
+		])
 	row_selection_probe._on_update_sync_requested()
-	if row_selection_probe.compare_requests.size() != 1 or not bool((row_selection_probe.compare_requests[0] as Dictionary).get("background", false)):
+	if row_selection_probe._state.update_sync_state != "error" or row_selection_probe._state.update_sync_error != LocalizationServiceScript.translate("settings_update_refuses_rollback"):
 		row_selection_probe.free()
-		return _failure("plugin.gd should issue one compare verification request only when updating the selected row.")
+		return _failure("plugin.gd should refuse a locally-detected rollback without issuing a Compare request.")
 	row_selection_probe.free()
 
 	var cache_save_probe := PluginScript.new()
@@ -422,11 +386,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"commits": {"refactor/v2.0.0": "branch-sha", "v2.0.0": "tag-sha"},
 		"release_rows": [{"kind": "tag", "ref": "v2.0.0", "commit": "", "title": "Release 2.0.0", "date": "2026-07-08T00:00:00Z", "stable": true}],
 		"tag_rows": [],
-		"branch_commit_rows": {"refactor/v2.0.0": [{"kind": "branch", "ref": "refactor/v2.0.0", "commit": "branch-sha", "title": "Merge pull request", "date": "2026-07-08T00:00:00Z"}]}
+		"branch_commit_rows": {"refactor/v2.0.0": [{"kind": "branch", "ref": "refactor/v2.0.0", "commit": "branch-sha", "title": "Merge pull request", "date": "2026-07-08T00:00:00Z"}]},
+		"commit_histories": {
+			"current-sync-sha": {"head_commit": "current-sync-sha", "commits": ["current-sync-sha", "base-sha"], "complete": true, "done": true},
+			"branch-sha": {"head_commit": "branch-sha", "commits": ["branch-sha", "current-sync-sha", "base-sha"], "complete": true, "done": true}
+		}
 	}
 	cache_save_probe._finalize_update_refs_discovery_if_ready(99)
 	var saved_cache: Dictionary = settings_store.load_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH)
-	if str((saved_cache.get("commits", {}) as Dictionary).get("refactor/v2.0.0", "")) != "branch-sha" or ((saved_cache.get("branch_commit_rows", {}) as Dictionary).get("refactor/v2.0.0", []) as Array).is_empty():
+	if str((saved_cache.get("commits", {}) as Dictionary).get("refactor/v2.0.0", "")) != "branch-sha" or ((saved_cache.get("branch_commit_rows", {}) as Dictionary).get("refactor/v2.0.0", []) as Array).is_empty() or not (saved_cache.get("commit_histories", {}) as Dictionary).has("branch-sha"):
 		cache_save_probe.free()
 		return _failure("plugin.gd should persist refreshed update refs and commit table rows after successful discovery.")
 	cache_save_probe.free()
@@ -619,19 +587,18 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	prepared_sync_probe._update_refs_pending["stable_releases"] = ["v2.0.0"]
 	prepared_sync_probe._update_refs_pending["tags"] = ["v2.0.0"]
 	prepared_sync_probe._update_refs_pending["commits"] = {"v2.0.0": "tag-sha"}
+	prepared_sync_probe._update_refs_pending["commit_histories"] = {
+		"current-sync-sha": {"head_commit": "current-sync-sha", "commits": ["current-sync-sha", "base-sha"], "complete": true, "done": true},
+		"tag-sha": {"head_commit": "tag-sha", "commits": ["tag-sha", "current-sync-sha", "base-sha"], "complete": true, "done": true}
+	}
 	prepared_sync_probe._finalize_update_refs_discovery_if_ready(prepared_sync_probe._update_refs_request_serial)
-	if prepared_sync_probe.archive_requests.size() != 0 or prepared_sync_probe.compare_requests.size() != 0 or prepared_sync_probe._update_sync_after_refs_discovery_pending:
+	if prepared_sync_probe.archive_requests.size() != 0 or prepared_sync_probe._update_sync_after_refs_discovery_pending:
 		prepared_sync_probe.free()
 		return _failure("plugin.gd explicit update ref discovery should refresh cached refs without hidden compare or queued sync.")
 	var prepared_start_result: Dictionary = prepared_sync_probe.start_plugin_update_sync_from_tools()
-	if not bool(prepared_start_result.get("accepted", false)) or not bool(prepared_start_result.get("loading", false)) or prepared_sync_probe.archive_requests.size() != 0 or prepared_sync_probe.compare_requests.size() != 1 or not prepared_sync_probe._update_sync_after_refs_discovery_pending:
+	if not bool(prepared_start_result.get("accepted", false)) or not bool(prepared_start_result.get("loading", false)) or prepared_sync_probe.archive_requests.size() != 1 or prepared_sync_probe._update_sync_after_refs_discovery_pending:
 		prepared_sync_probe.free()
-		return _failure("plugin.gd tool update sync should verify cached release refs before starting archive sync.")
-	var prepared_compare_body := JSON.stringify({"ahead_by": 1, "behind_by": 0}).to_utf8_buffer()
-	prepared_sync_probe._on_update_compare_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), prepared_compare_body, "current-sync-sha", "tag-sha", prepared_sync_probe._update_compare_request_serial)
-	if prepared_sync_probe.archive_requests.size() != 1:
-		prepared_sync_probe.free()
-		return _failure("plugin.gd tool update sync should start after release refs and compare are verified.")
+		return _failure("plugin.gd tool update sync should consume completed local history without a Compare request.")
 	var prepared_target: Dictionary = (prepared_sync_probe.archive_requests[0] as Dictionary).get("target", {})
 	if str(prepared_target.get("kind", "")) != "tag" or str(prepared_target.get("ref", "")) != "v2.0.0" or str(prepared_target.get("commit", "")) != "tag-sha":
 		prepared_sync_probe.free()
@@ -688,207 +655,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 			guard_probe.free()
 			return _failure("plugin.gd tool update sync should explain the blocked one-click %s target." % str(scenario.get("label", "")))
 		guard_probe.free()
-
-	var stale_selection_probe := PendingSyncProbePlugin.new()
-	stale_selection_probe._state.settings["update_source"] = "custom_branch"
-	stale_selection_probe._state.settings["update_custom_branch"] = "feature/new"
-	stale_selection_probe._state.update_refs_state = "success"
-	stale_selection_probe._state.update_refs_last_checked_unix = int(Time.get_unix_time_from_system())
-	stale_selection_probe._update_refs_discovery_loaded = true
-	stale_selection_probe._state.update_ref_commits = {"feature/old": "old-sha", "feature/new": "new-sha"}
-	stale_selection_probe._state.update_compare_state = "success"
-	stale_selection_probe._state.update_compare_target_ref = "feature/old"
-	stale_selection_probe._state.update_selection_refresh_pending = true
-	stale_selection_probe._state.update_selection_refresh_pending_ref = "feature/new"
-	stale_selection_probe._on_update_sync_requested()
-	if not stale_selection_probe.archive_requests.is_empty() or stale_selection_probe.compare_requests.size() != 1 or str(stale_selection_probe._state.update_sync_state) != "loading" or not stale_selection_probe._update_sync_after_refs_discovery_pending:
-		stale_selection_probe.free()
-		return _failure("Dock update sync should queue a newly selected target until its background compare refresh finishes.")
-	var stale_tool_result: Dictionary = stale_selection_probe.start_plugin_update_sync_from_tools()
-	if bool(stale_tool_result.get("accepted", false)) or not stale_selection_probe.archive_requests.is_empty() or str(stale_tool_result.get("status", "")) != "loading":
-		stale_selection_probe.free()
-		return _failure("MCP plugin update sync should report the already queued target instead of starting a duplicate sync.")
-	_mark_update_target_verified(stale_selection_probe, "feature/new", "new-sha")
-	var fresh_tool_result: Dictionary = stale_selection_probe.start_plugin_update_sync_from_tools()
-	if bool(fresh_tool_result.get("accepted", false)) or stale_selection_probe.archive_requests.size() != 0:
-		stale_selection_probe.free()
-		return _failure("MCP plugin update sync should keep the already queued Dock sync as the single loading operation.")
-	stale_selection_probe.free()
-
-	var target_change_cancel_probe := PendingSyncProbePlugin.new()
-	target_change_cancel_probe._state.settings["update_source"] = "custom_branch"
-	target_change_cancel_probe._state.settings["update_custom_branch"] = "feature/cancel-old"
-	target_change_cancel_probe._state.update_refs_state = "success"
-	target_change_cancel_probe._state.update_refs_last_checked_unix = int(Time.get_unix_time_from_system())
-	target_change_cancel_probe._update_refs_discovery_loaded = true
-	target_change_cancel_probe._state.update_ref_commits = {
-		"feature/cancel-old": "old-sha",
-		"feature/cancel-new": "new-sha"
-	}
-	target_change_cancel_probe._state.update_compare_state = "success"
-	target_change_cancel_probe._state.update_compare_refresh_state = "idle"
-	target_change_cancel_probe._state.update_compare_target_ref = "feature/other"
-	target_change_cancel_probe._state.update_compare_target_commit = "other-sha"
-	target_change_cancel_probe._on_update_sync_requested()
-	target_change_cancel_probe._on_update_custom_branch_changed("feature/cancel-new")
-	if target_change_cancel_probe._update_sync_after_refs_discovery_pending or str(target_change_cancel_probe._state.update_sync_state) != "error" or str(target_change_cancel_probe._state.update_sync_error).is_empty():
-		target_change_cancel_probe.free()
-		return _failure("Changing the update target during pending sync should fail the accepted sync instead of leaving Settings stuck in loading.")
-	target_change_cancel_probe.free()
-
-	var refs_error_probe := PendingSyncProbePlugin.new()
-	refs_error_probe._state.settings["update_source"] = "custom_branch"
-	refs_error_probe._state.settings["update_custom_branch"] = "feature/refs-error"
-	refs_error_probe._state.update_refs_state = "success"
-	refs_error_probe._state.update_refs_refresh_state = "error"
-	refs_error_probe._state.update_refs_refresh_error = "previous refs refresh failed"
-	refs_error_probe._state.update_refs_last_checked_unix = int(Time.get_unix_time_from_system())
-	refs_error_probe._update_refs_discovery_loaded = true
-	refs_error_probe._state.update_ref_commits = {"feature/refs-error": "target-sha"}
-	refs_error_probe._state.update_compare_state = "success"
-	refs_error_probe._state.update_compare_refresh_state = "idle"
-	refs_error_probe._state.update_compare_last_checked_unix = int(Time.get_unix_time_from_system())
-	refs_error_probe._state.update_compare_target_ref = "feature/refs-error"
-	refs_error_probe._state.update_compare_target_commit = "target-sha"
-	refs_error_probe._state.update_compare_ahead_by = 1
-	refs_error_probe._state.update_compare_behind_by = 0
-	refs_error_probe._on_update_sync_requested()
-	if refs_error_probe.archive_requests.size() != 1 or refs_error_probe._update_sync_after_refs_discovery_pending or not refs_error_probe.refs_refresh_requests.is_empty() or str(refs_error_probe._state.update_refs_refresh_state) != "error":
-		refs_error_probe.free()
-		return _failure("Dock update sync should not start a hidden refs refresh after a manual refs refresh error when the selected branch target is already verified.")
-	refs_error_probe.free()
-
-	var pending_refs_probe := PendingSyncProbePlugin.new()
-	pending_refs_probe._state.settings["update_source"] = "custom_branch"
-	pending_refs_probe._state.settings["update_custom_branch"] = "feature/pending-refs"
-	pending_refs_probe._state.update_refs_state = "success"
-	pending_refs_probe._state.update_refs_refresh_state = "loading"
-	pending_refs_probe._state.update_refs_refresh_serial = 41
-	pending_refs_probe._update_refs_request_serial = 41
-	pending_refs_probe._update_refs_background_serials[41] = true
-	pending_refs_probe._update_refs_discovery_loaded = true
-	pending_refs_probe._state.update_ref_commits = {"feature/pending-refs": "old-sha"}
-	pending_refs_probe._state.update_compare_state = "success"
-	pending_refs_probe._state.update_compare_refresh_state = "idle"
-	pending_refs_probe._state.update_compare_target_ref = "feature/pending-refs"
-	pending_refs_probe._state.update_compare_target_commit = "old-sha"
-	pending_refs_probe._on_update_sync_requested()
-	if str(pending_refs_probe._state.update_sync_state) != "loading" or not pending_refs_probe._update_sync_after_refs_discovery_pending or pending_refs_probe._update_sync_pending_refs_refresh_required or pending_refs_probe.compare_requests.size() != 0 or pending_refs_probe.archive_requests.size() != 0:
-		pending_refs_probe.free()
-		return _failure("Dock update sync should queue behind an already-running refs refresh without starting compare or archive sync.")
-	pending_refs_probe._update_refs_pending = {
-		"serial": 41,
-		"background": true,
-		"branch_done": true,
-		"release_done": true,
-		"tag_done": true,
-		"branch_commits_done": true,
-		"branch_commits_branch": "feature/pending-refs",
-		"errors": [],
-		"branches": ["feature/pending-refs"],
-		"releases": [],
-		"stable_releases": [],
-		"tags": [],
-		"commits": {"feature/pending-refs": "new-sha"},
-		"release_rows": [],
-		"tag_rows": [],
-		"branch_commit_rows": {"feature/pending-refs": [{"kind": "branch", "ref": "feature/pending-refs", "commit": "new-sha", "title": "New head", "date": "2026-07-13T00:00:00Z"}]}
-	}
-	pending_refs_probe._finalize_update_refs_discovery_if_ready(41)
-	if pending_refs_probe.compare_requests.size() != 1 or pending_refs_probe.archive_requests.size() != 0 or not pending_refs_probe._update_sync_after_refs_discovery_pending:
-		pending_refs_probe.free()
-		return _failure("Dock update sync should verify compare after pending refs refresh resolves a newer target commit.")
-	var pending_refs_compare_body := JSON.stringify({"ahead_by": 1, "behind_by": 0}).to_utf8_buffer()
-	pending_refs_probe._on_update_compare_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), pending_refs_compare_body, "current-sync-sha", "new-sha", pending_refs_probe._update_compare_request_serial)
-	var pending_refs_target: Dictionary = (pending_refs_probe.archive_requests[0] as Dictionary).get("target", {}) if pending_refs_probe.archive_requests.size() == 1 else {}
-	if pending_refs_probe._update_sync_after_refs_discovery_pending or pending_refs_probe.archive_requests.size() != 1 or str(pending_refs_target.get("commit", "")) != "new-sha":
-		pending_refs_probe.free()
-		return _failure("Dock update sync should continue with the latest target commit after pending refs and compare complete.")
-	pending_refs_probe.free()
-
-	var pending_compare_probe := PendingSyncProbePlugin.new()
-	pending_compare_probe._state.settings["update_source"] = "custom_branch"
-	pending_compare_probe._state.settings["update_custom_branch"] = "feature/new"
-	pending_compare_probe._state.update_refs_state = "success"
-	pending_compare_probe._state.update_refs_last_checked_unix = int(Time.get_unix_time_from_system())
-	pending_compare_probe._update_refs_discovery_loaded = true
-	pending_compare_probe._state.update_ref_commits = {"feature/new": "new-sha"}
-	pending_compare_probe._state.update_compare_state = "success"
-	pending_compare_probe._state.update_compare_target_ref = "feature/old"
-	pending_compare_probe._state.update_compare_target_commit = "old-sha"
-	pending_compare_probe._on_update_sync_requested()
-	if str(pending_compare_probe._state.update_sync_state) != "loading" or not pending_compare_probe._update_sync_after_refs_discovery_pending or pending_compare_probe.compare_requests.size() != 1 or not bool((pending_compare_probe.compare_requests[0] as Dictionary).get("background", false)) or pending_compare_probe.archive_requests.size() != 0:
-		pending_compare_probe.free()
-		return _failure("Dock update sync should wait for a fresh background compare before archive sync when compare metadata is stale.")
-	var compare_body := JSON.stringify({"ahead_by": 1, "behind_by": 0}).to_utf8_buffer()
-	pending_compare_probe._on_update_compare_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), compare_body, "current-sync-sha", "new-sha", pending_compare_probe._update_compare_request_serial)
-	if pending_compare_probe._update_sync_after_refs_discovery_pending or pending_compare_probe.archive_requests.size() != 1:
-		pending_compare_probe.free()
-		return _failure("Dock update sync should continue into archive sync after pending target compare succeeds.")
-	var pending_target: Dictionary = (pending_compare_probe.archive_requests[0] as Dictionary).get("target", {})
-	if str(pending_target.get("ref", "")) != "feature/new" or str(pending_target.get("commit", "")) != "new-sha":
-		pending_compare_probe.free()
-		return _failure("Dock update sync should use the latest verified target commit after pending compare succeeds.")
-	pending_compare_probe.free()
-
-	var pending_compare_failure_probe := PendingSyncProbePlugin.new()
-	pending_compare_failure_probe._state.settings["update_source"] = "custom_branch"
-	pending_compare_failure_probe._state.settings["update_custom_branch"] = "feature/fail"
-	pending_compare_failure_probe._state.update_refs_state = "success"
-	pending_compare_failure_probe._state.update_refs_last_checked_unix = int(Time.get_unix_time_from_system())
-	pending_compare_failure_probe._update_refs_discovery_loaded = true
-	pending_compare_failure_probe._state.update_ref_commits = {"feature/fail": "fail-sha"}
-	pending_compare_failure_probe._state.update_compare_state = "success"
-	pending_compare_failure_probe._state.update_compare_target_ref = "feature/old"
-	pending_compare_failure_probe._state.update_compare_target_commit = "old-sha"
-	pending_compare_failure_probe._on_update_sync_requested()
-	pending_compare_failure_probe._mark_update_compare_failed("network unavailable", pending_compare_failure_probe._update_compare_request_serial)
-	if pending_compare_failure_probe._update_sync_after_refs_discovery_pending or str(pending_compare_failure_probe._state.update_sync_state) != "error" or pending_compare_failure_probe.archive_requests.size() != 0 or not str(pending_compare_failure_probe._state.update_sync_error).contains("network unavailable"):
-		pending_compare_failure_probe.free()
-		return _failure("Dock update sync should fail the queued sync clearly when pending compare refresh fails.")
-	pending_compare_failure_probe.free()
-
-	var stale_commit_probe := PendingSyncProbePlugin.new()
-	stale_commit_probe._state.settings["update_source"] = "custom_branch"
-	stale_commit_probe._state.settings["update_custom_branch"] = "feature/same-ref"
-	stale_commit_probe._state.update_refs_state = "success"
-	stale_commit_probe._state.update_refs_last_checked_unix = int(Time.get_unix_time_from_system())
-	stale_commit_probe._update_refs_discovery_loaded = true
-	stale_commit_probe._state.update_ref_commits = {"feature/same-ref": "new-sha"}
-	stale_commit_probe._state.update_compare_state = "success"
-	stale_commit_probe._state.update_compare_refresh_state = "idle"
-	stale_commit_probe._state.update_compare_target_ref = "feature/same-ref"
-	stale_commit_probe._state.update_compare_target_commit = "old-sha"
-	var stale_commit_result: Dictionary = stale_commit_probe.start_plugin_update_sync_from_tools()
-	if not bool(stale_commit_result.get("accepted", false)) or not bool(stale_commit_result.get("loading", false)) or stale_commit_probe.compare_requests.size() != 1 or not stale_commit_probe.archive_requests.is_empty():
-		stale_commit_probe.free()
-		return _failure("MCP plugin update sync should queue compare verification when compare metadata matches the ref but not the current target commit.")
-	stale_commit_probe._on_update_compare_request_completed(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), compare_body, "current-sync-sha", "new-sha", stale_commit_probe._update_compare_request_serial)
-	if stale_commit_probe._update_sync_after_refs_discovery_pending or stale_commit_probe.archive_requests.size() != 1:
-		stale_commit_probe.free()
-		return _failure("MCP plugin update sync should continue after queued compare verifies the current target commit.")
-	stale_commit_probe.free()
-
-	var failed_compare_probe := PendingSyncProbePlugin.new()
-	failed_compare_probe._state.settings["update_source"] = "custom_branch"
-	failed_compare_probe._state.settings["update_custom_branch"] = "feature/same-ref"
-	failed_compare_probe._state.update_refs_state = "success"
-	failed_compare_probe._state.update_refs_last_checked_unix = int(Time.get_unix_time_from_system())
-	failed_compare_probe._update_refs_discovery_loaded = true
-	failed_compare_probe._state.update_ref_commits = {"feature/same-ref": "new-sha"}
-	failed_compare_probe._state.update_compare_state = "success"
-	failed_compare_probe._state.update_compare_refresh_state = "error"
-	failed_compare_probe._state.update_compare_target_ref = "feature/same-ref"
-	failed_compare_probe._state.update_compare_target_commit = "new-sha"
-	var failed_compare_result: Dictionary = failed_compare_probe.start_plugin_update_sync_from_tools()
-	if not bool(failed_compare_result.get("accepted", false)) or failed_compare_probe.compare_requests.size() != 1 or not failed_compare_probe.archive_requests.is_empty():
-		failed_compare_probe.free()
-		return _failure("MCP plugin update sync should queue a fresh compare when the latest background compare refresh is failed.")
-	failed_compare_probe._mark_update_compare_failed("compare still failed", failed_compare_probe._update_compare_request_serial)
-	if failed_compare_probe._update_sync_after_refs_discovery_pending or str(failed_compare_probe._state.update_sync_state) != "error" or not str(failed_compare_probe._state.update_sync_error).contains("compare still failed"):
-		failed_compare_probe.free()
-		return _failure("MCP plugin update sync should surface pending compare refresh failure as sync failure.")
-	failed_compare_probe.free()
 
 	var archive_attempt_probe := ArchiveAttemptProbePlugin.new()
 	archive_attempt_probe._update_sync_request_serial = 21
@@ -952,17 +718,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		refresh_probe.request_parent.queue_free()
 		refresh_probe.free()
 		return _failure("plugin.gd should not refresh update refs when the selected branch changes.")
-	refresh_probe._state.update_ref_commits = {"v1.0.0-pre3": "annotated-tag-object-sha"}
-	refresh_probe._state.update_ref_versions = {"v1.0.0-pre3": "1.0.0-pre3"}
-	refresh_probe._state.update_ref_latest_release = "v1.0.0-pre3"
-	refresh_probe._state.settings["update_source"] = "latest_release"
-	refresh_probe._state.update_refs_state = "success"
-	refresh_probe._update_refs_discovery_loaded = true
-	refresh_probe._refresh_update_compare_for_current_target()
-	if refresh_probe.compare_requests.is_empty() or str((refresh_probe.compare_requests[0] as Dictionary).get("head", "")) != "v1.0.0-pre3" or str((refresh_probe.compare_requests[0] as Dictionary).get("target_commit", "")) != "annotated-tag-object-sha":
-		refresh_probe.request_parent.queue_free()
-		refresh_probe.free()
-		return _failure("plugin.gd should compare release tags by ref name while preserving the displayed target commit hash.")
 	refresh_probe.request_parent.queue_free()
 	refresh_probe.free()
 
@@ -1001,65 +756,16 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("plugin.gd should not start a background compare refresh while a foreground compare request is loading.")
 	foreground_compare_probe.free()
 
-	var commit_drift_probe := RefreshProbePlugin.new()
-	commit_drift_probe._state.settings["update_source"] = "custom_branch"
-	commit_drift_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
-	commit_drift_probe._state.update_refs_state = "success"
-	commit_drift_probe._state.update_ref_commits = {"refactor/v2.0.0": "new-target-sha"}
-	commit_drift_probe._state.update_compare_state = "success"
-	commit_drift_probe._state.update_compare_refresh_state = "idle"
-	commit_drift_probe._state.update_compare_target_ref = "refactor/v2.0.0"
-	commit_drift_probe._state.update_compare_target_commit = "old-target-sha"
-	commit_drift_probe._state.update_compare_last_checked_unix = int(Time.get_unix_time_from_system())
-	if not commit_drift_probe._should_refresh_update_compare_in_background():
-		commit_drift_probe.free()
-		return _failure("plugin.gd should still require compare verification when sync sees a selected ref with a new commit.")
-	commit_drift_probe.free()
-
 	var compare_reset_probe := PluginScript.new()
 	compare_reset_probe._state.update_compare_state = "success"
 	compare_reset_probe._state.update_compare_refresh_state = "loading"
 	compare_reset_probe._state.update_compare_refresh_error = ""
 	compare_reset_probe._state.update_compare_refresh_serial = 7
-	compare_reset_probe._update_compare_request_serial = 7
-	compare_reset_probe._update_compare_background_serials[7] = true
 	compare_reset_probe._reset_update_compare_state()
-	if compare_reset_probe._state.update_compare_refresh_state != "idle" or compare_reset_probe._state.update_compare_refresh_serial != compare_reset_probe._update_compare_request_serial or not compare_reset_probe._update_compare_background_serials.is_empty():
+	if compare_reset_probe._state.update_compare_refresh_state != "idle" or compare_reset_probe._state.update_compare_refresh_serial != 8:
 		compare_reset_probe.free()
-		return _failure("plugin.gd should clear stale background compare refresh state when compare work is reset.")
+		return _failure("plugin.gd should reset local comparison state without a remote request serial.")
 	compare_reset_probe.free()
-
-	var refs_completion_compare_probe := RefreshProbePlugin.new()
-	refs_completion_compare_probe._state.settings["update_source"] = "custom_branch"
-	refs_completion_compare_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
-	refs_completion_compare_probe._state.update_refs_state = "success"
-	refs_completion_compare_probe._state.update_compare_state = "loading"
-	refs_completion_compare_probe._state.update_compare_last_checked_unix = 0
-	refs_completion_compare_probe._update_compare_request_serial = 5
-	refs_completion_compare_probe._update_refs_request_serial = 1
-	refs_completion_compare_probe._update_refs_pending = {
-		"serial": 1,
-		"background": true,
-		"branch_done": true,
-		"release_done": true,
-		"tag_done": true,
-		"branch_commits_done": true,
-		"branch_commits_branch": "refactor/v2.0.0",
-		"errors": [],
-		"branches": ["refactor/v2.0.0"],
-		"releases": [],
-		"stable_releases": [],
-		"tags": [],
-		"commits": {"refactor/v2.0.0": "target-sha"},
-		"release_rows": [],
-		"tag_rows": [],
-		"branch_commit_rows": {"refactor/v2.0.0": [{"kind": "branch", "ref": "refactor/v2.0.0", "commit": "target-sha", "title": "Target head", "date": "2026-07-13T00:00:00Z"}]}
-	}
-	refs_completion_compare_probe._finalize_update_refs_discovery_if_ready(1)
-	if not refs_completion_compare_probe.compare_requests.is_empty() or refs_completion_compare_probe._update_compare_request_serial != 5 or refs_completion_compare_probe._state.update_compare_state != "loading":
-		refs_completion_compare_probe.free()
-		return _failure("plugin.gd should not let background refs completion preempt a foreground compare request.")
-	refs_completion_compare_probe.free()
 
 	var foreground_refs_probe := ForegroundRefsProbePlugin.new()
 	foreground_refs_probe._state.update_refs_state = "success"
@@ -1114,21 +820,6 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("plugin.gd should not repeat unauthenticated GitHub requests during a recorded rate-limit cooldown.")
 	rate_limit_probe.free()
 
-	var compare_rate_limit_probe := RefreshProbePlugin.new()
-	compare_rate_limit_probe._state.settings["update_source"] = "custom_branch"
-	compare_rate_limit_probe._state.settings["update_custom_branch"] = "dev"
-	compare_rate_limit_probe._state.update_refs_state = "success"
-	compare_rate_limit_probe._state.update_ref_commits = {"dev": "target-sha"}
-	compare_rate_limit_probe._update_refs_discovery_loaded = true
-	compare_rate_limit_probe._state.update_refs_rate_limit_remaining = "0"
-	compare_rate_limit_probe._state.update_refs_rate_limit_reset_unix = int(Time.get_unix_time_from_system()) + 3600
-	compare_rate_limit_probe._state.update_refs_last_http_status = 403
-	compare_rate_limit_probe._on_update_compare_target_selected("branch", "dev", "target-sha")
-	compare_rate_limit_probe._on_update_sync_requested()
-	if not compare_rate_limit_probe.compare_requests.is_empty() or compare_rate_limit_probe._state.update_sync_state != "error" or compare_rate_limit_probe._state.update_compare_refresh_state != "error":
-		compare_rate_limit_probe.free()
-		return _failure("plugin.gd should apply the recorded GitHub rate-limit cooldown to one-click compare verification.")
-	compare_rate_limit_probe.free()
 
 	var background_failure_probe := PluginScript.new()
 	background_failure_probe._state.update_refs_state = "success"
@@ -1323,7 +1014,11 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"commits": {"refactor/v2.0.0": "target-sha"},
 		"release_rows": [],
 		"tag_rows": [],
-		"branch_commit_rows": {"refactor/v2.0.0": [{"kind": "branch", "ref": "refactor/v2.0.0", "commit": "target-sha", "title": "Target head", "date": "2026-07-13T00:00:00Z"}]}
+		"branch_commit_rows": {"refactor/v2.0.0": [{"kind": "branch", "ref": "refactor/v2.0.0", "commit": "target-sha", "title": "Target head", "date": "2026-07-13T00:00:00Z"}]},
+		"commit_histories": {
+			"current-sync-sha": {"head_commit": "current-sync-sha", "commits": ["current-sync-sha", "base-sha"], "complete": true, "done": true, "pages": 1},
+			"target-sha": {"head_commit": "target-sha", "commits": ["target-sha", "current-sync-sha", "base-sha"], "complete": true, "done": true, "pages": 1}
+		}
 	}
 	background_success_probe._finalize_update_refs_discovery_if_ready(1)
 	if background_success_probe._state.update_refs_state != "success" or background_success_probe._state.update_refs_refresh_state != "success" or background_success_probe._state.update_ref_branches != target_branches or str(background_success_probe._state.update_ref_commits.get("refactor/v2.0.0", "")) != "target-sha" or not background_success_probe._update_refs_discovery_loaded:

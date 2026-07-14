@@ -127,6 +127,115 @@ func append_branch_commit_rows(pending: Dictionary, branch: String, items: Array
 	return next_pending
 
 
+func begin_commit_history(pending: Dictionary, head_commit: String, reset: bool = false) -> Dictionary:
+	var normalized_head := head_commit.strip_edges()
+	if normalized_head.is_empty():
+		return pending.duplicate(true)
+	var next_pending := pending.duplicate(true)
+	var histories := duplicate_commit_histories(next_pending.get("commit_histories", {}))
+	if reset or not histories.has(normalized_head):
+		histories[normalized_head] = {
+			"head_commit": normalized_head,
+			"commits": [],
+			"complete": false,
+			"done": false,
+			"pages": 1,
+			"checked_unix": 0
+		}
+	next_pending["commit_histories"] = histories
+	return next_pending
+
+
+func append_commit_history(pending: Dictionary, head_commit: String, items: Array) -> Dictionary:
+	var normalized_head := head_commit.strip_edges()
+	if normalized_head.is_empty():
+		return pending.duplicate(true)
+	var next_pending := begin_commit_history(pending, normalized_head)
+	var histories := duplicate_commit_histories(next_pending.get("commit_histories", {}))
+	var entry: Dictionary = histories.get(normalized_head, {})
+	var commits := to_string_array(entry.get("commits", []))
+	for item in items:
+		if not (item is Dictionary):
+			continue
+		append_unique_ref(commits, str((item as Dictionary).get("sha", "")))
+	entry["head_commit"] = normalized_head
+	entry["commits"] = commits
+	histories[normalized_head] = entry
+	next_pending["commit_histories"] = histories
+	return next_pending
+
+
+func finish_commit_history(pending: Dictionary, head_commit: String, complete: bool) -> Dictionary:
+	var normalized_head := head_commit.strip_edges()
+	if normalized_head.is_empty():
+		return pending.duplicate(true)
+	var next_pending := begin_commit_history(pending, normalized_head)
+	var histories := duplicate_commit_histories(next_pending.get("commit_histories", {}))
+	var entry: Dictionary = histories.get(normalized_head, {})
+	entry["head_commit"] = normalized_head
+	entry["complete"] = complete
+	entry["done"] = true
+	histories[normalized_head] = entry
+	next_pending["commit_histories"] = histories
+	return next_pending
+
+
+func mark_commit_history_failed(pending: Dictionary, head_commit: String) -> Dictionary:
+	return finish_commit_history(pending, head_commit, false)
+
+
+func get_commit_history_pages(pending: Dictionary, head_commit: String) -> int:
+	var histories = pending.get("commit_histories", {})
+	if not (histories is Dictionary):
+		return 1
+	var entry = (histories as Dictionary).get(head_commit.strip_edges(), {})
+	if not (entry is Dictionary):
+		return 1
+	return maxi(1, int((entry as Dictionary).get("pages", 1)))
+
+
+func increment_commit_history_page(pending: Dictionary, head_commit: String) -> Dictionary:
+	var normalized_head := head_commit.strip_edges()
+	var next_pending := begin_commit_history(pending, normalized_head)
+	var histories := duplicate_commit_histories(next_pending.get("commit_histories", {}))
+	var entry: Dictionary = histories.get(normalized_head, {})
+	entry["pages"] = get_commit_history_pages(next_pending, normalized_head) + 1
+	histories[normalized_head] = entry
+	next_pending["commit_histories"] = histories
+	return next_pending
+
+
+func are_commit_histories_done(pending: Dictionary) -> bool:
+	var histories := duplicate_commit_histories(pending.get("commit_histories", {}))
+	if histories.is_empty():
+		return true
+	for entry in histories.values():
+		if not (entry is Dictionary) or not bool((entry as Dictionary).get("done", false)):
+			return false
+	return true
+
+
+func duplicate_commit_histories(raw_histories) -> Dictionary:
+	var histories := {}
+	if not (raw_histories is Dictionary):
+		return histories
+	for raw_key in (raw_histories as Dictionary).keys():
+		var head_commit := str(raw_key).strip_edges()
+		var raw_entry = (raw_histories as Dictionary).get(raw_key, {})
+		if head_commit.is_empty() or not (raw_entry is Dictionary):
+			continue
+		var entry := raw_entry as Dictionary
+		histories[head_commit] = {
+			"head_commit": str(entry.get("head_commit", head_commit)).strip_edges(),
+			"commits": to_string_array(entry.get("commits", [])),
+			"complete": bool(entry.get("complete", false)),
+			"done": bool(entry.get("done", false)),
+			"pages": maxi(1, int(entry.get("pages", 1))),
+		"checked_unix": int(entry.get("checked_unix", 0))
+		}
+	return histories
+
+
 func collect_names(items: Array, key: String) -> Array[String]:
 	var names: Array[String] = []
 	for item in items:
@@ -209,6 +318,7 @@ func build_final_snapshot(pending: Dictionary) -> Dictionary:
 		"release_source": "releases_and_tags",
 		"release_rows": build_release_table_rows(pending),
 		"branch_commit_rows": duplicate_branch_commit_rows(pending.get("branch_commit_rows", {})),
+		"commit_histories": duplicate_commit_histories(pending.get("commit_histories", {})),
 		"errors": to_string_array(pending.get("errors", []))
 	}
 
@@ -318,6 +428,10 @@ func get_waiting_kinds(pending: Dictionary) -> Array[String]:
 	for kind in ["branches", "releases", "tags", "branch_commits"]:
 		if not is_kind_done(pending, kind):
 			waiting.append(kind)
+	for raw_head in duplicate_commit_histories(pending.get("commit_histories", {})).keys():
+		var head_commit := str(raw_head)
+		if not is_kind_done(pending, "commit_history:%s" % head_commit):
+			waiting.append("commit_history:%s" % head_commit)
 	return waiting
 
 
@@ -332,6 +446,10 @@ func is_kind_done(pending: Dictionary, kind: String) -> bool:
 		"branch_commits":
 			return bool(pending.get("branch_commits_done", false))
 		_:
+			if kind.begins_with("commit_history:"):
+				var head_commit := kind.trim_prefix("commit_history:").strip_edges()
+				var entry = duplicate_commit_histories(pending.get("commit_histories", {})).get(head_commit, {})
+				return entry is Dictionary and bool((entry as Dictionary).get("done", false))
 			return false
 
 

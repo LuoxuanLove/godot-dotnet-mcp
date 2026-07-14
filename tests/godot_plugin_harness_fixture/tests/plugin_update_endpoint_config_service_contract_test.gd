@@ -18,6 +18,8 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("PluginUpdateEndpointConfigService should own the GitHub releases discovery URL.", refs_urls)
 	if str(refs_urls.get("tags", "")).find("/tags?per_page=100&page=1") == -1:
 		return _failure("PluginUpdateEndpointConfigService should own the GitHub tags discovery URL.", refs_urls)
+	if service.get_branch_commits_url_template().find("/commits?sha=%s&per_page=100&page=1") == -1:
+		return _failure("PluginUpdateEndpointConfigService should use 100-item pages for local commit history.", {"template": service.get_branch_commits_url_template()})
 
 	if service.get_refs_http_timeout() != 10.0:
 		return _failure("PluginUpdateEndpointConfigService should preserve refs HTTP timeout.", {"timeout": service.get_refs_http_timeout()})
@@ -64,6 +66,7 @@ func _verify_plugin_entrypoint_delegates_update_endpoint_config() -> String:
 	for required in [
 		"PluginUpdateEndpointConfigServiceScript.new()",
 		"_ensure_plugin_update_endpoint_config_service().get_refs_request_urls()",
+		"_ensure_plugin_update_endpoint_config_service().get_branch_commits_url_template()",
 		"_ensure_plugin_update_endpoint_config_service().get_branch_ref_url_template()",
 		"_ensure_plugin_update_endpoint_config_service().get_target_plugin_cfg_branch_url_template()",
 		"_ensure_plugin_update_endpoint_config_service().get_target_plugin_cfg_tag_url_template()",
@@ -74,7 +77,6 @@ func _verify_plugin_entrypoint_delegates_update_endpoint_config() -> String:
 		"_ensure_plugin_update_endpoint_config_service().get_sync_marker_path()",
 		"_ensure_plugin_update_endpoint_config_service().get_archive_url_prefixes()",
 		"_ensure_plugin_update_endpoint_config_service().get_sync_addon_root()",
-		"_ensure_plugin_update_endpoint_config_service().get_compare_url_template()",
 		"_ensure_plugin_update_http_request_service().start_refs_request(",
 		"_ensure_plugin_update_http_request_service().start_sync_archive_request("
 	]:
@@ -82,7 +84,6 @@ func _verify_plugin_entrypoint_delegates_update_endpoint_config() -> String:
 			return "plugin.gd should delegate update endpoint config responsibility: %s" % required
 	for forbidden in [
 		"const UPDATE_REFS_BRANCHES_URL",
-		"const UPDATE_COMPARE_URL_TEMPLATE",
 		"const UPDATE_SYNC_ARCHIVE_PATH",
 		"const UPDATE_SYNC_REPO_URL",
 		"const UPDATE_SYNC_ADDON_ROOT"
