@@ -771,11 +771,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	foreground_refs_probe._state.update_refs_state = "success"
 	foreground_refs_probe._state.update_refs_refresh_state = "loading"
 	foreground_refs_probe._state.update_refs_refresh_serial = 1
+	foreground_refs_probe._state.update_ref_latest_stable_release = "v1.0.0"
 	foreground_refs_probe._update_refs_background_serials[1] = true
 	foreground_refs_probe._on_update_check_requested(false)
-	if foreground_refs_probe._state.update_refs_refresh_state != "idle" or foreground_refs_probe._state.update_refs_refresh_serial != foreground_refs_probe._update_refs_request_serial or not foreground_refs_probe._update_refs_background_serials.is_empty() or foreground_refs_probe.refs_requests.size() != 2 or str(foreground_refs_probe.refs_requests[0].get("kind", "")) != "releases" or str(foreground_refs_probe.refs_requests[1].get("kind", "")) != "tags":
+	var foreground_request_kinds: Array[String] = []
+	for request in foreground_refs_probe.refs_requests:
+		foreground_request_kinds.append(str(request.get("kind", "")))
+	if foreground_refs_probe._state.update_refs_refresh_state != "idle" or foreground_refs_probe._state.update_refs_refresh_serial != foreground_refs_probe._update_refs_request_serial or not foreground_refs_probe._update_refs_background_serials.is_empty() or foreground_refs_probe.refs_requests.size() != 4 or not foreground_request_kinds.has("branches") or not foreground_request_kinds.has("releases") or not foreground_request_kinds.has("tags") or not foreground_request_kinds.has("branch_commits") or not (foreground_refs_probe._update_refs_pending.get("stable_releases", []) as Array).is_empty():
 		foreground_refs_probe.free()
-		return _failure("plugin.gd should refresh only release and tag endpoints for the Release channel.")
+		return _failure("plugin.gd should refresh stable and development endpoints together without prepending a cached stable release to the fresh release result.")
 	foreground_refs_probe.free()
 
 	var foreground_preserve_probe := ForegroundRefsProbePlugin.new()
@@ -790,9 +794,12 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	foreground_preserve_probe._state.update_ref_commits = {"cached/branch": "cached-sha"}
 	foreground_preserve_probe._state.update_ref_branch_commit_rows = {"cached/branch": [{"kind": "branch", "ref": "cached/branch", "commit": "cached-sha", "title": "Cached", "date": "2026-07-08T00:00:00Z"}]}
 	foreground_preserve_probe._on_update_check_requested(false)
-	if foreground_preserve_probe._state.update_refs_state != "loading" or foreground_preserve_probe._state.update_ref_branches != preserved_branches or foreground_preserve_probe._state.update_ref_releases != preserved_releases or str(foreground_preserve_probe._state.update_ref_commits.get("cached/branch", "")) != "cached-sha" or foreground_preserve_probe.refs_requests.size() != 2 or str(foreground_preserve_probe.refs_requests[0].get("kind", "")) != "branches" or str(foreground_preserve_probe.refs_requests[1].get("kind", "")) != "branch_commits":
+	var preserve_request_kinds: Array[String] = []
+	for request in foreground_preserve_probe.refs_requests:
+		preserve_request_kinds.append(str(request.get("kind", "")))
+	if foreground_preserve_probe._state.update_refs_state != "loading" or foreground_preserve_probe._state.update_ref_branches != preserved_branches or foreground_preserve_probe._state.update_ref_releases != preserved_releases or str(foreground_preserve_probe._state.update_ref_commits.get("cached/branch", "")) != "cached-sha" or foreground_preserve_probe.refs_requests.size() != 4 or not preserve_request_kinds.has("branches") or not preserve_request_kinds.has("releases") or not preserve_request_kinds.has("tags") or not preserve_request_kinds.has("branch_commits"):
 		foreground_preserve_probe.free()
-		return _failure("plugin.gd should preserve cached data while refreshing only branches and selected commits for Development.")
+		return _failure("plugin.gd should preserve cached data while refreshing both version panels.")
 	foreground_preserve_probe.free()
 
 	var paged_refresh_probe := ForegroundRefsProbePlugin.new()
@@ -801,7 +808,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	paged_refresh_probe._on_update_check_requested(false)
 	var next_page_headers := PackedStringArray(['Link: <https://api.github.test/branches?page=2>; rel="next"'])
 	paged_refresh_probe._on_update_refs_request_completed(HTTPRequest.RESULT_SUCCESS, 200, next_page_headers, '[{"name":"dev","commit":{"sha":"page-1-sha"}}]'.to_utf8_buffer(), "branches", 1)
-	if (paged_refresh_probe._update_refs_pending.get("successful_kinds", []) as Array).has("branches") or bool(paged_refresh_probe._update_refs_pending.get("branch_done", false)) or paged_refresh_probe.refs_requests.size() != 3:
+	if (paged_refresh_probe._update_refs_pending.get("successful_kinds", []) as Array).has("branches") or bool(paged_refresh_probe._update_refs_pending.get("branch_done", false)) or paged_refresh_probe.refs_requests.size() != 5:
 		paged_refresh_probe.free()
 		return _failure("plugin.gd should not mark a paginated endpoint successful until its final page completes.")
 	paged_refresh_probe._on_update_refs_request_completed(HTTPRequest.RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray(), "branches", 1)
