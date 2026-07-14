@@ -1,0 +1,53 @@
+docs/zh-CN/流程/发布说明/发布说明-v2.0.0.md
+  s_d588252f8a516b::t_6beb51227a0803 43
+tests/godot_plugin_harness_fixture/tests/settings_tab_rendering_contract_test.gd
+  s_d588252f8a516b::t_04b70d239f2c99 395-398,405
+  s_d588252f8a516b::t_619e3fe11db9d5 202-204,224-229,243-244,376,384-385,403-404,406
+docs/ko/변경-로그.md
+  s_d588252f8a516b::t_45178da5e04c84 11,22
+docs/ja/プロセス/リリースノート/リリースノート-v2.0.0.md
+  s_d588252f8a516b::t_6beb51227a0803 43
+docs/ko/프로세스/릴리스-노트/릴리스-노트-v2.0.0.md
+  s_d588252f8a516b::t_6beb51227a0803 43
+tests/godot_plugin_harness_fixture/tests/mcp_dock_settings_tab_contract_test.gd
+  s_d588252f8a516b::t_619e3fe11db9d5 269-270
+docs/en/CHANGELOG.md
+  s_d588252f8a516b::t_45178da5e04c84 11,22
+docs/en/process/release-notes/release-notes-v2.0.0.md
+  s_d588252f8a516b::t_6beb51227a0803 43
+addons/godot_dotnet_mcp/ui/settings_tab.gd
+  s_d588252f8a516b::t_f0668d7083fa17 152-155,242-249
+  s_d588252f8a516b::t_afb4d54da82c3b 56,157,160,193,225,532,539,546,560,570
+  s_d588252f8a516b::t_004ac0a022cc69 250-251
+docs/en/interface/dock-ui-style-guide.md
+  s_d588252f8a516b::t_92171a8164c9c6 63-65
+docs/zh-CN/变更日志.md
+  s_d588252f8a516b::t_45178da5e04c84 12,23
+addons/godot_dotnet_mcp/ui/settings_panel.tscn
+  s_d588252f8a516b::t_afb4d54da82c3b 131-145,179,188,191,193,195,200,204,206-207
+  s_d588252f8a516b::t_45178da5e04c84 177,203
+docs/ja/変更履歴.md
+  s_d588252f8a516b::t_45178da5e04c84 11,22
+docs/zh-CN/界面/Dock界面风格规范.md
+  s_d588252f8a516b::t_92171a8164c9c6 63-65
+docs/ja/インターフェース/Dock-UIスタイルガイド.md
+  s_d588252f8a516b::t_92171a8164c9c6 63-65
+docs/ko/인터페이스/Dock-UI-스타일-가이드.md
+  s_d588252f8a516b::t_92171a8164c9c6 63-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "c3bd67f42a43790b4ca77de75fbf49e2a7ac2765",
+  "prompts": {},
+  "sessions": {
+    "s_d588252f8a516b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f5fb7-ff55-7691-97bd-6d013e309f76",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
