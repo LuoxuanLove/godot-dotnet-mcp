@@ -139,7 +139,8 @@ func begin_commit_history(pending: Dictionary, head_commit: String, reset: bool 
 			"commits": [],
 			"complete": false,
 			"done": false,
-			"pages": 1
+			"pages": 1,
+			"checked_unix": 0
 		}
 	next_pending["commit_histories"] = histories
 	return next_pending
@@ -184,7 +185,10 @@ func mark_commit_history_failed(pending: Dictionary, head_commit: String) -> Dic
 
 
 func get_commit_history_pages(pending: Dictionary, head_commit: String) -> int:
-	var entry = duplicate_commit_histories(pending.get("commit_histories", {})).get(head_commit.strip_edges(), {})
+	var histories = pending.get("commit_histories", {})
+	if not (histories is Dictionary):
+		return 1
+	var entry = (histories as Dictionary).get(head_commit.strip_edges(), {})
 	if not (entry is Dictionary):
 		return 1
 	return maxi(1, int((entry as Dictionary).get("pages", 1)))

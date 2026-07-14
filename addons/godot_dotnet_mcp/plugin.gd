@@ -2456,7 +2456,6 @@ func _apply_successful_update_refs_snapshot(snapshot: Dictionary, successful_kin
 	if branches_succeeded:
 		_state.update_ref_branches = snapshot.get("branches", [])
 		_state.update_ref_commits = snapshot.get("commits", {})
-	_set_update_commit_histories(snapshot.get("commit_histories", {}))
 	if branch_commits_succeeded:
 		var branch := str(_update_refs_pending.get("branch_commits_branch", "")).strip_edges()
 		var current_rows := _duplicate_update_branch_commit_rows(_state.update_ref_branch_commit_rows)
