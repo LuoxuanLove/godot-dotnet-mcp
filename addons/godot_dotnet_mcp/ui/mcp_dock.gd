@@ -24,6 +24,7 @@ signal update_custom_branch_changed(branch: String)
 signal update_interaction_refresh_requested
 signal update_check_requested
 signal update_apply_requested
+signal update_compare_target_selected(kind: String, target_ref: String, target_commit: String)
 signal update_switch_requested(kind: String, target_ref: String, target_commit: String)
 signal start_requested
 signal restart_requested
@@ -386,6 +387,7 @@ func _connect_settings_tab() -> void:
 	_connect_signal_once(_settings_tab, "update_interaction_refresh_requested", _on_settings_tab_update_interaction_refresh_requested)
 	_connect_signal_once(_settings_tab, "update_check_requested", _on_settings_tab_update_check_requested)
 	_connect_signal_once(_settings_tab, "update_apply_requested", _on_settings_tab_update_apply_requested)
+	_connect_signal_once(_settings_tab, "update_compare_target_selected", _on_settings_tab_update_compare_target_selected)
 	_connect_signal_once(_settings_tab, "update_switch_requested", _on_settings_tab_update_switch_requested)
 
 
@@ -590,6 +592,10 @@ func _on_settings_tab_update_check_requested() -> void:
 
 func _on_settings_tab_update_apply_requested() -> void:
 	update_apply_requested.emit()
+
+
+func _on_settings_tab_update_compare_target_selected(kind: String, target_ref: String, target_commit: String) -> void:
+	update_compare_target_selected.emit(kind, target_ref, target_commit)
 
 
 func _on_settings_tab_update_switch_requested(kind: String, target_ref: String, target_commit: String) -> void:

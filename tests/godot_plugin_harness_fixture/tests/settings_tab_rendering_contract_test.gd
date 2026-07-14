@@ -21,9 +21,9 @@ class FakeLocalization extends RefCounted:
 		"settings_update_remote_url": "Remote URL:",
 		"settings_update_current_branch": "Current Branch:",
 		"settings_update_current_version": "Current Version:",
-		"settings_update_channel_stable": "Stable",
+		"settings_update_channel_stable": "Release",
 		"settings_update_channel_development": "Development",
-		"settings_update_channel_stable_selected": "Stable selected",
+		"settings_update_channel_stable_selected": "Release selected",
 		"settings_update_channel_development_selected": "Development selected",
 		"settings_update_col_version": "Version ID",
 		"settings_update_col_message": "Update",
@@ -60,6 +60,7 @@ class FakeLocalization extends RefCounted:
 		"settings_update_compare_summary": "Current plugin %s [%s] -> selected target %s [%s], commit difference: %s.",
 		"settings_update_compare_difference": "current ahead %d / target ahead %d",
 		"settings_update_compare_loading": "checking...",
+		"settings_update_compare_deferred": "verified on update",
 		"port": "Port:",
 		"log_level": "Log Level:",
 		"language": "Language:",
@@ -88,6 +89,9 @@ class Recorder extends RefCounted:
 	var update_interaction_refresh_count := 0
 	var update_check_count := 0
 	var update_apply_count := 0
+	var update_compare_kind := ""
+	var update_compare_ref := ""
+	var update_compare_commit := ""
 	var update_switch_kind := ""
 	var update_switch_ref := ""
 	var update_switch_commit := ""
@@ -116,6 +120,11 @@ class Recorder extends RefCounted:
 	func on_update_apply_requested() -> void:
 		update_apply_count += 1
 
+	func on_update_compare_target_selected(kind: String, target_ref: String, target_commit: String) -> void:
+		update_compare_kind = kind
+		update_compare_ref = target_ref
+		update_compare_commit = target_commit
+
 	func on_update_switch_requested(kind: String, target_ref: String, target_commit: String) -> void:
 		update_switch_kind = kind
 		update_switch_ref = target_ref
@@ -138,6 +147,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_instance.update_interaction_refresh_requested.connect(Callable(recorder, "on_update_interaction_refresh_requested"))
 	_instance.update_check_requested.connect(Callable(recorder, "on_update_check_requested"))
 	_instance.update_apply_requested.connect(Callable(recorder, "on_update_apply_requested"))
+	_instance.update_compare_target_selected.connect(Callable(recorder, "on_update_compare_target_selected"))
 	_instance.update_switch_requested.connect(Callable(recorder, "on_update_switch_requested"))
 
 	_instance.apply_model({
@@ -201,9 +211,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should render and select the current log level.")
 	if language_option == null or language_option.get_item_count() != 2 or str(language_option.get_item_metadata(language_option.selected)) != "zh_CN":
 		return _failure("Settings tab should render and select the current language.")
-	if channel_tabs == null or channel_tabs.get_tab_count() != 2 or channel_tabs.current_tab != 0 or channel_tabs.get_tab_title(0) != "Stable" or channel_tabs.get_tab_title(1) != "Development":
-		return _failure("Settings tab should render Stable / Development update channel tabs in the existing Settings tab.")
-	if channel_status == null or channel_status.visible or channel_status.text != "Stable selected":
+	if channel_tabs == null or channel_tabs.get_tab_count() != 2 or channel_tabs.current_tab != 0 or channel_tabs.get_tab_title(0) != "Release" or channel_tabs.get_tab_title(1) != "Development":
+		return _failure("Settings tab should render Release / Development update channel tabs in the existing Settings tab.")
+	if channel_status == null or channel_status.visible or channel_status.text != "Release selected":
 		return _failure("Settings tab should preserve the accessible channel text without repeating it in the visible layout.")
 	if custom_branch == null or custom_branch.get_item_count() < 2 or str(custom_branch.get_item_metadata(0)) != "dev" or str(custom_branch.get_item_metadata(custom_branch.selected)) != "dev":
 		return _failure("Settings tab should render discovered custom branch options with dev pinned first.")
@@ -211,6 +221,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should hide the branch selector while the Stable channel is active.")
 	if version_tree == null or not version_tree.visible or version_tree.get_root() == null or version_tree.get_root().get_first_child() == null:
 		return _failure("Settings tab should render the version management table for discovered stable releases.")
+	if version_tree.select_mode != Tree.SELECT_ROW or channel_tabs.get_index() + 1 != custom_branch_row.get_index() or custom_branch_row.get_index() + 1 != version_tree.get_index():
+		return _failure("Settings tab should group the release/development selector directly above a row-selecting version table.")
 	var stable_row := version_tree.get_root().get_first_child()
 	if version_tree.columns != 3 or stable_row.get_button_count(2) == 0 or stable_row.get_next() == null or stable_row.get_next().get_button_count(2) == 0:
 		return _failure("Settings tab should render Switch actions for non-current discovered versions.")
@@ -220,15 +232,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var labels := _instance.find_children("*", "Label", true, false)
 	if _find_label_containing(labels, "Select an update mode") != null:
 		return _failure("Settings tab should normalize stale automatic discovery status copy from cached localization.")
-	if _find_label_containing(labels, "一键更新 / 切换进行验证与同步") == null:
-		return _failure("Settings tab should display the projected manual refresh policy copy.")
+	if _instance.find_child("UpdatesDescription", true, false) != null or _instance.find_child("RemoteUrlRow", true, false) != null:
+		return _failure("Settings tab should remove redundant update policy and repository metadata copy.")
 	if _find_label_containing(labels, "Current Version:") == null or _find_label_containing(labels, "1.0.1 (abcdef1)") == null:
 		return _failure("Settings tab should display the compact current-version summary above the version table.")
-	if _find_label_containing(labels, "Synced v1.2.3.") == null or details_button == null or not details_button.visible or details_panel == null or details_panel.visible or details_text == null or not details_text.text.contains("Current plugin 1.0.1 [abcdef1] -> selected target 1.2.3 [fedcba9]") or not details_text.text.contains("current ahead 0 / target ahead 2"):
-		return _failure("Settings tab should keep sync success concise while preserving compare hashes in collapsed update details.")
-	details_button.button_pressed = true
-	if not details_panel.visible or _find_label_containing(labels, "Remote URL:") == null:
-		return _failure("Settings tab should reveal repository metadata and compare details on demand.")
+	if _find_label_containing(labels, "Synced v1.2.3.") == null or details_button == null or details_button.visible or details_panel == null or details_panel.visible or details_text == null or not details_text.text.is_empty():
+		return _failure("Settings tab should show sync success once and hide empty diagnostic details.")
 	var check_button := _instance.find_child("CheckButton", true, false) as Button
 	if check_button == null or not check_button.visible or check_button.disabled or check_button.text != "Refresh List":
 		return _failure("Settings update Refresh List should be visible and enabled so refs refresh only when the user clicks it.")
@@ -288,6 +297,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var dev_current_row := dev_first_row.get_next()
 	if dev_first_row == null or dev_first_row.get_button_count(2) == 0 or dev_current_row == null or dev_current_row.get_text(2) != "Current" or dev_current_row.get_button_count(2) != 0:
 		return _failure("Settings tab should highlight the current commit row and suppress Switch for the already-current version.")
+	dev_current_row.select(0)
+	version_tree.emit_signal("cell_selected")
+	if recorder.update_compare_kind != "branch" or recorder.update_compare_ref != "feature/settings" or recorder.update_compare_commit != "abcdef123456" or not recorder.update_switch_ref.is_empty():
+		return _failure("Selecting a version row should set the full-row comparison target without switching it.")
 	custom_branch.select(1)
 	custom_branch.emit_signal("item_selected", 1)
 	var first_row := version_tree.get_root().get_first_child()

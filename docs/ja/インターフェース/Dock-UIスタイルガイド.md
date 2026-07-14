@@ -22,6 +22,8 @@
 
 visual order と keyboard focus order は一致させます。よく使う path を先に置き、固定 repository facts、hashes、timestamps、audit trail は secondary details に移します。
 
+list、table、preview、editor の scope を決める selector は、その surface の直前に置きます。selector と対象 content の間に無関係な status、metadata、action を挟みません。
+
 ## 間隔とレイアウト単位
 
 すべて current editor scale を乗算する logical pixels です。
@@ -55,16 +57,18 @@ visual order と keyboard focus order は一致させます。よく使う path 
 
 ## ステータス、ヘルプ、詳細
 
-- 1 card に常設 description は最大 1 つ、live status region は 1 つとし、同じ guidance を重複させません。
+- 1 card に常設 description は最大 1 つ、live status region は 1 つとします。controls、status、empty state だけで workflow が分かる場合は description を省き、同じ guidance を重複させません。
 - idle guidance は next action を示します。loading は active scope を示し、競合 action を lock し、測定可能なら progress を表示します。
 - success text は短くします。error text は原因と、既知なら recovery action を保持します。
 - trigger source、HTTP status、rate-limit reset、hash、comparison count は collapsible details に置きます。
-- error または rate limit exhausted の details は自動展開できますが、通常の audit は折りたたみます。
+- persistent status region は primary result を担当します。details は supplemental とし、同じ error や summary を繰り返さず、actionable diagnostic evidence を追加する場合だけ自動展開します。
+- error または rate limit exhausted で details がその evidence を追加する場合は自動展開できますが、通常の audit は折りたたみます。
 
 ## リスト、テーブル、空状態
 
 - item の選択や確認に必要な列だけを表示し、narrow layout の secondary date / identifier は tooltip または details に移します。
 - current row は色に加えて text marker または icon を持ち、同じ item を再選択する action は表示しません。
+- row selection が target を決める場合は row 全体を highlight します。selection は非破壊 target の更新だけを行い、mutation、navigation、switch は独立した row action で実行します。
 - row action は tertiary です。editor icon があっても localized label または tooltip を付けます。
 - 空の `Tree` は隠し、not loaded、loading、no results、error を区別する簡潔な empty state を表示します。
 - model refresh 中も selection、scroll position、deferred row action を安定させます。
@@ -79,6 +83,8 @@ visual order と keyboard focus order は一致させます。よく使う path 
 | Destructive | remove、clear、delete | 通常 action と分離し、損失の可能性があれば確認 |
 
 hover-only control は既に発見可能な action の shortcut にできますが、重要操作の唯一の入口にはしません。
+
+cached state の復元は network access や operational mutation を発生させません。passive selector は選択値を永続化し、依存する一時的な local state をリセットできますが、discovery、update、switch、navigation、その他の external operation を開始してはいけません。これらの operation には専用の明示的な user action が必要で、repeated retry は既知の cooldown / rate-limit state に従います。
 
 ## Dock のレスポンシブ動作
 

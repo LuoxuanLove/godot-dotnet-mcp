@@ -44,8 +44,38 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	if str(loading_snapshot.get("state", "")) != "loading" or str(loading_snapshot.get("compare_head", "")) != "target-sha":
 		return _failure("PluginUpdateCompareService should request compare checks for different branch commits.", loading_snapshot)
 	var equal_snapshot: Dictionary = service.build_compare_start_snapshot("target-sha", branch_target)
-	if str(equal_snapshot.get("state", "")) != "success" or int(equal_snapshot.get("ahead_by", -1)) != 0 or int(equal_snapshot.get("behind_by", -1)) != 0:
+	if str(equal_snapshot.get("state", "")) != "success" or str(equal_snapshot.get("source", "")) != "local_exact" or int(equal_snapshot.get("ahead_by", -1)) != 0 or int(equal_snapshot.get("behind_by", -1)) != 0:
 		return _failure("PluginUpdateCompareService should short-circuit equal commits as success.", equal_snapshot)
+	var cache_key := service.build_compare_cache_key("base-sha", "branch", "dev", "target-sha")
+	var compare_cache := {cache_key: {
+		"base_commit": "base-sha",
+		"target_kind": "branch",
+		"target_ref": "dev",
+		"target_commit": "target-sha",
+		"ahead_by": 4,
+		"behind_by": 1
+	}}
+	var cached_snapshot: Dictionary = service.build_compare_start_snapshot("base-sha", branch_target, compare_cache)
+	if str(cached_snapshot.get("state", "")) != "success" or str(cached_snapshot.get("source", "")) != "cache" or int(cached_snapshot.get("ahead_by", -1)) != 4 or int(cached_snapshot.get("behind_by", -1)) != 1:
+		return _failure("PluginUpdateCompareService should reuse only exact base/target compare cache entries.", cached_snapshot)
+	var moved_target: Dictionary = service.build_compare_start_snapshot("base-sha", {"kind": "branch", "ref": "dev", "commit": "moved-sha"}, compare_cache)
+	if str(moved_target.get("state", "")) != "loading":
+		return _failure("PluginUpdateCompareService should reject stale compare cache entries after a branch moves.", moved_target)
+	var forged_cache := {cache_key: {
+		"base_commit": "base-sha",
+		"target_kind": "branch",
+		"target_ref": "dev",
+		"target_commit": "different-sha",
+		"ahead_by": 4,
+		"behind_by": 0
+	}}
+	var forged_snapshot: Dictionary = service.build_compare_start_snapshot("base-sha", branch_target, forged_cache)
+	if str(forged_snapshot.get("state", "")) != "loading":
+		return _failure("PluginUpdateCompareService should verify cached metadata instead of trusting an externally supplied cache key.", forged_snapshot)
+	var empty_tag_key := service.build_compare_cache_key("base-sha", "tag", "v2.0.0", "")
+	var empty_tag_snapshot: Dictionary = service.build_compare_start_snapshot("base-sha", {"kind": "tag", "ref": "v2.0.0", "commit": ""}, {empty_tag_key: {"base_commit": "base-sha", "target_kind": "tag", "target_ref": "v2.0.0", "target_commit": "", "ahead_by": 1, "behind_by": 0}})
+	if str(empty_tag_snapshot.get("state", "")) != "loading":
+		return _failure("PluginUpdateCompareService should not cache a movable tag comparison without an exact target commit.", empty_tag_snapshot)
 	var unavailable_snapshot: Dictionary = service.build_compare_start_snapshot("", branch_target)
 	if str(unavailable_snapshot.get("state", "")) != "unavailable":
 		return _failure("PluginUpdateCompareService should mark missing base commits unavailable.", unavailable_snapshot)
@@ -56,6 +86,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var parse_error := service.parse_compare_response('[1,2]'.to_utf8_buffer())
 	if bool(parse_error.get("success", false)) or str(parse_error.get("error", "")) != "Expected a JSON object":
 		return _failure("PluginUpdateCompareService should reject non-object compare responses.", parse_error)
+	for invalid_body in ['{}', '{"ahead_by":1}', '{"ahead_by":-1,"behind_by":0}']:
+		var invalid_result := service.parse_compare_response(invalid_body.to_utf8_buffer())
+		if bool(invalid_result.get("success", false)):
+			return _failure("PluginUpdateCompareService should reject missing or negative compare counts.", invalid_result)
 
 	return {"name": "plugin_update_compare_service_contracts", "success": true, "error": ""}
 
@@ -87,7 +121,8 @@ func _verify_plugin_entrypoint_delegates_update_compare() -> String:
 	for required_service in [
 		"func build_target_version_url(target_ref: String, target_kind: String, branch_template: String, tag_template: String)",
 		"func parse_plugin_cfg_version(content: String)",
-		"func build_compare_start_snapshot(base_commit: String, target: Dictionary)",
+		"func build_compare_cache_key(base_commit: String, target_kind: String, target_ref: String, target_commit: String)",
+		"func build_compare_start_snapshot(base_commit: String, target: Dictionary, compare_cache: Dictionary = {})",
 		"func parse_compare_response(body: PackedByteArray)"
 	]:
 		if service_source.find(required_service) == -1:

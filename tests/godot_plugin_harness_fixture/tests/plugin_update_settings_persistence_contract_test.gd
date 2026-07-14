@@ -113,7 +113,7 @@ class SyncReloadProbePlugin extends PluginScript:
 	func _write_update_sync_marker(_target: Dictionary, _written: int) -> int:
 		return marker_error
 
-	func _refresh_update_compare_for_current_target(_background_refresh: bool = false) -> bool:
+	func _refresh_update_compare_for_current_target(_background_refresh: bool = false, _allow_remote_request: bool = true) -> bool:
 		compare_refresh_count += 1
 		return true
 
@@ -299,10 +299,41 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"commits": {"dev": "dev-sha", "": "ignored"},
 		"versions": {"v2.0.0": "2.0.0"},
 		"release_rows": [{"kind": "tag", "ref": "v2.0.0", "commit": "tag-sha", "title": "Release 2.0.0", "date": "2026-07-08T00:00:00Z", "stable": true}],
-		"branch_commit_rows": {"dev": [{"kind": "branch", "ref": "dev", "commit": "dev-sha", "title": "dev head", "date": "2026-07-08T00:00:00Z"}]}
+		"branch_commit_rows": {"dev": [{"kind": "branch", "ref": "dev", "commit": "dev-sha", "title": "dev head", "date": "2026-07-08T00:00:00Z"}]},
+		"compare_cache": {
+			"valid": {"base_commit": "base-sha", "target_kind": "branch", "target_ref": "dev", "target_commit": "dev-sha", "ahead_by": 2, "behind_by": 0, "checked_unix": 10},
+			"invalid": {"base_commit": "base-sha", "target_kind": "branch", "target_ref": "dev", "target_commit": "", "ahead_by": -1, "behind_by": 0},
+			"movable-tag": {"base_commit": "base-sha", "target_kind": "tag", "target_ref": "v2.0.0", "target_commit": "", "ahead_by": 1, "behind_by": 0}
+		}
 	})
-	if (normalized_cache.get("branches", []) as Array).size() != 1 or str((normalized_cache.get("commits", {}) as Dictionary).get("dev", "")) != "dev-sha" or (normalized_cache.get("release_rows", []) as Array).size() != 1:
+	var normalized_compare_key := "\n".join(["base-sha", "branch", "dev", "dev-sha"])
+	var normalized_compare_cache: Dictionary = normalized_cache.get("compare_cache", {})
+	if int(normalized_cache.get("format_version", 0)) != 2 or (normalized_cache.get("branches", []) as Array).size() != 1 or str((normalized_cache.get("commits", {}) as Dictionary).get("dev", "")) != "dev-sha" or (normalized_cache.get("release_rows", []) as Array).size() != 1 or normalized_compare_cache.size() != 1 or not normalized_compare_cache.has(normalized_compare_key) or normalized_compare_cache.has("valid"):
 		return _failure("settings_store.gd should normalize persisted update refs cache into stable arrays, dictionaries, and table rows.")
+	var compare_only_cache: Dictionary = settings_store.normalize_update_refs_cache({
+		"compare_cache": {
+			"valid-int": {"base_commit": "base-int", "target_kind": "branch", "target_ref": "dev", "target_commit": "int-sha", "ahead_by": 2, "behind_by": 0},
+			"valid-float": {"base_commit": "base-float", "target_kind": "tag", "target_ref": "v2.0.0", "target_commit": "float-sha", "ahead_by": 2.0, "behind_by": 0.0},
+			"numeric-string": {"base_commit": "base-string", "target_kind": "branch", "target_ref": "dev", "target_commit": "string-sha", "ahead_by": "2", "behind_by": 0},
+			"invalid-string": {"base_commit": "base-invalid-string", "target_kind": "branch", "target_ref": "dev", "target_commit": "invalid-string-sha", "ahead_by": "bogus", "behind_by": 0},
+			"boolean": {"base_commit": "base-boolean", "target_kind": "branch", "target_ref": "dev", "target_commit": "boolean-sha", "ahead_by": true, "behind_by": 0},
+			"null": {"base_commit": "base-null", "target_kind": "branch", "target_ref": "dev", "target_commit": "null-sha", "ahead_by": null, "behind_by": 0},
+			"fractional": {"base_commit": "base-fractional", "target_kind": "branch", "target_ref": "dev", "target_commit": "fractional-sha", "ahead_by": 1.5, "behind_by": 0},
+			"negative": {"base_commit": "base-negative", "target_kind": "branch", "target_ref": "dev", "target_commit": "negative-sha", "ahead_by": -1, "behind_by": 0},
+			"nan": {"base_commit": "base-nan", "target_kind": "branch", "target_ref": "dev", "target_commit": "nan-sha", "ahead_by": NAN, "behind_by": 0},
+			"infinity": {"base_commit": "base-infinity", "target_kind": "branch", "target_ref": "dev", "target_commit": "infinity-sha", "ahead_by": INF, "behind_by": 0}
+		}
+	})
+	var compare_only_entries: Dictionary = compare_only_cache.get("compare_cache", {})
+	var valid_int_key := "\n".join(["base-int", "branch", "dev", "int-sha"])
+	var valid_float_key := "\n".join(["base-float", "tag", "v2.0.0", "float-sha"])
+	if compare_only_cache.is_empty() or compare_only_entries.size() != 2 or not compare_only_entries.has(valid_int_key) or not compare_only_entries.has(valid_float_key):
+		return _failure("settings_store.gd should preserve compare-only caches while rejecting malformed comparison counts.")
+	settings_store.save_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH, compare_only_cache)
+	var compare_only_round_trip: Dictionary = settings_store.load_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH)
+	var round_trip_entries: Dictionary = compare_only_round_trip.get("compare_cache", {})
+	if round_trip_entries.size() != 2 or not round_trip_entries.has(valid_int_key) or not round_trip_entries.has(valid_float_key) or int((round_trip_entries.get(valid_float_key, {}) as Dictionary).get("ahead_by", -1)) != 2:
+		return _failure("settings_store.gd should save and restore exact comparison results without a refs snapshot.")
 	_plugin = PluginScript.new()
 	if _plugin == null:
 		return _failure("plugin.gd should instantiate for update settings persistence contracts.")
@@ -346,10 +377,30 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	cache_startup_probe._state.update_refs_state = "success"
 	cache_startup_probe._update_refs_discovery_loaded = true
 	cache_startup_probe._request_startup_update_refs_refresh()
-	if cache_startup_probe.discovery_request_count != 1 or cache_startup_probe.discovery_background_flags != [true]:
+	if cache_startup_probe.discovery_request_count != 0 or cache_startup_probe.discovery_background_flags != []:
 		cache_startup_probe.free()
-		return _failure("plugin.gd should refresh cached startup refs in the background instead of clearing the visible version list.")
+		return _failure("plugin.gd should restore cached refs without contacting GitHub during startup.")
 	cache_startup_probe.free()
+
+	var row_selection_probe := RefreshProbePlugin.new()
+	row_selection_probe._state.settings["update_source"] = "custom_branch"
+	row_selection_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
+	row_selection_probe._state.update_refs_state = "success"
+	row_selection_probe._state.update_ref_commits = {"refactor/v2.0.0": "current-sync-sha"}
+	row_selection_probe._update_refs_discovery_loaded = true
+	row_selection_probe._on_update_compare_target_selected("branch", "refactor/v2.0.0", "current-sync-sha")
+	if row_selection_probe._state.update_compare_state != "success" or row_selection_probe._state.update_compare_ahead_by != 0 or row_selection_probe._state.update_compare_behind_by != 0 or not row_selection_probe.compare_requests.is_empty():
+		row_selection_probe.free()
+		return _failure("plugin.gd should compare an identical selected row locally without a GitHub request.")
+	row_selection_probe._on_update_compare_target_selected("branch", "refactor/v2.0.0", "older-sha")
+	if row_selection_probe._state.update_compare_state != "unverified" or not row_selection_probe.compare_requests.is_empty() or row_selection_probe._state.update_selected_target_commit != "older-sha":
+		row_selection_probe.free()
+		return _failure("plugin.gd row selection should defer non-cached online comparison until an update is requested.")
+	row_selection_probe._on_update_sync_requested()
+	if row_selection_probe.compare_requests.size() != 1 or not bool((row_selection_probe.compare_requests[0] as Dictionary).get("background", false)):
+		row_selection_probe.free()
+		return _failure("plugin.gd should issue one compare verification request only when updating the selected row.")
+	row_selection_probe.free()
 
 	var cache_save_probe := PluginScript.new()
 	cache_save_probe._state.settings["update_source"] = "custom_branch"
@@ -375,7 +426,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	}
 	cache_save_probe._finalize_update_refs_discovery_if_ready(99)
 	var saved_cache: Dictionary = settings_store.load_update_refs_cache(PluginRuntimeStateScript.UPDATE_REFS_CACHE_PATH)
-	if str(saved_cache.get("latest_stable_release", "")) != "v2.0.0" or str((saved_cache.get("commits", {}) as Dictionary).get("refactor/v2.0.0", "")) != "branch-sha" or ((saved_cache.get("branch_commit_rows", {}) as Dictionary).get("refactor/v2.0.0", []) as Array).is_empty():
+	if str((saved_cache.get("commits", {}) as Dictionary).get("refactor/v2.0.0", "")) != "branch-sha" or ((saved_cache.get("branch_commit_rows", {}) as Dictionary).get("refactor/v2.0.0", []) as Array).is_empty():
 		cache_save_probe.free()
 		return _failure("plugin.gd should persist refreshed update refs and commit table rows after successful discovery.")
 	cache_save_probe.free()
@@ -741,7 +792,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"commits": {"feature/pending-refs": "new-sha"},
 		"release_rows": [],
 		"tag_rows": [],
-		"branch_commit_rows": {}
+		"branch_commit_rows": {"feature/pending-refs": [{"kind": "branch", "ref": "feature/pending-refs", "commit": "new-sha", "title": "New head", "date": "2026-07-13T00:00:00Z"}]}
 	}
 	pending_refs_probe._finalize_update_refs_discovery_if_ready(41)
 	if pending_refs_probe.compare_requests.size() != 1 or pending_refs_probe.archive_requests.size() != 0 or not pending_refs_probe._update_sync_after_refs_discovery_pending:
@@ -1002,7 +1053,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"commits": {"refactor/v2.0.0": "target-sha"},
 		"release_rows": [],
 		"tag_rows": [],
-		"branch_commit_rows": {}
+		"branch_commit_rows": {"refactor/v2.0.0": [{"kind": "branch", "ref": "refactor/v2.0.0", "commit": "target-sha", "title": "Target head", "date": "2026-07-13T00:00:00Z"}]}
 	}
 	refs_completion_compare_probe._finalize_update_refs_discovery_if_ready(1)
 	if not refs_completion_compare_probe.compare_requests.is_empty() or refs_completion_compare_probe._update_compare_request_serial != 5 or refs_completion_compare_probe._state.update_compare_state != "loading":
@@ -1016,9 +1067,9 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	foreground_refs_probe._state.update_refs_refresh_serial = 1
 	foreground_refs_probe._update_refs_background_serials[1] = true
 	foreground_refs_probe._on_update_check_requested(false)
-	if foreground_refs_probe._state.update_refs_refresh_state != "idle" or foreground_refs_probe._state.update_refs_refresh_serial != foreground_refs_probe._update_refs_request_serial or not foreground_refs_probe._update_refs_background_serials.is_empty() or foreground_refs_probe.refs_requests.size() != 4:
+	if foreground_refs_probe._state.update_refs_refresh_state != "idle" or foreground_refs_probe._state.update_refs_refresh_serial != foreground_refs_probe._update_refs_request_serial or not foreground_refs_probe._update_refs_background_serials.is_empty() or foreground_refs_probe.refs_requests.size() != 2 or str(foreground_refs_probe.refs_requests[0].get("kind", "")) != "releases" or str(foreground_refs_probe.refs_requests[1].get("kind", "")) != "tags":
 		foreground_refs_probe.free()
-		return _failure("plugin.gd should clear stale background refs refresh state when a foreground refs discovery supersedes it.")
+		return _failure("plugin.gd should refresh only release and tag endpoints for the Release channel.")
 	foreground_refs_probe.free()
 
 	var foreground_preserve_probe := ForegroundRefsProbePlugin.new()
@@ -1026,15 +1077,58 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	foreground_preserve_probe._update_refs_discovery_loaded = true
 	var preserved_branches: Array[String] = ["cached/branch"]
 	var preserved_releases: Array[String] = ["v2.0.0"]
+	foreground_preserve_probe._state.settings["update_source"] = "custom_branch"
+	foreground_preserve_probe._state.settings["update_custom_branch"] = "cached/branch"
 	foreground_preserve_probe._state.update_ref_branches = preserved_branches
 	foreground_preserve_probe._state.update_ref_releases = preserved_releases
 	foreground_preserve_probe._state.update_ref_commits = {"cached/branch": "cached-sha"}
 	foreground_preserve_probe._state.update_ref_branch_commit_rows = {"cached/branch": [{"kind": "branch", "ref": "cached/branch", "commit": "cached-sha", "title": "Cached", "date": "2026-07-08T00:00:00Z"}]}
 	foreground_preserve_probe._on_update_check_requested(false)
-	if foreground_preserve_probe._state.update_refs_state != "loading" or foreground_preserve_probe._state.update_ref_branches != preserved_branches or foreground_preserve_probe._state.update_ref_releases != preserved_releases or str(foreground_preserve_probe._state.update_ref_commits.get("cached/branch", "")) != "cached-sha":
+	if foreground_preserve_probe._state.update_refs_state != "loading" or foreground_preserve_probe._state.update_ref_branches != preserved_branches or foreground_preserve_probe._state.update_ref_releases != preserved_releases or str(foreground_preserve_probe._state.update_ref_commits.get("cached/branch", "")) != "cached-sha" or foreground_preserve_probe.refs_requests.size() != 2 or str(foreground_preserve_probe.refs_requests[0].get("kind", "")) != "branches" or str(foreground_preserve_probe.refs_requests[1].get("kind", "")) != "branch_commits":
 		foreground_preserve_probe.free()
-		return _failure("plugin.gd foreground Refresh List should preserve the visible cached version list while the latest refs are loading.")
+		return _failure("plugin.gd should preserve cached data while refreshing only branches and selected commits for Development.")
 	foreground_preserve_probe.free()
+
+	var paged_refresh_probe := ForegroundRefsProbePlugin.new()
+	paged_refresh_probe._state.settings["update_source"] = "custom_branch"
+	paged_refresh_probe._state.settings["update_custom_branch"] = "dev"
+	paged_refresh_probe._on_update_check_requested(false)
+	var next_page_headers := PackedStringArray(['Link: <https://api.github.test/branches?page=2>; rel="next"'])
+	paged_refresh_probe._on_update_refs_request_completed(HTTPRequest.RESULT_SUCCESS, 200, next_page_headers, '[{"name":"dev","commit":{"sha":"page-1-sha"}}]'.to_utf8_buffer(), "branches", 1)
+	if (paged_refresh_probe._update_refs_pending.get("successful_kinds", []) as Array).has("branches") or bool(paged_refresh_probe._update_refs_pending.get("branch_done", false)) or paged_refresh_probe.refs_requests.size() != 3:
+		paged_refresh_probe.free()
+		return _failure("plugin.gd should not mark a paginated endpoint successful until its final page completes.")
+	paged_refresh_probe._on_update_refs_request_completed(HTTPRequest.RESULT_CANT_CONNECT, 0, PackedStringArray(), PackedByteArray(), "branches", 1)
+	if (paged_refresh_probe._update_refs_pending.get("successful_kinds", []) as Array).has("branches"):
+		paged_refresh_probe.free()
+		return _failure("plugin.gd should not promote partial first-page data when a later page fails.")
+	paged_refresh_probe.free()
+
+	var rate_limit_probe := ForegroundRefsProbePlugin.new()
+	rate_limit_probe._state.update_refs_rate_limit_remaining = "0"
+	rate_limit_probe._state.update_refs_rate_limit_reset_unix = int(Time.get_unix_time_from_system()) + 3600
+	rate_limit_probe._state.update_refs_last_http_status = 403
+	rate_limit_probe._on_update_check_requested(false, "manual")
+	if not rate_limit_probe.refs_requests.is_empty() or rate_limit_probe._update_refs_request_serial != 0 or rate_limit_probe._state.update_refs_state != "error":
+		rate_limit_probe.free()
+		return _failure("plugin.gd should not repeat unauthenticated GitHub requests during a recorded rate-limit cooldown.")
+	rate_limit_probe.free()
+
+	var compare_rate_limit_probe := RefreshProbePlugin.new()
+	compare_rate_limit_probe._state.settings["update_source"] = "custom_branch"
+	compare_rate_limit_probe._state.settings["update_custom_branch"] = "dev"
+	compare_rate_limit_probe._state.update_refs_state = "success"
+	compare_rate_limit_probe._state.update_ref_commits = {"dev": "target-sha"}
+	compare_rate_limit_probe._update_refs_discovery_loaded = true
+	compare_rate_limit_probe._state.update_refs_rate_limit_remaining = "0"
+	compare_rate_limit_probe._state.update_refs_rate_limit_reset_unix = int(Time.get_unix_time_from_system()) + 3600
+	compare_rate_limit_probe._state.update_refs_last_http_status = 403
+	compare_rate_limit_probe._on_update_compare_target_selected("branch", "dev", "target-sha")
+	compare_rate_limit_probe._on_update_sync_requested()
+	if not compare_rate_limit_probe.compare_requests.is_empty() or compare_rate_limit_probe._state.update_sync_state != "error" or compare_rate_limit_probe._state.update_compare_refresh_state != "error":
+		compare_rate_limit_probe.free()
+		return _failure("plugin.gd should apply the recorded GitHub rate-limit cooldown to one-click compare verification.")
+	compare_rate_limit_probe.free()
 
 	var background_failure_probe := PluginScript.new()
 	background_failure_probe._state.update_refs_state = "success"
@@ -1068,6 +1162,145 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		return _failure("plugin.gd should preserve the last successful update refs snapshot when a background refresh fails.")
 	background_failure_probe.free()
 
+	var partial_development_probe := PluginScript.new()
+	partial_development_probe._state.settings["update_source"] = "custom_branch"
+	partial_development_probe._state.settings["update_custom_branch"] = "dev"
+	partial_development_probe._state.update_refs_state = "success"
+	var cached_development_branches: Array[String] = ["dev"]
+	partial_development_probe._state.update_ref_branches = cached_development_branches
+	partial_development_probe._state.update_ref_commits = {"dev": "old-sha"}
+	partial_development_probe._state.update_ref_branch_commit_rows = {"dev": [{"kind": "branch", "ref": "dev", "commit": "old-sha", "title": "Cached history", "date": "2026-07-08T00:00:00Z"}]}
+	partial_development_probe._update_refs_request_serial = 1
+	partial_development_probe._update_refs_pending = {
+		"serial": 1,
+		"background": false,
+		"required_kinds": ["branches", "branch_commits"],
+		"successful_kinds": ["branches"],
+		"branch_done": true,
+		"release_done": true,
+		"tag_done": true,
+		"branch_commits_done": true,
+		"branch_commits_branch": "dev",
+		"errors": ["branch commits unavailable"],
+		"branches": ["dev", "feature/new"],
+		"releases": [],
+		"stable_releases": [],
+		"tags": [],
+		"commits": {"dev": "new-head-sha"},
+		"release_rows": [],
+		"tag_rows": [],
+		"branch_commit_rows": {}
+	}
+	partial_development_probe._finalize_update_refs_discovery_if_ready(1)
+	var preserved_history: Array = (partial_development_probe._state.update_ref_branch_commit_rows as Dictionary).get("dev", [])
+	if not (partial_development_probe._state.update_ref_branches as Array).has("feature/new") or preserved_history.size() != 1 or str((preserved_history[0] as Dictionary).get("commit", "")) != "old-sha":
+		partial_development_probe.free()
+		return _failure("plugin.gd should preserve the last successful branch history when the branch list succeeds but commit history refresh fails.")
+	partial_development_probe.free()
+
+	var partial_history_probe := PluginScript.new()
+	partial_history_probe._state.settings["update_source"] = "custom_branch"
+	partial_history_probe._state.settings["update_custom_branch"] = "dev"
+	partial_history_probe._state.update_refs_state = "success"
+	var cached_history_branches: Array[String] = ["dev"]
+	partial_history_probe._state.update_ref_branches = cached_history_branches
+	partial_history_probe._state.update_ref_commits = {"dev": "old-sha"}
+	partial_history_probe._state.update_ref_branch_commit_rows = {"dev": [{"kind": "branch", "ref": "dev", "commit": "old-sha", "title": "Old head", "date": "2026-07-08T00:00:00Z"}]}
+	partial_history_probe._update_refs_request_serial = 1
+	partial_history_probe._update_refs_pending = {
+		"serial": 1,
+		"background": false,
+		"required_kinds": ["branches", "branch_commits"],
+		"successful_kinds": ["branch_commits"],
+		"branch_done": true,
+		"release_done": true,
+		"tag_done": true,
+		"branch_commits_done": true,
+		"branch_commits_branch": "dev",
+		"errors": ["branches unavailable"],
+		"branches": [],
+		"releases": [],
+		"stable_releases": [],
+		"tags": [],
+		"commits": {"dev": "old-sha"},
+		"release_rows": [],
+		"tag_rows": [],
+		"branch_commit_rows": {"dev": [{"kind": "branch", "ref": "dev", "commit": "new-sha", "title": "New head", "date": "2026-07-13T00:00:00Z"}]}
+	}
+	partial_history_probe._finalize_update_refs_discovery_if_ready(1)
+	if str(partial_history_probe._state.update_ref_commits.get("dev", "")) != "new-sha" or str(partial_history_probe._resolve_update_sync_target().get("commit", "")) != "new-sha":
+		partial_history_probe.free()
+		return _failure("plugin.gd should align the implicit branch target with refreshed visible history when only commit history succeeds.")
+	partial_history_probe.free()
+
+	var partial_release_probe := PluginScript.new()
+	partial_release_probe._state.settings["update_source"] = "latest_stable"
+	partial_release_probe._state.update_refs_state = "success"
+	var cached_release_values: Array[String] = ["v1.0.0"]
+	partial_release_probe._state.update_ref_releases = cached_release_values
+	partial_release_probe._state.update_ref_release_rows = [{"kind": "tag", "ref": "v1.0.0", "commit": "old-tag-sha", "title": "Cached tag", "date": "2026-07-01T00:00:00Z", "stable": true}]
+	partial_release_probe._state.update_ref_commits = {"v1.0.0": "old-tag-sha"}
+	partial_release_probe._update_refs_request_serial = 1
+	partial_release_probe._update_refs_pending = {
+		"serial": 1,
+		"background": false,
+		"required_kinds": ["releases", "tags"],
+		"successful_kinds": ["releases"],
+		"branch_done": true,
+		"release_done": true,
+		"tag_done": true,
+		"branch_commits_done": true,
+		"branch_commits_branch": "dev",
+		"errors": ["tags unavailable"],
+		"branches": [],
+		"releases": ["v2.0.0"],
+		"stable_releases": ["v2.0.0"],
+		"tags": [],
+		"commits": {"v1.0.0": "old-tag-sha"},
+		"release_rows": [{"kind": "tag", "ref": "v2.0.0", "commit": "", "title": "Release 2.0.0", "date": "2026-07-13T00:00:00Z", "stable": true}],
+		"tag_rows": [],
+		"branch_commit_rows": {}
+	}
+	partial_release_probe._finalize_update_refs_discovery_if_ready(1)
+	if not (partial_release_probe._state.update_ref_releases as Array).has("v2.0.0") or not (partial_release_probe._state.update_ref_releases as Array).has("v1.0.0") or (partial_release_probe._state.update_ref_release_rows as Array).size() != 2:
+		partial_release_probe.free()
+		return _failure("plugin.gd should merge fresh release data with cached tag data when only one Release endpoint succeeds.")
+	partial_release_probe.free()
+
+	var hidden_selection_probe := PluginScript.new()
+	hidden_selection_probe._state.settings["update_source"] = "custom_branch"
+	hidden_selection_probe._state.settings["update_custom_branch"] = "dev"
+	hidden_selection_probe._state.update_refs_state = "success"
+	hidden_selection_probe._state.update_selected_target_kind = "branch"
+	hidden_selection_probe._state.update_selected_target_ref = "dev"
+	hidden_selection_probe._state.update_selected_target_commit = "old-sha"
+	hidden_selection_probe._update_refs_request_serial = 1
+	hidden_selection_probe._update_refs_pending = {
+		"serial": 1,
+		"background": false,
+		"required_kinds": ["branches", "branch_commits"],
+		"successful_kinds": ["branches", "branch_commits"],
+		"branch_done": true,
+		"release_done": true,
+		"tag_done": true,
+		"branch_commits_done": true,
+		"branch_commits_branch": "dev",
+		"errors": [],
+		"branches": ["dev"],
+		"releases": [],
+		"stable_releases": [],
+		"tags": [],
+		"commits": {"dev": "new-sha"},
+		"release_rows": [],
+		"tag_rows": [],
+		"branch_commit_rows": {"dev": [{"kind": "branch", "ref": "dev", "commit": "new-sha", "title": "New head", "date": "2026-07-13T00:00:00Z"}]}
+	}
+	hidden_selection_probe._finalize_update_refs_discovery_if_ready(1)
+	if not str(hidden_selection_probe._state.update_selected_target_ref).is_empty() or not str(hidden_selection_probe._state.update_selected_target_commit).is_empty() or str(hidden_selection_probe._resolve_update_sync_target().get("commit", "")) != "new-sha":
+		hidden_selection_probe.free()
+		return _failure("plugin.gd should clear a selected compare target that is no longer visible after an explicit refresh.")
+	hidden_selection_probe.free()
+
 	var background_success_probe := PluginScript.new()
 	background_success_probe._state.settings["update_source"] = "custom_branch"
 	background_success_probe._state.settings["update_custom_branch"] = "refactor/v2.0.0"
@@ -1090,7 +1323,7 @@ func run_case(_tree: SceneTree) -> Dictionary:
 		"commits": {"refactor/v2.0.0": "target-sha"},
 		"release_rows": [],
 		"tag_rows": [],
-		"branch_commit_rows": {}
+		"branch_commit_rows": {"refactor/v2.0.0": [{"kind": "branch", "ref": "refactor/v2.0.0", "commit": "target-sha", "title": "Target head", "date": "2026-07-13T00:00:00Z"}]}
 	}
 	background_success_probe._finalize_update_refs_discovery_if_ready(1)
 	if background_success_probe._state.update_refs_state != "success" or background_success_probe._state.update_refs_refresh_state != "success" or background_success_probe._state.update_ref_branches != target_branches or str(background_success_probe._state.update_ref_commits.get("refactor/v2.0.0", "")) != "target-sha" or not background_success_probe._update_refs_discovery_loaded:

@@ -7,14 +7,15 @@ const DEFAULT_LOG_LEVEL := "info"
 const DEFAULT_LANGUAGE := "en"
 const DEFAULT_UPDATE_SOURCE := "latest_stable"
 const DEFAULT_UPDATE_BRANCH := "dev"
-const UPDATE_REPO_URL := "https://github.com/LuoxuanLove/godot-dotnet-mcp"
-
-
 func project(model: Dictionary) -> Dictionary:
 	var localization = model.get("localization")
 	var settings: Dictionary = model.get("settings", {})
 	var update_settings := _project_update_settings(settings)
 	var freshness: Dictionary = model.get("plugin_freshness", {})
+	var version_rows := _build_version_rows(model, update_settings, localization)
+	_mark_selected_update_row(version_rows, model, update_settings)
+	var update_status_text := _build_update_status_text(model, update_settings, localization)
+	var update_details_text := _build_update_details_text(model, update_settings, localization, update_status_text)
 
 	return {
 		"settings": {
@@ -28,23 +29,21 @@ func project(model: Dictionary) -> Dictionary:
 			"update_releases": _project_ref_options(_build_release_values(model, update_settings), str(update_settings.get("release_tag", "")), localization, "settings_update_release_unavailable")
 		},
 		"updates": {
-			"description_text": _get_localized_text(localization, "settings_updates_description", "The plugin refreshes the version list once at startup. After that, GitHub is contacted only by Refresh List, an explicit tool refresh, or verification and synchronization through One-click Update or Switch."),
 			"refresh_text": _get_localized_text(localization, "settings_update_refresh_list", "Refresh List"),
 			"source": str(update_settings.get("source", DEFAULT_UPDATE_SOURCE)),
 			"active_channel": _resolve_update_channel(update_settings),
 			"custom_branch": str(update_settings.get("custom_branch", DEFAULT_UPDATE_BRANCH)),
 			"release_tag": str(update_settings.get("release_tag", "")),
 			"show_branch_row": str(update_settings.get("source", DEFAULT_UPDATE_SOURCE)) == "custom_branch",
-			"remote_url": UPDATE_REPO_URL,
 			"current_branch": _resolve_current_branch(model, update_settings),
 			"current_version": _resolve_current_version(model, freshness, localization),
 			"current_commit": _read_freshness_value(freshness, ["sync", "source_git_commit"]),
-			"version_rows": _build_version_rows(model, update_settings, localization),
+			"version_rows": version_rows,
 			"empty_text": _build_update_table_empty_text(model, update_settings, localization),
 			"audit_text": _build_update_audit_text(model, localization),
-			"details_text": _build_update_details_text(model, update_settings, localization),
-			"details_attention": _should_highlight_update_details(model),
-			"status_text": _build_update_status_text(model, update_settings, localization),
+			"details_text": update_details_text,
+			"details_attention": not update_details_text.is_empty() and _should_highlight_update_details(model),
+			"status_text": update_status_text,
 			"progress": _project_update_sync_progress(model),
 			"progress_visible": str(model.get("update_sync_state", "idle")) == "loading",
 			"check_enabled": _is_update_check_enabled(model),
@@ -124,6 +123,24 @@ func _build_version_rows(model: Dictionary, update_settings: Dictionary, localiz
 	if _resolve_update_channel(update_settings) == "development":
 		return _build_development_rows(model, update_settings, localization)
 	return _build_stable_rows(model, localization)
+
+
+func _mark_selected_update_row(rows: Array, model: Dictionary, update_settings: Dictionary) -> void:
+	var selected_ref := str(model.get("update_selected_target_ref", "")).strip_edges()
+	var selected_commit := str(model.get("update_selected_target_commit", "")).strip_edges()
+	if selected_ref.is_empty():
+		selected_ref = _resolve_selected_update_target_value(model, update_settings)
+		selected_commit = _resolve_target_update_commit(model, selected_ref)
+	var matched := false
+	for raw_row in rows:
+		if not (raw_row is Dictionary):
+			continue
+		var row := raw_row as Dictionary
+		var row_ref := str(row.get("ref", "")).strip_edges()
+		var row_commit := str(row.get("commit", "")).strip_edges()
+		var selected := not matched and row_ref == selected_ref and (selected_commit.is_empty() or row_commit == selected_commit)
+		row["selected"] = selected
+		matched = matched or selected
 
 
 func _build_stable_rows(model: Dictionary, localization) -> Array:
@@ -223,29 +240,32 @@ func _build_update_audit_text(model: Dictionary, localization) -> String:
 	return "  |  ".join(parts)
 
 
-func _build_update_details_text(model: Dictionary, update_settings: Dictionary, localization) -> String:
+func _build_update_details_text(model: Dictionary, update_settings: Dictionary, localization, primary_status: String = "") -> String:
 	var refs_state := str(model.get("update_refs_state", "idle"))
 	var sync_state := str(model.get("update_sync_state", "idle"))
 	if refs_state == "error":
 		var refs_error := str(model.get("update_refs_error", "")).strip_edges()
-		if refs_error.is_empty():
-			refs_error = _get_localized_text(localization, "settings_update_refs_error", "Update refs discovery failed.")
-		return refs_error
+		return _remove_duplicate_update_detail(refs_error, primary_status)
 	if sync_state == "error":
 		var sync_error := str(model.get("update_sync_error", "")).strip_edges()
-		if sync_error.is_empty():
-			sync_error = _get_localized_text(localization, "settings_update_sync_error", "Update sync failed.")
-		return sync_error
+		return _remove_duplicate_update_detail(sync_error, primary_status)
 	if str(model.get("update_compare_state", "idle")) == "error":
 		var compare_error := str(model.get("update_compare_error", "")).strip_edges()
-		if compare_error.is_empty():
-			compare_error = _get_localized_text(localization, "settings_update_compare_required", "Update target could not be verified; use Switch for an explicit manual change.")
-		return compare_error
+		return _remove_duplicate_update_detail(compare_error, primary_status)
 	var details := _build_background_refresh_errors(model, localization)
-	if refs_state == "idle" and sync_state == "idle":
-		return "\n".join(details)
-	details.append(_build_update_compare_status_text(model, update_settings, localization))
-	return "\n".join(details)
+	var filtered: Array[String] = []
+	for detail in details:
+		var unique_detail := _remove_duplicate_update_detail(detail, primary_status)
+		_append_unique_detail(filtered, unique_detail)
+	return "\n".join(filtered)
+
+
+func _remove_duplicate_update_detail(detail: String, primary_status: String) -> String:
+	var normalized_detail := detail.replace("\r\n", "\n").replace("\r", "\n").strip_edges()
+	var normalized_status := primary_status.replace("\r\n", "\n").replace("\r", "\n").strip_edges()
+	if normalized_detail.is_empty() or normalized_detail == normalized_status:
+		return ""
+	return normalized_detail
 
 
 func _build_background_refresh_errors(model: Dictionary, localization) -> Array[String]:
@@ -254,13 +274,20 @@ func _build_background_refresh_errors(model: Dictionary, localization) -> Array[
 		var refs_error := str(model.get("update_refs_refresh_error", "")).strip_edges()
 		if refs_error.is_empty():
 			refs_error = _get_localized_text(localization, "settings_update_refs_error", "Update refs discovery failed.")
-		errors.append(refs_error)
+		_append_unique_detail(errors, refs_error)
 	if ["error", "unavailable"].has(str(model.get("update_compare_refresh_state", "idle"))):
 		var compare_error := str(model.get("update_compare_refresh_error", "")).strip_edges()
 		if compare_error.is_empty():
 			compare_error = _get_localized_text(localization, "settings_update_compare_required", "Update target could not be verified; use Switch for an explicit manual change.")
-		errors.append(compare_error)
+		_append_unique_detail(errors, compare_error)
 	return errors
+
+
+func _append_unique_detail(details: Array[String], text: String) -> void:
+	var normalized := text.strip_edges()
+	if normalized.is_empty() or details.has(normalized):
+		return
+	details.append(normalized)
 
 
 func _should_highlight_update_details(model: Dictionary) -> bool:
@@ -276,7 +303,21 @@ func _build_update_status_text(model: Dictionary, update_settings: Dictionary, l
 	var sync_state := str(model.get("update_sync_state", "idle"))
 	if sync_state != "idle":
 		return _build_update_sync_status_text(model, update_settings, localization)
-	return _build_update_refs_status_text(model, update_settings, localization)
+	var refs_state := str(model.get("update_refs_state", "idle"))
+	if refs_state == "loading":
+		return _get_localized_text(localization, "settings_update_refs_loading", "Loading update refs.")
+	if refs_state == "error":
+		return _get_localized_text(localization, "settings_update_refs_error", "Update refs discovery failed.")
+	var compare_state := str(model.get("update_compare_state", "idle"))
+	if compare_state == "loading":
+		return _get_localized_text(localization, "settings_update_compare_loading", "Checking selected target...")
+	if compare_state == "error":
+		return _get_localized_text(localization, "settings_update_compare_required", "Update target could not be verified; use Switch for an explicit manual change.")
+	if compare_state == "unverified" or compare_state == "unavailable":
+		return _build_update_compare_status_text(model, update_settings, localization)
+	if compare_state == "success":
+		return _build_update_compare_status_text(model, update_settings, localization)
+	return ""
 
 
 func _project_update_sync_progress(model: Dictionary) -> float:
@@ -320,10 +361,7 @@ func _build_update_sync_status_text(model: Dictionary, update_settings: Dictiona
 				status = _get_localized_text(localization, "settings_update_sync_success", "Update sync completed.")
 			return status
 		"error":
-			var error := str(model.get("update_sync_error", "")).strip_edges()
-			if error.is_empty():
-				error = _get_localized_text(localization, "settings_update_sync_error", "Update sync failed.")
-			return "%s %s" % [error, target]
+			return _get_localized_text(localization, "settings_update_sync_error", "Update sync failed.")
 		_:
 			return _build_update_refs_status_text(model, update_settings, localization)
 
@@ -351,6 +389,9 @@ func _resolve_current_version(model: Dictionary, freshness: Dictionary, localiza
 
 
 func _resolve_selected_update_target_value(model: Dictionary, update_settings: Dictionary) -> String:
+	var selected_ref := str(model.get("update_selected_target_ref", "")).strip_edges()
+	if not selected_ref.is_empty():
+		return selected_ref
 	var source := str(update_settings.get("source", DEFAULT_UPDATE_SOURCE))
 	match source:
 		"custom_branch":
@@ -364,6 +405,10 @@ func _resolve_selected_update_target_value(model: Dictionary, update_settings: D
 
 
 func _resolve_target_update_commit(model: Dictionary, target_ref: String) -> String:
+	var selected_ref := str(model.get("update_selected_target_ref", "")).strip_edges()
+	var selected_commit := str(model.get("update_selected_target_commit", "")).strip_edges()
+	if not selected_commit.is_empty() and selected_ref == target_ref:
+		return selected_commit
 	var commits: Dictionary = model.get("update_refs_commits", {})
 	return str(commits.get(target_ref, model.get("update_compare_target_commit", ""))).strip_edges()
 
@@ -387,6 +432,8 @@ func _build_compare_difference_text(model: Dictionary, localization) -> String:
 	var state := str(model.get("update_compare_state", "idle"))
 	if state == "loading":
 		return _get_localized_text(localization, "settings_update_compare_loading", "checking...")
+	if state == "unverified":
+		return _get_localized_text(localization, "settings_update_compare_deferred", "verified on update")
 	var ahead_by := int(model.get("update_compare_ahead_by", -1))
 	var behind_by := int(model.get("update_compare_behind_by", -1))
 	if state == "success" and ahead_by >= 0 and behind_by >= 0:

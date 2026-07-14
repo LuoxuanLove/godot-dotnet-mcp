@@ -45,7 +45,7 @@ class FakeLocalization extends RefCounted:
 		"settings_update_remote_url": "Remote URL:",
 		"settings_update_current_branch": "Current Branch:",
 		"settings_update_current_version": "Current Version:",
-		"settings_update_channel_stable": "Stable",
+		"settings_update_channel_stable": "Release",
 		"settings_update_channel_development": "Development",
 		"settings_update_col_version": "Version ID",
 		"settings_update_col_message": "Update",
@@ -81,6 +81,7 @@ class FakeLocalization extends RefCounted:
 		"settings_update_compare_summary": "Current plugin %s [%s] -> selected target %s [%s], commit difference: %s.",
 		"settings_update_compare_difference": "current ahead %d / target ahead %d",
 		"settings_update_compare_loading": "checking...",
+		"settings_update_compare_deferred": "verified on update",
 		"port": "Port:",
 		"log_level": "Log Level:",
 		"language": "Language:",
@@ -105,6 +106,9 @@ class Recorder extends RefCounted:
 	var update_interaction_refresh_count := 0
 	var update_check_count := 0
 	var update_apply_count := 0
+	var update_compare_kind := ""
+	var update_compare_ref := ""
+	var update_compare_commit := ""
 	var update_switch_kind := ""
 	var update_switch_ref := ""
 	var update_switch_commit := ""
@@ -126,6 +130,11 @@ class Recorder extends RefCounted:
 
 	func on_update_apply_requested() -> void:
 		update_apply_count += 1
+
+	func on_update_compare_target_selected(kind: String, target_ref: String, target_commit: String) -> void:
+		update_compare_kind = kind
+		update_compare_ref = target_ref
+		update_compare_commit = target_commit
 
 	func on_update_switch_requested(kind: String, target_ref: String, target_commit: String) -> void:
 		update_switch_kind = kind
@@ -177,6 +186,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_instance.update_interaction_refresh_requested.connect(Callable(recorder, "on_update_interaction_refresh_requested"))
 	_instance.update_check_requested.connect(Callable(recorder, "on_update_check_requested"))
 	_instance.update_apply_requested.connect(Callable(recorder, "on_update_apply_requested"))
+	_instance.update_compare_target_selected.connect(Callable(recorder, "on_update_compare_target_selected"))
 	_instance.update_switch_requested.connect(Callable(recorder, "on_update_switch_requested"))
 	_instance.apply_model({
 		"localization": FakeLocalization.new(),
@@ -229,8 +239,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var apply_button := tab_container.get_tab_control(5).find_child("ApplyButton", true, false) as Button
 	if channel_tabs == null or custom_branch_value == null or version_tree == null or check_button == null or prepare_button == null or apply_button == null:
 		return _failure("Settings tab update controls should exist in the Settings tab.")
-	if channel_tabs.get_tab_count() != 2 or channel_tabs.current_tab != 1 or channel_tabs.get_tab_title(0) != "Stable" or channel_tabs.get_tab_title(1) != "Development":
-		return _failure("Settings tab should expose Stable and Development update channels in order.")
+	if channel_tabs.get_tab_count() != 2 or channel_tabs.current_tab != 1 or channel_tabs.get_tab_title(0) != "Release" or channel_tabs.get_tab_title(1) != "Development":
+		return _failure("Settings tab should expose Release and Development update channels in order.")
 	if tab_container.get_tab_control(5).find_child("SourceOption", true, false) != null:
 		return _failure("Settings tab should not expose the removed update source selector.")
 	if custom_branch_value.get_item_count() < 2 or str(custom_branch_value.get_item_metadata(0)) != "dev" or str(custom_branch_value.get_item_metadata(custom_branch_value.selected)) != "dev":
@@ -241,6 +251,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab update refs should not use manual LineEdit controls.")
 	if not version_tree.visible or version_tree.get_root() == null or version_tree.get_root().get_first_child() == null:
 		return _failure("Settings tab should show branch commit rows in the Development channel.")
+	if version_tree.select_mode != Tree.SELECT_ROW:
+		return _failure("Settings tab should highlight selected version rows instead of individual cells.")
 	if not check_button.visible or check_button.disabled or check_button.text != "Refresh List":
 		return _failure("Settings tab Refresh List should be visible and enabled because refs refresh is manual.")
 	if prepare_button.visible or not prepare_button.disabled or not prepare_button.text.is_empty():
@@ -256,9 +268,13 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should display the compact update summary after Dock projection.")
 	var details_button := tab_container.get_tab_control(5).find_child("DetailsButton", true, false) as Button
 	var details_panel := tab_container.get_tab_control(5).find_child("DetailsPanel", true, false) as PanelContainer
-	var details_text := tab_container.get_tab_control(5).find_child("UpdatesDetails", true, false) as Label
-	if _find_label_containing(labels, "Synced dev.") == null or details_button == null or not details_button.visible or details_panel == null or details_panel.visible or details_text == null or not details_text.text.contains("Current plugin 1.0.1 [abcdef1] -> selected target 1.4.0 [1234567]") or details_text.text.contains("selected target dev") or not details_text.text.contains("current ahead 0 / target ahead 1"):
-		return _failure("Settings tab should preserve compare hashes in collapsed details while keeping the main sync status concise.")
+	if _find_label_containing(labels, "Synced dev.") == null or details_button == null or details_button.visible or details_panel == null or details_panel.visible:
+		return _failure("Settings tab should keep completed sync status in one place and hide empty diagnostic details.")
+	var second_row := version_tree.get_root().get_first_child().get_next()
+	second_row.select(1)
+	version_tree.emit_signal("cell_selected")
+	if recorder.update_compare_kind != "branch" or recorder.update_compare_ref != "dev" or recorder.update_compare_commit != "fedcba9876543210" or not recorder.update_switch_ref.is_empty():
+		return _failure("Selecting any cell in a version row should set the comparison target without switching versions.")
 	custom_branch_value.emit_signal("pressed")
 	if recorder.update_interaction_refresh_count != 0 or recorder.update_source != "" or recorder.update_custom_branch != "":
 		return _failure("MCP Dock should not request update refresh when Settings selectors are opened.")

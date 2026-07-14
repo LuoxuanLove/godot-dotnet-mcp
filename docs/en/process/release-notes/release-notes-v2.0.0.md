@@ -40,9 +40,9 @@ This makes the Dock a preview of the MCP server surface rather than a parallel i
 
 ### 🎛️ Focused Settings Experience
 
-The Settings page keeps port, log level, language, stable/development channels, branch selection, Refresh List, one-click update, and row-level Switch actions, but presents them in a quieter hierarchy. Current version and primary actions stay visible, while repository metadata, commit comparisons, HTTP refresh audit, and rate-limit timing move into on-demand details that open automatically when an error or exhausted API rate limit needs attention.
+The Settings page keeps port, log level, language, Release/Development channels, branch selection, Refresh List, one-click update, and row-level Switch actions, but presents them in a quieter hierarchy. Redundant policy and repository text is removed, the channel selector sits directly above the version list, the primary status carries the result, and expandable details contain only supplemental diagnostics instead of repeating the same error.
 
-The version list now uses three focused columns, marks the current row with text as well as color, and moves dates to row tooltips. Forms and actions stack into a true single-column layout at ultra-narrow Dock widths, so the update workflow remains usable without horizontal clutter.
+The version list now uses three focused columns, marks the current row with text as well as color, and moves dates to row tooltips. Selecting a commit highlights the whole row and makes that exact ref/commit the comparison target; only the separate Switch action changes the installed version. Selection and startup are cache-only. Refresh List fetches the selected channel's metadata, one-click update may request remote comparison, and the explicit Switch action downloads the selected archive and, for a selected branch, resolves its ref when cached commit metadata is unavailable. Forms and actions stack into a true single-column layout at ultra-narrow Dock widths, so the update workflow remains usable without horizontal clutter.
 
 A four-language Dock UI style guide now defines the information hierarchy, editor-native theme use, spacing, responsive breakpoints, action priorities, status and empty-state behavior, accessibility, localization, and validation matrix that future pages must follow.
 
@@ -78,5 +78,5 @@ Compatibility is deliberately explicit: older discovery calls and legacy transpo
 - HTTP clients should send `MCP-Protocol-Version: 2025-11-25`, handle `Mcp-Session-Id`, and advertise `Accept: application/json, text/event-stream`.
 - Stdio launchers should use newline-delimited JSON-RPC unless they intentionally opt into the legacy `Content-Length` compatibility mode.
 - C# semantic workflows should rely on the shipped framework-dependent Roslyn runtime files instead of compiling plugin Roslyn source inside the host project, and require the .NET 8 runtime.
-- Settings update refs refresh is manual: click Check for Updates, or call the explicit maintenance refresh action, before syncing release-derived targets.
+- Settings restores cached update refs and exact comparisons at startup without contacting GitHub. Refresh List updates only the selected channel, and one-click update requests remote comparison only when no exact local/cache result is available.
 - Antigravity users can use the Config tab to detect and open the app, copy the Godot MCP configuration, and write or remove the `godot-mcp` entry in `.gemini/config/mcp_config.json`.

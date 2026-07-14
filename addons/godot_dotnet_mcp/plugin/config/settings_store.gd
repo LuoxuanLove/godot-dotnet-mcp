@@ -7,6 +7,7 @@ const SystemTreeCatalog = preload("res://addons/godot_dotnet_mcp/plugin/runtime/
 const TreeCollapseState = preload("res://addons/godot_dotnet_mcp/plugin/runtime/tree_collapse_state.gd")
 const FileWriteTransaction = preload("res://addons/godot_dotnet_mcp/plugin/config/file_write_transaction.gd")
 const TOOL_CONFIG_EXCHANGE_ROOT := "user://godot_dotnet_mcp/config_exchange"
+const UPDATE_COMPARE_CACHE_LIMIT := 32
 
 
 func load_plugin_settings(default_settings: Dictionary, settings_path: String, all_categories: Array, default_domains: Array) -> Dictionary:
@@ -99,10 +100,11 @@ func normalize_update_refs_cache(cache: Dictionary) -> Dictionary:
 	var versions := _normalize_string_dictionary(cache.get("versions", {}))
 	var release_rows := _normalize_update_ref_rows(cache.get("release_rows", []))
 	var branch_commit_rows := _normalize_update_branch_commit_rows(cache.get("branch_commit_rows", {}))
-	if branches.is_empty() and releases.is_empty() and commits.is_empty() and release_rows.is_empty() and branch_commit_rows.is_empty():
+	var compare_cache := _normalize_update_compare_cache(cache.get("compare_cache", {}))
+	if branches.is_empty() and releases.is_empty() and commits.is_empty() and release_rows.is_empty() and branch_commit_rows.is_empty() and compare_cache.is_empty():
 		return {}
 	return {
-		"format_version": 1,
+		"format_version": 2,
 		"saved_unix": int(cache.get("saved_unix", 0)),
 		"last_checked_unix": int(cache.get("last_checked_unix", 0)),
 		"last_trigger": str(cache.get("last_trigger", "")).strip_edges(),
@@ -115,7 +117,8 @@ func normalize_update_refs_cache(cache: Dictionary) -> Dictionary:
 		"commits": commits,
 		"versions": versions,
 		"release_rows": release_rows,
-		"branch_commit_rows": branch_commit_rows
+		"branch_commit_rows": branch_commit_rows,
+		"compare_cache": compare_cache
 	}
 
 
@@ -452,3 +455,46 @@ func _normalize_update_branch_commit_rows(raw_rows) -> Dictionary:
 		if not branch_rows.is_empty():
 			rows[branch] = branch_rows
 	return rows
+
+
+func _normalize_update_compare_cache(raw_cache) -> Dictionary:
+	var result := {}
+	if not (raw_cache is Dictionary):
+		return result
+	for raw_key in (raw_cache as Dictionary).keys():
+		if result.size() >= UPDATE_COMPARE_CACHE_LIMIT:
+			break
+		var value = (raw_cache as Dictionary).get(raw_key, {})
+		if not (value is Dictionary):
+			continue
+		var entry := value as Dictionary
+		var base_commit := str(entry.get("base_commit", "")).strip_edges()
+		var target_kind := str(entry.get("target_kind", "branch")).strip_edges()
+		var target_ref := str(entry.get("target_ref", "")).strip_edges()
+		var target_commit := str(entry.get("target_commit", "")).strip_edges()
+		var ahead_by := _normalize_non_negative_integer(entry.get("ahead_by", null))
+		var behind_by := _normalize_non_negative_integer(entry.get("behind_by", null))
+		if base_commit.is_empty() or target_ref.is_empty() or target_commit.is_empty() or ahead_by < 0 or behind_by < 0:
+			continue
+		var normalized_kind := "tag" if target_kind == "tag" else "branch"
+		var normalized_key := "\n".join([base_commit, normalized_kind, target_ref, target_commit])
+		result[normalized_key] = {
+			"base_commit": base_commit,
+			"target_kind": normalized_kind,
+			"target_ref": target_ref,
+			"target_commit": target_commit,
+			"ahead_by": ahead_by,
+			"behind_by": behind_by,
+			"checked_unix": int(entry.get("checked_unix", 0))
+		}
+	return result
+
+
+func _normalize_non_negative_integer(value) -> int:
+	if value is int:
+		return value if value >= 0 else -1
+	if value is float:
+		if is_nan(value) or is_inf(value) or value < 0.0 or floor(value) != value:
+			return -1
+		return int(value)
+	return -1

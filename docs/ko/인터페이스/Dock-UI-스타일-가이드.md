@@ -22,6 +22,8 @@
 
 visual order와 keyboard focus order는 같아야 합니다. 자주 쓰는 path를 먼저 두고 고정 repository facts, hashes, timestamps, audit trail은 secondary details로 이동합니다.
 
+list, table, preview, editor의 scope를 정하는 selector는 해당 surface 바로 앞에 둡니다. selector와 대상 content 사이에 관련 없는 status, metadata, action을 넣지 않습니다.
+
 ## 간격과 레이아웃 단위
 
 모든 값은 current editor scale을 곱하는 logical pixels입니다.
@@ -55,16 +57,18 @@ visual order와 keyboard focus order는 같아야 합니다. 자주 쓰는 path�
 
 ## 상태, 도움말, 세부 정보
 
-- 한 card에는 상시 description 최대 하나와 live status region 하나만 두고 같은 guidance를 반복하지 않습니다.
+- 한 card에는 상시 description 최대 하나와 live status region 하나만 둡니다. controls, status, empty state만으로 workflow가 설명되면 description을 생략하고 같은 guidance를 반복하지 않습니다.
 - idle guidance는 next action을 알려야 합니다. loading은 active scope를 표시하고 충돌 action을 잠그며 측정 가능하면 progress를 보여 줍니다.
 - success text는 짧게 유지합니다. error text는 원인과 알려진 경우 recovery action을 보존합니다.
 - trigger source, HTTP status, rate-limit reset, hash, comparison count는 collapsible details에 둡니다.
-- error 또는 rate limit exhausted details는 자동으로 펼칠 수 있지만 일반 audit은 접힌 상태로 둡니다.
+- persistent status region은 primary result를 담당합니다. details는 supplemental이어야 하며 같은 error나 summary를 반복하지 않고 actionable diagnostic evidence를 추가할 때만 자동으로 펼칩니다.
+- error 또는 rate limit exhausted 상태에서 details가 해당 evidence를 추가하면 자동으로 펼칠 수 있지만 일반 audit은 접힌 상태로 둡니다.
 
 ## 목록, 테이블, 빈 상태
 
 - item을 선택하거나 판단하는 데 필요한 열만 보여 주고 narrow layout의 secondary date / identifier는 tooltip 또는 details로 이동합니다.
 - current row는 색상 외에도 text marker 또는 icon이 있어야 하며 같은 item을 다시 선택하는 action을 표시하지 않습니다.
+- row selection이 target을 정할 때는 row 전체를 highlight합니다. selection은 비파괴 target만 업데이트하고 mutation, navigation, switch는 별도 row action으로 수행합니다.
 - row action은 tertiary입니다. editor icon이 있어도 localized label 또는 tooltip을 제공합니다.
 - 빈 `Tree`는 숨기고 not loaded, loading, no results, error를 구분하는 간단한 empty state를 표시합니다.
 - model refresh 동안 selection, scroll position, deferred row action을 안정적으로 유지합니다.
@@ -79,6 +83,8 @@ visual order와 keyboard focus order는 같아야 합니다. 자주 쓰는 path�
 | Destructive | remove, clear, delete | 일반 action과 분리하고 손실 가능성이 있으면 확인 |
 
 hover-only control은 이미 찾을 수 있는 action의 shortcut으로 사용할 수 있지만 중요한 작업의 유일한 진입점이 되어서는 안 됩니다.
+
+cached state 복원은 network access나 operational mutation을 일으키지 않아야 합니다. passive selector는 선택값을 저장하고 의존하는 임시 local state를 초기화할 수 있지만 discovery, update, switch, navigation 또는 기타 external operation을 시작해서는 안 됩니다. 이러한 operation에는 전용의 명시적 user action이 필요하며 repeated retry는 알려진 cooldown / rate-limit state를 따라야 합니다.
 
 ## Dock 반응형 동작
 
