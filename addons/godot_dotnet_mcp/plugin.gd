@@ -1408,8 +1408,6 @@ func _build_update_refs_pending(serial: int, background_refresh: bool) -> Dictio
 	var cached_commits := _duplicate_update_ref_commits(_state.update_ref_commits)
 	var cached_branch_rows := _duplicate_update_branch_commit_rows(_state.update_ref_branch_commit_rows)
 	var stable_releases: Array[String] = []
-	if not str(_state.update_ref_latest_stable_release).strip_edges().is_empty():
-		stable_releases.append(str(_state.update_ref_latest_stable_release).strip_edges())
 	cached_branch_rows.erase(selected_branch)
 	var pending := {
 		"serial": serial,

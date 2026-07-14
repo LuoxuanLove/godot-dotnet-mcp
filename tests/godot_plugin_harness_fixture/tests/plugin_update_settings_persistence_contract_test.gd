@@ -771,14 +771,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	foreground_refs_probe._state.update_refs_state = "success"
 	foreground_refs_probe._state.update_refs_refresh_state = "loading"
 	foreground_refs_probe._state.update_refs_refresh_serial = 1
+	foreground_refs_probe._state.update_ref_latest_stable_release = "v1.0.0"
 	foreground_refs_probe._update_refs_background_serials[1] = true
 	foreground_refs_probe._on_update_check_requested(false)
 	var foreground_request_kinds: Array[String] = []
 	for request in foreground_refs_probe.refs_requests:
 		foreground_request_kinds.append(str(request.get("kind", "")))
-	if foreground_refs_probe._state.update_refs_refresh_state != "idle" or foreground_refs_probe._state.update_refs_refresh_serial != foreground_refs_probe._update_refs_request_serial or not foreground_refs_probe._update_refs_background_serials.is_empty() or foreground_refs_probe.refs_requests.size() != 4 or not foreground_request_kinds.has("branches") or not foreground_request_kinds.has("releases") or not foreground_request_kinds.has("tags") or not foreground_request_kinds.has("branch_commits"):
+	if foreground_refs_probe._state.update_refs_refresh_state != "idle" or foreground_refs_probe._state.update_refs_refresh_serial != foreground_refs_probe._update_refs_request_serial or not foreground_refs_probe._update_refs_background_serials.is_empty() or foreground_refs_probe.refs_requests.size() != 4 or not foreground_request_kinds.has("branches") or not foreground_request_kinds.has("releases") or not foreground_request_kinds.has("tags") or not foreground_request_kinds.has("branch_commits") or not (foreground_refs_probe._update_refs_pending.get("stable_releases", []) as Array).is_empty():
 		foreground_refs_probe.free()
-		return _failure("plugin.gd should refresh stable and development endpoints together for the dual version panels.")
+		return _failure("plugin.gd should refresh stable and development endpoints together without prepending a cached stable release to the fresh release result.")
 	foreground_refs_probe.free()
 
 	var foreground_preserve_probe := ForegroundRefsProbePlugin.new()

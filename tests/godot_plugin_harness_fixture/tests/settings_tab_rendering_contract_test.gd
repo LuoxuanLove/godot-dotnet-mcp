@@ -206,7 +206,11 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var version_toolbar := _instance.find_child("VersionToolbar", true, false) as GridContainer
 	var audit_text := _instance.find_child("UpdatesAudit", true, false) as Label
 	var version_panels := _instance.find_child("VersionPanels", true, false) as GridContainer
+	var stable_version_panel := _instance.find_child("StableVersionPanel", true, false) as PanelContainer
+	var stable_version_body := _instance.find_child("StableVersionBody", true, false) as VBoxContainer
 	var stable_version_tree := _instance.find_child("StableVersionTree", true, false) as Tree
+	var development_version_panel := _instance.find_child("DevelopmentVersionPanel", true, false) as PanelContainer
+	var development_version_body := _instance.find_child("DevelopmentVersionBody", true, false) as VBoxContainer
 	var development_version_tree := _instance.find_child("DevelopmentVersionTree", true, false) as Tree
 	if _instance.find_child("SourceOption", true, false) != null or _instance.find_child("ReleaseTagRow", true, false) != null or _instance.find_child("ReleaseTagValue", true, false) != null or _instance.find_child("CustomBranchValue", true, false) is LineEdit:
 		return _failure("Settings tab should not render removed source/release controls or manual LineEdit controls for update refs.")
@@ -222,8 +226,10 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should render discovered custom branch options with dev pinned first.")
 	if not custom_branch_row.visible:
 		return _failure("Settings tab should keep the Development branch selector available while both channels are visible.")
-	if version_panels == null or stable_version_tree == null or development_version_tree == null or not stable_version_tree.visible or stable_version_tree.get_root() == null or stable_version_tree.get_root().get_first_child() == null or not development_version_tree.visible or development_version_tree.get_root() == null or development_version_tree.get_root().get_first_child() == null:
+	if version_panels == null or stable_version_panel == null or stable_version_body == null or stable_version_tree == null or development_version_panel == null or development_version_body == null or development_version_tree == null or not stable_version_tree.visible or stable_version_tree.get_root() == null or stable_version_tree.get_root().get_first_child() == null or not development_version_tree.visible or development_version_tree.get_root() == null or development_version_tree.get_root().get_first_child() == null:
 		return _failure("Settings tab should render stable and development version tables at the same time.")
+	if version_panels.size_flags_vertical != Control.SIZE_EXPAND_FILL or stable_version_panel.size_flags_vertical != Control.SIZE_EXPAND_FILL or stable_version_body.size_flags_vertical != Control.SIZE_EXPAND_FILL or stable_version_tree.size_flags_vertical != Control.SIZE_EXPAND_FILL or development_version_panel.size_flags_vertical != Control.SIZE_EXPAND_FILL or development_version_body.size_flags_vertical != Control.SIZE_EXPAND_FILL or development_version_tree.size_flags_vertical != Control.SIZE_EXPAND_FILL:
+		return _failure("Settings tab version panels and trees should expand vertically with the Dock.")
 	if version_toolbar == null or audit_text == null:
 		return _failure("Settings tab should keep the refresh audit toolbar and dual version panels.")
 	if version_toolbar.get_index() + 1 != version_panels.get_index():
