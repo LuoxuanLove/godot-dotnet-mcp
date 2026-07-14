@@ -1,0 +1,23 @@
+tests/godot_plugin_harness_fixture/tests/settings_tab_rendering_contract_test.gd
+  s_ff5170bebb0816::t_d82c163fdab4c0 209-210,212-213,229,231-232
+addons/godot_dotnet_mcp/ui/settings_panel.tscn
+  s_ff5170bebb0816::t_d82c163fdab4c0 199,205,209,225,239,243,259
+tests/godot_plugin_harness_fixture/tests/plugin_update_settings_persistence_contract_test.gd
+  s_ff5170bebb0816::t_d82c163fdab4c0 774,780,782
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "e9fa4e9e6082a101e09b1a491a6eb863bcf12fa8",
+  "prompts": {},
+  "sessions": {
+    "s_ff5170bebb0816": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f61a6-db23-7b80-9810-9fd6ce0292c8",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "LuoxuanLove <96955247+LuoxuanLove@users.noreply.github.com>"
+    }
+  }
+}
