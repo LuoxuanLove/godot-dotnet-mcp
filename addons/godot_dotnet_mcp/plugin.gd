@@ -97,13 +97,12 @@ var _update_refs_pending := {}
 var _update_refs_discovery_loaded := false
 var _update_refs_discovery_retry_pending := false
 var _update_refs_background_serials := {}
+var _update_commit_histories_fallback: Dictionary = {}
 var _update_sync_after_refs_discovery_pending := false
 var _update_sync_pending_target_ref := ""
 var _update_sync_pending_target_kind := ""
 var _update_sync_pending_refs_refresh_required := false
 var _update_sync_pending_manual_switch := false
-var _update_compare_request_serial := 0
-var _update_compare_background_serials := {}
 var _update_ref_version_request_serial := 0
 var _update_ref_version_requests_in_flight := {}
 var _update_sync_request_serial := 0
@@ -453,9 +452,9 @@ func _apply_update_refs_cache(cache: Dictionary) -> void:
 	_state.update_ref_versions = _duplicate_update_ref_commits(cache.get("versions", {}))
 	_state.update_ref_release_rows = _duplicate_update_ref_rows(cache.get("release_rows", []))
 	_state.update_ref_branch_commit_rows = _duplicate_update_branch_commit_rows(cache.get("branch_commit_rows", {}))
-	_state.update_compare_cache = (cache.get("compare_cache", {}) as Dictionary).duplicate(true) if cache.get("compare_cache", {}) is Dictionary else {}
+	_set_update_commit_histories(cache.get("commit_histories", {}))
 	_update_refs_discovery_loaded = true
-	_refresh_update_compare_for_current_target(false, false)
+	_refresh_update_compare_for_current_target()
 
 
 func _save_update_refs_cache() -> void:
@@ -481,7 +480,7 @@ func _build_update_refs_cache_snapshot() -> Dictionary:
 		"versions": _state.update_ref_versions,
 		"release_rows": _state.update_ref_release_rows,
 		"branch_commit_rows": _state.update_ref_branch_commit_rows,
-		"compare_cache": _state.update_compare_cache
+		"commit_histories": _get_update_commit_histories()
 	}
 
 
@@ -1114,24 +1113,11 @@ func _should_refresh_update_refs_in_background() -> bool:
 
 
 func _should_refresh_update_compare_in_background() -> bool:
-	if _state == null:
-		return false
-	if str(_state.update_refs_state) != "success" or str(_state.update_compare_state) == "loading" or str(_state.update_compare_refresh_state) == "loading":
-		return false
-	var target := _resolve_update_sync_target()
-	var target_ref := str(target.get("ref", "")).strip_edges()
-	var target_commit := str(target.get("commit", "")).strip_edges()
-	if not target_ref.is_empty() and str(_state.update_compare_target_ref).strip_edges() != target_ref:
-		return true
-	if not target_commit.is_empty() and str(_state.update_compare_target_commit).strip_edges() != target_commit:
-		return true
 	return false
 
 
 func _maybe_refresh_update_compare_in_background() -> bool:
-	if not _should_refresh_update_compare_in_background():
-		return false
-	return _refresh_update_compare_for_current_target(true)
+	return false
 
 
 func _should_refresh_update_refs_before_sync() -> bool:
@@ -1150,10 +1136,8 @@ func _should_queue_update_sync_for_verification(target: Dictionary) -> bool:
 			return false
 	if _should_refresh_update_refs_before_sync():
 		return true
-	if _should_refresh_update_compare_in_background():
-		return true
 	var compare_refresh_state := str(_state.update_compare_refresh_state)
-	if compare_refresh_state == "loading" or compare_refresh_state == "error" or compare_refresh_state == "unavailable":
+	if compare_refresh_state == "loading":
 		return true
 	return not _is_update_sync_target_verified(target, true)
 
@@ -1289,11 +1273,6 @@ func _ensure_pending_update_sync_verification() -> bool:
 		_state.update_sync_progress = max(float(_state.update_sync_progress), 0.04)
 		_refresh_dock()
 		return true
-	if str(_state.update_compare_state) == "loading" or str(_state.update_compare_refresh_state) == "loading":
-		_state.update_sync_status = _get_localized_text("settings_update_sync_verifying_target")
-		_state.update_sync_progress = max(float(_state.update_sync_progress), 0.1)
-		_refresh_dock()
-		return true
 	if str(_state.update_refs_state) != "success" or not _update_refs_discovery_loaded:
 		var target_without_refs := _resolve_update_sync_target()
 		if _should_require_discovered_refs_for_sync(target_without_refs):
@@ -1312,14 +1291,11 @@ func _ensure_pending_update_sync_verification() -> bool:
 		return false
 	_update_sync_pending_target_ref = target_ref
 	_update_sync_pending_target_kind = str(target.get("kind", "branch"))
-	if _is_update_sync_target_verified(target, true):
-		return _continue_pending_update_sync_after_refs_discovery()
-	_state.update_sync_status = _get_localized_text("settings_update_sync_verifying_target")
-	_state.update_sync_progress = max(float(_state.update_sync_progress), 0.1)
-	if not _refresh_update_compare_for_current_target(true):
-		_fail_pending_update_sync_after_refs_discovery("Selected update target could not be verified before sync.")
+	if not _is_update_sync_target_verified(target, true):
+		_fail_pending_update_sync_after_refs_discovery(_get_one_click_update_guard_message())
+		_refresh_dock()
 		return false
-	return true
+	return _continue_pending_update_sync_after_refs_discovery()
 
 
 func _start_pending_sync_refs_refresh() -> bool:
@@ -1359,13 +1335,15 @@ func _on_update_compare_target_selected(kind: String, target_ref: String, target
 	_state.update_selected_target_kind = "tag" if kind == "tag" else "branch"
 	_state.update_selected_target_ref = normalized_ref
 	_state.update_selected_target_commit = target_commit.strip_edges()
+	if _is_update_selected_branch_head(_state.update_selected_target_kind, normalized_ref, _state.update_selected_target_commit):
+		_state.update_selected_target_commit = ""
 	if str(_state.update_sync_state) != "loading":
 		_state.update_sync_state = "idle"
 		_state.update_sync_status = ""
 		_state.update_sync_error = ""
 		_state.update_sync_progress = 0.0
 	_reset_update_compare_state()
-	_refresh_update_compare_for_current_target(false, false)
+	_refresh_update_compare_for_current_target()
 	_refresh_dock()
 
 
@@ -1421,6 +1399,8 @@ func _on_update_check_requested(background_refresh: bool = false, trigger_source
 				_start_update_refs_request(kind, str(refs_request_urls.get(kind, "")), serial)
 			"branch_commits":
 				_start_update_refs_request(kind, _get_selected_update_branch_commits_url(), serial)
+	for head_commit in _get_pending_update_history_heads():
+		_start_update_commit_history_request(head_commit, _get_update_commit_history_url(head_commit), serial)
 
 
 func _build_update_refs_pending(serial: int, background_refresh: bool) -> Dictionary:
@@ -1437,7 +1417,7 @@ func _build_update_refs_pending(serial: int, background_refresh: bool) -> Dictio
 	var stable_releases: Array[String] = []
 	if development and not str(_state.update_ref_latest_stable_release).strip_edges().is_empty():
 		stable_releases.append(str(_state.update_ref_latest_stable_release).strip_edges())
-	return {
+	var pending := {
 		"serial": serial,
 		"background": background_refresh,
 		"required_kinds": ["branches", "branch_commits"] if development else ["releases", "tags"],
@@ -1456,12 +1436,17 @@ func _build_update_refs_pending(serial: int, background_refresh: bool) -> Dictio
 		"release_rows": cached_release_rows if development else [],
 		"tag_rows": [],
 		"branch_commit_rows": cached_branch_rows,
+		"commit_histories": {},
 		"branches_pages": 1,
 		"releases_pages": 1,
 		"tags_pages": 1,
 		"branch_commits_pages": 1,
 		"active_requests": {}
 	}
+	var current_commit := _resolve_current_update_commit()
+	if not current_commit.is_empty():
+		pending = _ensure_plugin_update_refs_discovery_service().begin_commit_history(pending, current_commit, true)
+	return pending
 
 
 func _on_update_sync_requested() -> void:
@@ -1521,14 +1506,19 @@ func _on_update_switch_requested(kind: String, target_ref: String, target_commit
 	_save_settings()
 	_clear_update_selection_refresh_pending()
 	_reset_update_compare_state()
+	var resolved_commit := target_commit.strip_edges()
+	if resolved_commit.is_empty():
+		resolved_commit = str((_state.update_ref_commits as Dictionary).get(normalized_ref, "")).strip_edges()
 	var target := {
 		"kind": normalized_kind,
 		"ref": normalized_ref,
-		"commit": target_commit.strip_edges()
+		"commit": resolved_commit
 	}
 	_state.update_selected_target_kind = normalized_kind
 	_state.update_selected_target_ref = normalized_ref
-	_state.update_selected_target_commit = target_commit.strip_edges()
+	_state.update_selected_target_commit = resolved_commit
+	if _is_update_selected_branch_head(normalized_kind, normalized_ref, _state.update_selected_target_commit):
+		_state.update_selected_target_commit = ""
 	_request_update_sync(target, "manual_switch")
 
 
@@ -1571,10 +1561,13 @@ func _resolve_update_sync_target() -> Dictionary:
 	var selected_ref := str(_state.update_selected_target_ref).strip_edges()
 	if selected_ref.is_empty():
 		return planned
+	var selected_commit := str(_state.update_selected_target_commit).strip_edges()
+	if selected_commit.is_empty():
+		selected_commit = str((_state.update_ref_commits as Dictionary).get(selected_ref, "")).strip_edges()
 	return {
 		"kind": "tag" if str(_state.update_selected_target_kind) == "tag" else "branch",
 		"ref": selected_ref,
-		"commit": str(_state.update_selected_target_commit).strip_edges()
+		"commit": selected_commit
 	}
 
 
@@ -1601,6 +1594,13 @@ func _reconcile_update_selected_target_with_refs() -> void:
 				break
 	if not visible:
 		_clear_update_target_selection()
+
+
+func _is_update_selected_branch_head(kind: String, target_ref: String, target_commit: String) -> bool:
+	if _state == null or kind != "branch" or target_ref.is_empty() or target_commit.is_empty():
+		return false
+	var branch_head := str((_state.update_ref_commits as Dictionary).get(target_ref, "")).strip_edges()
+	return not branch_head.is_empty() and target_commit == branch_head
 
 
 func _start_update_refs_request(kind: String, url: String, serial: int) -> void:
@@ -1635,6 +1635,92 @@ func _start_update_refs_request(kind: String, url: String, serial: int) -> void:
 	if not bool(start_result.get("success", false)):
 		_update_refs_pending = _ensure_plugin_update_refs_discovery_service().clear_active_request(_update_refs_pending, kind)
 		_mark_update_refs_request_failed(kind, "Failed to start %s request: %s" % [kind, int(start_result.get("error", FAILED))], serial)
+
+
+func _get_pending_update_history_heads() -> Array[String]:
+	if _update_refs_pending.is_empty():
+		return []
+	var heads: Array[String] = []
+	for raw_head in _duplicate_update_commit_histories(_update_refs_pending.get("commit_histories", {})).keys():
+		var head_commit := str(raw_head).strip_edges()
+		if not head_commit.is_empty() and not _ensure_plugin_update_refs_discovery_service().is_kind_done(_update_refs_pending, "commit_history:%s" % head_commit):
+			heads.append(head_commit)
+	return heads
+
+
+func _get_update_commit_history_url(head_commit: String) -> String:
+	var template: String = _ensure_plugin_update_endpoint_config_service().get_branch_commits_url_template()
+	return template % head_commit.strip_edges().uri_encode()
+
+
+func _start_update_commit_history_request(head_commit: String, url: String, serial: int) -> void:
+	var normalized_head := head_commit.strip_edges()
+	if _state == null or serial != _update_refs_request_serial or normalized_head.is_empty():
+		return
+	var kind := "commit_history:%s" % normalized_head
+	if _ensure_plugin_update_refs_discovery_service().is_kind_done(_update_refs_pending, kind):
+		return
+	var request_parent := _get_update_request_parent()
+	if request_parent == null:
+		_mark_update_refs_request_failed(kind, "No active update refs request host.", serial)
+		return
+	var page_count: int = _ensure_plugin_update_refs_discovery_service().get_commit_history_pages(_update_refs_pending, normalized_head)
+	var timeout_msec := int(ceil((_ensure_plugin_update_endpoint_config_service().get_refs_http_timeout() + UPDATE_REFS_STALE_REQUEST_GRACE_SEC) * 1000.0))
+	_update_refs_pending = _ensure_plugin_update_refs_discovery_service().record_active_request(
+		_update_refs_pending,
+		kind,
+		url,
+		serial,
+		Time.get_ticks_msec(),
+		timeout_msec,
+		"UpdateCommitHistoryRequest",
+		page_count
+	)
+	var start_result: Dictionary = _ensure_plugin_update_http_request_service().start_refs_request(
+		request_parent,
+		"UpdateCommitHistoryRequest",
+		url,
+		_get_update_refs_headers(),
+		Callable(self, "_on_update_commit_history_request_completed").bind(normalized_head, serial),
+		_ensure_plugin_update_endpoint_config_service()
+	)
+	if not bool(start_result.get("success", false)):
+		_update_refs_pending = _ensure_plugin_update_refs_discovery_service().clear_active_request(_update_refs_pending, kind)
+		_mark_update_refs_request_failed(kind, "Failed to start commit history request: %s" % int(start_result.get("error", FAILED)), serial)
+
+
+func _on_update_commit_history_request_completed(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, head_commit: String, serial: int) -> void:
+	var kind := "commit_history:%s" % head_commit
+	if _state == null or serial != _update_refs_request_serial or _ensure_plugin_update_refs_discovery_service().is_kind_done(_update_refs_pending, kind):
+		return
+	_update_refs_pending = _ensure_plugin_update_refs_discovery_service().clear_active_request(_update_refs_pending, kind)
+	if result != HTTPRequest.RESULT_SUCCESS or response_code < 200 or response_code >= 300:
+		_handle_update_refs_http_failure(kind, result, response_code, headers, serial)
+		return
+	_record_update_refs_http_status(kind, result, response_code, headers, "")
+	var parse_result := _parse_update_refs_json_array(body)
+	if not bool(parse_result.get("success", false)):
+		_handle_update_refs_parse_failure(kind, str(parse_result.get("error", "Invalid JSON response")), serial)
+		return
+	_update_refs_pending = _ensure_plugin_update_refs_discovery_service().append_commit_history(_update_refs_pending, head_commit, parse_result.get("items", []))
+	var next_url := _extract_update_refs_next_url(headers)
+	var pages: int = _ensure_plugin_update_refs_discovery_service().get_commit_history_pages(_update_refs_pending, head_commit)
+	if not next_url.is_empty() and pages < _ensure_plugin_update_endpoint_config_service().get_refs_max_pages():
+		_update_refs_pending = _ensure_plugin_update_refs_discovery_service().increment_commit_history_page(_update_refs_pending, head_commit)
+		_start_update_commit_history_request(head_commit, next_url, serial)
+		return
+	var complete := next_url.is_empty()
+	_update_refs_pending = _ensure_plugin_update_refs_discovery_service().finish_commit_history(_update_refs_pending, head_commit, complete)
+	if not complete:
+		_append_update_refs_error(_get_update_localized_text("settings_update_compare_required", "Update target could not be verified; use Switch for an explicit manual change."))
+	_finalize_update_refs_discovery_if_ready(serial)
+
+
+func _append_update_refs_error(message: String) -> void:
+	var errors: Array = _update_refs_pending.get("errors", [])
+	if not message.is_empty() and not errors.has(message):
+		errors.append(message)
+	_update_refs_pending["errors"] = errors
 
 
 func _start_update_archive_sync_request(target: Dictionary, serial: int) -> void:
@@ -1836,6 +1922,7 @@ func _on_update_refs_request_completed(result: int, response_code: int, headers:
 				_state.update_ref_commits = _duplicate_update_ref_commits(_update_refs_pending.get("commits", {}))
 			_mark_update_refs_kind_success(kind)
 			_update_refs_pending["branch_done"] = true
+			_queue_pending_update_target_history(serial)
 		"releases":
 			_append_update_refs_pending_names("releases", _extract_update_ref_names(items, "tag_name"))
 			_append_update_refs_pending_names("stable_releases", _extract_update_stable_release_names(items))
@@ -1852,6 +1939,7 @@ func _on_update_refs_request_completed(result: int, response_code: int, headers:
 				return
 			_mark_update_refs_kind_success(kind)
 			_update_refs_pending["tag_done"] = true
+			_queue_pending_update_target_history(serial)
 		"branch_commits":
 			_append_update_refs_pending_branch_commit_rows(_get_pending_update_branch_commits_branch(), items)
 			_mark_update_refs_kind_success(kind)
@@ -1901,6 +1989,48 @@ func _append_update_refs_pending_tag_rows(items: Array) -> void:
 
 func _append_update_refs_pending_branch_commit_rows(branch: String, items: Array) -> void:
 	_update_refs_pending = _ensure_plugin_update_refs_discovery_service().append_branch_commit_rows(_update_refs_pending, branch, items)
+
+
+func _queue_pending_update_target_history(serial: int) -> bool:
+	if _state == null or serial != _update_refs_request_serial:
+		return false
+	var target := _resolve_pending_update_sync_target()
+	var target_commit := str(target.get("commit", "")).strip_edges()
+	if target_commit.is_empty():
+		return false
+	var histories := _duplicate_update_commit_histories(_update_refs_pending.get("commit_histories", {}))
+	if histories.has(target_commit):
+		return false
+	_update_refs_pending = _ensure_plugin_update_refs_discovery_service().begin_commit_history(_update_refs_pending, target_commit, true)
+	_start_update_commit_history_request(target_commit, _get_update_commit_history_url(target_commit), serial)
+	return true
+
+
+func _resolve_pending_update_sync_target() -> Dictionary:
+	if _state == null:
+		return {}
+	var planned: Dictionary = _ensure_plugin_update_request_planning_service().resolve_sync_target(
+		_state.settings,
+		_build_pending_update_refs_planning_context()
+	)
+	var selected_ref := str(_state.update_selected_target_ref).strip_edges()
+	if selected_ref.is_empty():
+		return planned
+	return {
+		"kind": "tag" if str(_state.update_selected_target_kind) == "tag" else "branch",
+		"ref": selected_ref,
+		"commit": str(_state.update_selected_target_commit).strip_edges() if not str(_state.update_selected_target_commit).strip_edges().is_empty() else str(_update_refs_pending.get("commits", {}).get(selected_ref, "")).strip_edges()
+	}
+
+
+func _build_pending_update_refs_planning_context() -> Dictionary:
+	var stable_releases := _to_string_array(_update_refs_pending.get("stable_releases", []))
+	var releases := _to_string_array(_update_refs_pending.get("releases", []))
+	return {
+		"latest_stable_release": stable_releases[0] if not stable_releases.is_empty() else "",
+		"latest_release": releases[0] if not releases.is_empty() else "",
+		"commits": _update_refs_pending.get("commits", {})
+	}
 
 
 func _get_pending_update_branch_commits_branch() -> String:
@@ -2004,15 +2134,16 @@ func _mark_update_refs_request_failed(kind: String, message: String, serial: int
 	if _ensure_plugin_update_refs_discovery_service().is_kind_done(_update_refs_pending, kind):
 		return
 	_update_refs_pending = _ensure_plugin_update_refs_discovery_service().clear_active_request(_update_refs_pending, kind)
-	var errors: Array = _update_refs_pending.get("errors", [])
-	errors.append(message)
-	_update_refs_pending["errors"] = errors
+	_append_update_refs_error(message)
 	if kind == "branches":
 		_update_refs_pending["branch_done"] = true
 	elif kind == "tags":
 		_update_refs_pending["tag_done"] = true
 	elif kind == "branch_commits":
 		_update_refs_pending["branch_commits_done"] = true
+	elif kind.begins_with("commit_history:"):
+		var head_commit := kind.trim_prefix("commit_history:").strip_edges()
+		_update_refs_pending = _ensure_plugin_update_refs_discovery_service().mark_commit_history_failed(_update_refs_pending, head_commit)
 	else:
 		_update_refs_pending["release_done"] = true
 	_finalize_update_refs_discovery_if_ready(serial)
@@ -2137,7 +2268,7 @@ func _complete_update_sync_after_editor_refresh(target_ref: String, sync_result:
 		int(sync_result.get("written", 0)),
 		_get_localized_text("settings_update_sync_success")
 	))
-	_refresh_update_compare_for_current_target(false, false)
+	_refresh_update_compare_for_current_target()
 	_refresh_dock()
 	_request_update_sync_lifecycle_reload()
 
@@ -2254,6 +2385,12 @@ func _finalize_update_refs_discovery_if_ready(serial: int) -> void:
 	if not bool(_update_refs_pending.get("branch_done", false)) or not bool(_update_refs_pending.get("release_done", false)) or not bool(_update_refs_pending.get("tag_done", false)) or not bool(_update_refs_pending.get("branch_commits_done", false)):
 		_refresh_dock()
 		return
+	if _queue_pending_update_target_history(serial):
+		_refresh_dock()
+		return
+	if not _ensure_plugin_update_refs_discovery_service().are_commit_histories_done(_update_refs_pending):
+		_refresh_dock()
+		return
 	var snapshot: Dictionary = _ensure_plugin_update_refs_discovery_service().build_final_snapshot(_update_refs_pending)
 	var errors: Array = snapshot.get("errors", [])
 	var background_refresh := bool(_update_refs_pending.get("background", false))
@@ -2270,19 +2407,15 @@ func _finalize_update_refs_discovery_if_ready(serial: int) -> void:
 			_state.update_refs_refresh_error = ""
 			_state.update_refs_refresh_serial = serial
 			_update_refs_discovery_loaded = true
-			if str(_state.update_compare_state) != "loading":
-				_reset_update_compare_state()
 		else:
 			_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_refs_success(
 				_localization.get_text("settings_update_refs_success") if _localization != null else "Update refs loaded."
 			))
-			_reset_update_compare_state()
 		if not errors.is_empty():
 			_state.update_refs_refresh_state = "error"
 			_state.update_refs_refresh_error = "; ".join(errors)
 		_save_update_refs_cache()
-		if str(_state.update_compare_state) != "loading":
-			_refresh_update_compare_for_current_target(false, false)
+		_refresh_update_compare_for_current_target()
 	else:
 		if background_refresh:
 			_state.update_refs_refresh_state = "error"
@@ -2323,6 +2456,7 @@ func _apply_successful_update_refs_snapshot(snapshot: Dictionary, successful_kin
 	if branches_succeeded:
 		_state.update_ref_branches = snapshot.get("branches", [])
 		_state.update_ref_commits = snapshot.get("commits", {})
+	_set_update_commit_histories(snapshot.get("commit_histories", {}))
 	if branch_commits_succeeded:
 		var branch := str(_update_refs_pending.get("branch_commits_branch", "")).strip_edges()
 		var current_rows := _duplicate_update_branch_commit_rows(_state.update_ref_branch_commit_rows)
@@ -2360,6 +2494,7 @@ func _apply_successful_update_refs_snapshot(snapshot: Dictionary, successful_kin
 			_state.update_ref_latest_release = str(snapshot.get("latest_release", ""))
 			_state.update_ref_latest_stable_release = str(snapshot.get("latest_stable_release", ""))
 		_state.update_refs_release_source = str(snapshot.get("release_source", ""))
+	_set_update_commit_histories(snapshot.get("commit_histories", {}))
 
 
 func _merge_update_ref_values(primary: Array[String], fallback: Array[String]) -> Array[String]:
@@ -2458,76 +2593,29 @@ func _set_update_sync_guard_error(message: String) -> void:
 	_refresh_dock()
 
 
-func _refresh_update_compare_for_current_target(background_refresh: bool = false, allow_remote_request: bool = true) -> bool:
+func _refresh_update_compare_for_current_target() -> bool:
 	if _state == null or str(_state.update_refs_state) != "success":
 		return false
 	var target := _resolve_update_sync_target()
-	var base_commit := _resolve_current_update_commit()
-	var compare_snapshot := _build_update_compare_start_snapshot(base_commit, target)
-	var target_ref := str(compare_snapshot.get("target_ref", ""))
+	var compare_snapshot: Dictionary = _ensure_plugin_update_compare_service().build_local_compare_snapshot(
+		_resolve_current_update_commit(),
+		target,
+		_get_update_commit_histories()
+	)
 	_state.update_compare_base_commit = str(compare_snapshot.get("base_commit", ""))
-	_state.update_compare_target_ref = target_ref
+	_state.update_compare_target_ref = str(compare_snapshot.get("target_ref", ""))
 	_state.update_compare_target_commit = str(compare_snapshot.get("target_commit", ""))
-	_state.update_compare_error = str(compare_snapshot.get("error", ""))
-	var compare_state := str(compare_snapshot.get("state", "loading"))
-	if compare_state == "unavailable":
-		if background_refresh:
-			_state.update_compare_refresh_state = "unavailable"
-			_state.update_compare_refresh_error = str(compare_snapshot.get("error", ""))
-			_state.update_compare_last_checked_unix = int(Time.get_unix_time_from_system())
-			if _update_sync_after_refs_discovery_pending:
-				_fail_pending_update_sync_after_refs_discovery("Update target verification failed before sync: %s" % _state.update_compare_refresh_error)
-			return true
-		_state.update_compare_ahead_by = int(compare_snapshot.get("ahead_by", -1))
-		_state.update_compare_behind_by = int(compare_snapshot.get("behind_by", -1))
-		_state.update_compare_state = "unavailable"
-		return true
-	if compare_state == "success":
-		_state.update_compare_ahead_by = int(compare_snapshot.get("ahead_by", -1))
-		_state.update_compare_behind_by = int(compare_snapshot.get("behind_by", -1))
-		_state.update_compare_state = "success"
-		_state.update_compare_refresh_state = "success" if background_refresh else "idle"
-		_state.update_compare_refresh_error = ""
-		_state.update_compare_last_checked_unix = int(Time.get_unix_time_from_system())
-		if bool(_state.update_selection_refresh_pending) and str(_state.update_selection_refresh_pending_ref).strip_edges() == target_ref:
-			_state.update_selection_refresh_pending = false
-			_state.update_selection_refresh_pending_ref = ""
-		if _update_sync_after_refs_discovery_pending and _is_update_sync_target_verified(target, true):
-			_continue_pending_update_sync_after_refs_discovery()
-			return true
-		return true
-	if not allow_remote_request:
-		_state.update_compare_ahead_by = -1
-		_state.update_compare_behind_by = -1
-		_state.update_compare_state = "unverified"
-		_state.update_compare_refresh_state = "idle"
-		_state.update_compare_refresh_error = ""
-		return true
-	if _is_update_refs_rate_limited():
-		var rate_limit_message := _build_update_refs_rate_limit_cooldown_message()
-		_record_update_refs_audit("compare", "rate_limit_cooldown", int(_state.update_refs_last_http_status), rate_limit_message, {})
-		if background_refresh:
-			_state.update_compare_refresh_state = "error"
-			_state.update_compare_refresh_error = rate_limit_message
-			_state.update_compare_last_checked_unix = int(Time.get_unix_time_from_system())
-		else:
-			_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_compare_failure(rate_limit_message))
-		_fail_pending_update_sync_after_refs_discovery(rate_limit_message)
-		_refresh_dock()
-		return true
-	if not background_refresh:
-		_state.update_compare_ahead_by = int(compare_snapshot.get("ahead_by", -1))
-		_state.update_compare_behind_by = int(compare_snapshot.get("behind_by", -1))
-	_start_update_compare_request(base_commit, str(compare_snapshot.get("compare_head", "")), str(compare_snapshot.get("target_commit", "")), background_refresh)
+	_state.update_compare_ahead_by = int(compare_snapshot.get("ahead_by", -1))
+	_state.update_compare_behind_by = int(compare_snapshot.get("behind_by", -1))
+	var compare_error := str(compare_snapshot.get("error", ""))
+	_state.update_compare_error = _get_update_localized_text("settings_update_compare_required", "Update target could not be verified; use Switch for an explicit manual change.") if not compare_error.is_empty() else ""
+	_state.update_compare_state = str(compare_snapshot.get("state", "unavailable"))
+	_state.update_compare_refresh_state = "idle"
+	_state.update_compare_refresh_error = ""
+	_state.update_compare_last_checked_unix = int(Time.get_unix_time_from_system())
+	if str(_state.update_compare_state) == "success" and bool(_state.update_selection_refresh_pending) and str(_state.update_selection_refresh_pending_ref).strip_edges() == str(_state.update_compare_target_ref).strip_edges():
+		_clear_update_selection_refresh_pending()
 	return true
-
-
-func _build_update_compare_start_snapshot(base_commit: String, target: Dictionary) -> Dictionary:
-	return _ensure_plugin_update_compare_service().build_compare_start_snapshot(base_commit, target, _state.update_compare_cache)
-
-
-func _resolve_update_compare_head(target: Dictionary) -> String:
-	return _ensure_plugin_update_compare_service().resolve_compare_head(target)
 
 
 func _resolve_current_update_commit() -> String:
@@ -2537,114 +2625,28 @@ func _resolve_current_update_commit() -> String:
 func _reset_update_compare_state() -> void:
 	if _state == null:
 		return
-	_update_compare_request_serial += 1
 	_state.update_compare_refresh_state = "idle"
 	_state.update_compare_refresh_error = ""
-	_state.update_compare_refresh_serial = _update_compare_request_serial
-	_update_compare_background_serials.clear()
+	_state.update_compare_refresh_serial += 1
 	_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_compare_reset())
 
 
-func _start_update_compare_request(base_commit: String, compare_head: String, target_commit: String = "", background_refresh: bool = false) -> void:
-	_update_compare_request_serial += 1
-	var serial := _update_compare_request_serial
-	if background_refresh:
-		_state.update_compare_refresh_state = "loading"
-		_state.update_compare_refresh_error = ""
-		_state.update_compare_refresh_serial = serial
-		_update_compare_background_serials[serial] = true
-	else:
-		_state.update_compare_state = "loading"
-	var request_parent := _get_update_request_parent()
-	if request_parent == null:
-		_mark_update_compare_failed("No active update compare request host.", serial)
-		return
-	var compare_url: String = _ensure_plugin_update_endpoint_config_service().get_compare_url_template() % [base_commit.uri_encode(), compare_head.uri_encode()]
-	var start_result: Dictionary = _ensure_plugin_update_http_request_service().start_refs_request(
-		request_parent,
-		"UpdateCompareRequest",
-		compare_url,
-		_get_update_refs_headers(),
-		Callable(self, "_on_update_compare_request_completed").bind(base_commit, target_commit, serial),
-		_ensure_plugin_update_endpoint_config_service()
-	)
-	if not bool(start_result.get("success", false)):
-		_mark_update_compare_failed("Failed to start update compare request: %s" % int(start_result.get("error", FAILED)), serial)
+func _get_update_commit_histories() -> Dictionary:
+	if _state == null:
+		return _update_commit_histories_fallback
+	var value = _state.get("update_commit_histories")
+	if value is Dictionary:
+		var histories := value as Dictionary
+		if not histories.is_empty():
+			return histories
+	return _update_commit_histories_fallback
 
 
-func _on_update_compare_request_completed(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, base_commit: String, target_commit: String, serial: int) -> void:
-	if _state == null or serial != _update_compare_request_serial:
-		return
-	if result != HTTPRequest.RESULT_SUCCESS or response_code < 200 or response_code >= 300:
-		var failure := _format_update_http_failure("compare", result, response_code, headers)
-		_record_update_refs_http_status("compare", result, response_code, headers, failure)
-		_mark_update_compare_failed(failure, serial)
-		return
-	_record_update_refs_http_status("compare", result, response_code, headers, "")
-	var parse_result := _parse_update_compare_json(body)
-	if not bool(parse_result.get("success", false)):
-		_mark_update_compare_failed(str(parse_result.get("error", "Invalid JSON response")), serial)
-		return
-	_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_compare_success(base_commit, target_commit, parse_result))
-	_store_update_compare_cache_entry()
-	_save_update_refs_cache()
-	_state.update_compare_refresh_state = "success" if _update_compare_background_serials.has(serial) else "idle"
-	_state.update_compare_refresh_error = ""
-	_state.update_compare_refresh_serial = serial
-	_state.update_compare_last_checked_unix = int(Time.get_unix_time_from_system())
-	if bool(_state.update_selection_refresh_pending) and str(_state.update_selection_refresh_pending_ref).strip_edges() == str(_state.update_compare_target_ref).strip_edges():
-		_state.update_selection_refresh_pending = false
-		_state.update_selection_refresh_pending_ref = ""
-	_update_compare_background_serials.erase(serial)
-	if _update_sync_after_refs_discovery_pending and _continue_pending_update_sync_after_refs_discovery():
-		return
-	_refresh_dock()
-
-
-func _store_update_compare_cache_entry() -> void:
-	if _state == null or str(_state.update_compare_state) != "success":
-		return
-	var target := _resolve_update_sync_target()
-	var base_commit := str(_state.update_compare_base_commit).strip_edges()
-	var target_kind := str(target.get("kind", "branch"))
-	var target_ref := str(_state.update_compare_target_ref).strip_edges()
-	var target_commit := str(_state.update_compare_target_commit).strip_edges()
-	if base_commit.is_empty() or target_ref.is_empty() or target_commit.is_empty():
-		return
-	var key: String = _ensure_plugin_update_compare_service().build_compare_cache_key(base_commit, target_kind, target_ref, target_commit)
-	_state.update_compare_cache[key] = {
-		"base_commit": base_commit,
-		"target_kind": "tag" if target_kind == "tag" else "branch",
-		"target_ref": target_ref,
-		"target_commit": target_commit,
-		"ahead_by": int(_state.update_compare_ahead_by),
-		"behind_by": int(_state.update_compare_behind_by),
-		"checked_unix": int(Time.get_unix_time_from_system())
-	}
-	while _state.update_compare_cache.size() > 32:
-		var keys: Array = _state.update_compare_cache.keys()
-		if keys.is_empty():
-			break
-		_state.update_compare_cache.erase(keys[0])
-
-
-func _mark_update_compare_failed(message: String, serial: int) -> void:
-	if _state == null or serial != _update_compare_request_serial:
-		return
-	if _update_compare_background_serials.has(serial):
-		_state.update_compare_refresh_state = "error"
-		_state.update_compare_refresh_error = message
-		_state.update_compare_refresh_serial = serial
-		_update_compare_background_serials.erase(serial)
-		_fail_pending_update_sync_after_refs_discovery("Update target verification failed before sync: %s" % message)
-		_refresh_dock()
-		return
-	_apply_update_state_patch(_ensure_plugin_update_state_transition_service().build_compare_failure(message))
-	_refresh_dock()
-
-
-func _parse_update_compare_json(body: PackedByteArray) -> Dictionary:
-	return _ensure_plugin_update_compare_service().parse_compare_response(body)
+func _set_update_commit_histories(raw_histories) -> void:
+	var normalized := _duplicate_update_commit_histories(raw_histories)
+	_update_commit_histories_fallback = normalized
+	if _state != null and _state.get("update_commit_histories") is Dictionary:
+		_state.update_commit_histories = normalized
 
 
 func _parse_update_refs_json_array(body: PackedByteArray) -> Dictionary:
@@ -2669,6 +2671,10 @@ func _duplicate_update_ref_rows(raw_rows) -> Array:
 
 func _duplicate_update_branch_commit_rows(raw_rows) -> Dictionary:
 	return _ensure_plugin_update_refs_discovery_service().duplicate_branch_commit_rows(raw_rows)
+
+
+func _duplicate_update_commit_histories(raw_histories) -> Dictionary:
+	return _ensure_plugin_update_refs_discovery_service().duplicate_commit_histories(raw_histories)
 
 
 func _on_start_requested() -> void:

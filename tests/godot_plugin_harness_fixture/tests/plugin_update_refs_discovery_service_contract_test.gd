@@ -60,6 +60,15 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	pending = service.append_branch_commit_rows(pending, "refactor/v2.0.0", [
 		{"sha": "branch-history-sha", "commit": {"message": "History commit\nbody", "author": {"date": "2026-07-03T12:00:00Z"}}}
 	])
+	pending = service.begin_commit_history(pending, "target-head", true)
+	pending = service.append_commit_history(pending, "target-head", [
+		{"sha": "target-head"}, {"sha": "merge-base"}
+	])
+	pending = service.increment_commit_history_page(pending, "target-head")
+	pending = service.append_commit_history(pending, "target-head", [
+		{"sha": "older-base"}, {"sha": "merge-base"}
+	])
+	pending = service.finish_commit_history(pending, "target-head", true)
 
 	var snapshot: Dictionary = service.build_final_snapshot(pending)
 	if snapshot.get("branches", []) != ["dev", "refactor/v2.0.0"]:
@@ -82,6 +91,10 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var branch_rows: Array = branch_commit_rows.get("refactor/v2.0.0", [])
 	if branch_rows.size() != 1 or str((branch_rows[0] as Dictionary).get("title", "")) != "History commit":
 		return _failure("PluginUpdateRefsDiscoveryService should build development branch commit rows.", snapshot)
+	var histories: Dictionary = snapshot.get("commit_histories", {})
+	var target_history: Dictionary = histories.get("target-head", {})
+	if not bool(target_history.get("complete", false)) or int(target_history.get("pages", 0)) != 2 or target_history.get("commits", []) != ["target-head", "merge-base", "older-base"]:
+		return _failure("PluginUpdateRefsDiscoveryService should aggregate paged local commit history separately from visible rows.", snapshot)
 
 	var duplicated: Dictionary = service.duplicate_commits({"dev": "one", 2: "two"})
 	if str(duplicated.get("2", "")) != "two":
@@ -127,6 +140,25 @@ func run_case(_tree: SceneTree) -> Dictionary:
 	var cleared_status := service.build_pending_status(request_pending, 13000)
 	if not (cleared_status.get("active_requests", []) as Array).is_empty():
 		return _failure("PluginUpdateRefsDiscoveryService should clear completed refs requests.", cleared_status)
+	var history_pending := service.begin_commit_history({
+		"branch_done": true,
+		"release_done": true,
+		"tag_done": true,
+		"branch_commits_done": true,
+		"commit_histories": {}
+	}, "history-head", true)
+	if service.are_commit_histories_done(history_pending):
+		return _failure("PluginUpdateRefsDiscoveryService should wait for local history completion.", history_pending)
+	history_pending = service.mark_commit_history_failed(history_pending, "history-head")
+	if not service.are_commit_histories_done(history_pending) or bool((history_pending.get("commit_histories", {}).get("history-head", {}) as Dictionary).get("complete", true)):
+		return _failure("PluginUpdateRefsDiscoveryService should mark failed local histories done but incomplete.", history_pending)
+	var preserved_history_pending := service.begin_commit_history({
+		"commit_histories": {
+			"history-head": {"head_commit": "history-head", "commits": ["history-head"], "complete": false, "done": false, "pages": 1}
+		}
+	}, "history-head")
+	if (preserved_history_pending.get("commit_histories", {}).get("history-head", {}) as Dictionary).get("commits", []) != ["history-head"]:
+		return _failure("PluginUpdateRefsDiscoveryService should preserve an in-progress history when a later pagination helper reuses it.", preserved_history_pending)
 
 	return {"name": "plugin_update_refs_discovery_service_contracts", "success": true, "error": ""}
 
@@ -144,6 +176,8 @@ func _verify_plugin_entrypoint_delegates_update_refs_discovery() -> String:
 		"_ensure_plugin_update_refs_discovery_service().append_release_rows(",
 		"_ensure_plugin_update_refs_discovery_service().append_tag_rows(",
 		"_ensure_plugin_update_refs_discovery_service().append_branch_commit_rows(",
+		"_ensure_plugin_update_refs_discovery_service().append_commit_history(",
+		"_ensure_plugin_update_refs_discovery_service().finish_commit_history(",
 		"_ensure_plugin_update_refs_discovery_service().build_final_snapshot(",
 		"_ensure_plugin_update_refs_discovery_service().parse_refs_json_array(",
 		"_format_stale_update_refs_request_error("
@@ -163,6 +197,8 @@ func _verify_plugin_entrypoint_delegates_update_refs_discovery() -> String:
 		"func parse_refs_json_array(body: PackedByteArray)",
 		"func extract_next_url(headers: PackedStringArray)",
 		"func build_final_snapshot(pending: Dictionary)",
+		"func begin_commit_history(pending: Dictionary, head_commit: String, reset: bool = false)",
+		"func append_commit_history(pending: Dictionary, head_commit: String, items: Array)",
 		"func find_stale_active_requests(pending: Dictionary, now_msec: int)",
 		"func build_pending_status(pending: Dictionary, now_msec: int)",
 		"func collect_stable_release_names(items: Array)",

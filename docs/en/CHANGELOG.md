@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Added a four-language Dock UI style guide covering information hierarchy, spacing, editor-native theme use, action priority, responsive behavior, accessibility, localization, and acceptance checks for every page.
 - Reworked the Settings update area into an integrated version manager with Release/Development channels, cached release/tag and branch commit tables, explicit row-level Switch actions, and one-click update guards that refuse rollback or divergent targets unless the user switches manually.
 - Persisted version refs and exact commit comparisons across editor restarts. Startup now restores cache only and never requests GitHub; an explicit Refresh List updates only the selected channel, and comparison uses exact local/cache facts before one-click update requests remote verification.
+- Changed Refresh List to gather bounded, paginated commit histories for the installed source and selected target, calculate ahead/behind counts locally, and make one-click update rely on that refreshed local verification instead of GitHub's Compare endpoint.
 - Made version selection highlight the whole row and set that exact ref/commit as the comparison target without switching versions or making a network request.
 - Unified the Dock Resources and Prompts tabs around a single Tools-style tree, removing separate Catalog/Diagnostics view toggles while keeping protocol metadata in the selected-entry detail pane.
 - Matched the Dock Resources and Prompts catalog spacing, tree chrome, and row actions to the Tools tab by moving copy, preview, clear, and copy-preview actions into the tree context menu.
@@ -21,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Removed startup GitHub update-list and comparison requests, reduced each explicit list refresh to the two endpoint families required by the selected channel, and suppressed repeated unauthenticated retries while a known rate limit remains exhausted.
 - Removed the Settings update-details disclosure, kept actionable diagnostics in the wrapping primary status, and constrained refresh metadata with ellipsis plus a full-text tooltip so long failures and audit text cannot overflow the Dock.
 - Deferred Settings version-table Switch actions until after Tree mouse-selection events complete, preventing Godot from rejecting row rebuilds and flooding the Output panel with null item errors.
+- Fixed update verification after a hot reload: legacy runtime state now falls back safely while refreshed commit histories replace the removed remote comparison cache.
 
 ## [2.0.0] - 2026-07-04
 

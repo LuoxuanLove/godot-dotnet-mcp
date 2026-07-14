@@ -57,8 +57,7 @@ func _verify_plugin_entrypoint_delegates_update_http_requests() -> String:
 	for forbidden in [
 		"HTTPRequest.new()",
 		"request_completed.connect(Callable(self, \"_on_update_refs_request_completed\")",
-		"request_completed.connect(Callable(self, \"_on_update_archive_sync_request_attempt_completed\")",
-		"request_completed.connect(Callable(self, \"_on_update_compare_request_completed\")"
+		"request_completed.connect(Callable(self, \"_on_update_archive_sync_request_attempt_completed\")"
 	]:
 		if plugin_source.find(forbidden) != -1:
 			return "plugin.gd should not retain update HTTP request internals: %s" % forbidden

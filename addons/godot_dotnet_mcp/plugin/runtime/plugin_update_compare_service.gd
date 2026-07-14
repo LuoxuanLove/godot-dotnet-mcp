@@ -24,16 +24,6 @@ func parse_plugin_cfg_version(content: String) -> String:
 	return ""
 
 
-func resolve_compare_head(target: Dictionary) -> String:
-	var target_ref := str(target.get("ref", "")).strip_edges()
-	var target_commit := str(target.get("commit", "")).strip_edges()
-	if str(target.get("kind", "branch")) == "tag" and not target_ref.is_empty():
-		return target_ref
-	if not target_commit.is_empty():
-		return target_commit
-	return target_ref
-
-
 func resolve_current_commit(freshness) -> String:
 	if freshness is Dictionary:
 		var sync_snapshot = (freshness as Dictionary).get("sync", {})
@@ -42,77 +32,81 @@ func resolve_current_commit(freshness) -> String:
 	return ""
 
 
-func build_compare_cache_key(base_commit: String, target_kind: String, target_ref: String, target_commit: String) -> String:
-	return "\n".join([
-		base_commit.strip_edges(),
-		target_kind.strip_edges(),
-		target_ref.strip_edges(),
-		target_commit.strip_edges()
-	])
-
-
-func build_compare_start_snapshot(base_commit: String, target: Dictionary, compare_cache: Dictionary = {}) -> Dictionary:
+func build_local_compare_snapshot(base_commit: String, target: Dictionary, commit_histories = {}) -> Dictionary:
 	var target_ref := str(target.get("ref", "")).strip_edges()
 	var target_commit := str(target.get("commit", "")).strip_edges()
 	var target_kind := str(target.get("kind", "branch")).strip_edges()
-	var compare_head := resolve_compare_head(target)
-	var state := "loading"
+	var normalized_base := base_commit.strip_edges()
+	var state := "unavailable"
+	var error := ""
 	var ahead_by := -1
 	var behind_by := -1
-	var source := "remote_required"
-	if base_commit.strip_edges().is_empty() or compare_head.strip_edges().is_empty():
-		state = "unavailable"
-	elif not target_commit.is_empty() and base_commit == target_commit:
+	var source := "local_history"
+	if normalized_base.is_empty() or target_ref.is_empty() or target_commit.is_empty():
+		error = "local_history_unavailable"
+	elif normalized_base == target_commit:
 		state = "success"
 		ahead_by = 0
 		behind_by = 0
 		source = "local_exact"
+	elif not (commit_histories is Dictionary):
+		error = "local_history_unavailable"
 	else:
-		var cache_key := build_compare_cache_key(base_commit, target_kind, target_ref, target_commit)
-		var cached = compare_cache.get(cache_key, {})
-		if cached is Dictionary and not target_commit.is_empty():
-			var cached_entry := cached as Dictionary
-			var cached_ahead := int((cached as Dictionary).get("ahead_by", -1))
-			var cached_behind := int((cached as Dictionary).get("behind_by", -1))
-			var cache_matches_target := str(cached_entry.get("base_commit", "")).strip_edges() == base_commit.strip_edges() \
-				and str(cached_entry.get("target_kind", "")).strip_edges() == target_kind \
-				and str(cached_entry.get("target_ref", "")).strip_edges() == target_ref \
-				and str(cached_entry.get("target_commit", "")).strip_edges() == target_commit
-			if cache_matches_target and cached_ahead >= 0 and cached_behind >= 0:
-				state = "success"
-				ahead_by = cached_ahead
-				behind_by = cached_behind
-				source = "cache"
+		var histories := commit_histories as Dictionary
+		var base_history = histories.get(normalized_base, {})
+		var target_history = histories.get(target_commit, {})
+		if not (base_history is Dictionary) or not (target_history is Dictionary):
+			error = "local_history_unavailable"
+		elif not bool((base_history as Dictionary).get("complete", false)) or not bool((target_history as Dictionary).get("complete", false)):
+			error = "local_history_incomplete"
+		else:
+			var base_commits := _normalize_history_commits((base_history as Dictionary).get("commits", []))
+			var target_commits := _normalize_history_commits((target_history as Dictionary).get("commits", []))
+			if base_commits.is_empty() or target_commits.is_empty() or not base_commits.has(normalized_base) or not target_commits.has(target_commit):
+				error = "local_history_incomplete"
+			else:
+				var base_set := {}
+				for commit in base_commits:
+					base_set[commit] = true
+				var target_set := {}
+				for commit in target_commits:
+					target_set[commit] = true
+				var common_found := false
+				for commit in target_commits:
+					if base_set.has(commit):
+						common_found = true
+						break
+				if not common_found:
+					error = "local_history_no_common_commit"
+				else:
+					ahead_by = 0
+					behind_by = 0
+					for commit in target_commits:
+						if not base_set.has(commit):
+							ahead_by += 1
+					for commit in base_commits:
+						if not target_set.has(commit):
+							behind_by += 1
+					state = "success"
 	return {
 		"state": state,
-		"base_commit": base_commit.strip_edges(),
+		"base_commit": normalized_base,
 		"target_kind": target_kind,
 		"target_ref": target_ref,
 		"target_commit": target_commit,
-		"compare_head": compare_head,
 		"ahead_by": ahead_by,
 		"behind_by": behind_by,
 		"source": source,
-		"error": ""
+		"error": error
 	}
 
 
-func parse_compare_response(body: PackedByteArray) -> Dictionary:
-	var json := JSON.new()
-	var parse_error := json.parse(body.get_string_from_utf8())
-	if parse_error != OK:
-		return {"success": false, "error": json.get_error_message()}
-	if not (json.data is Dictionary):
-		return {"success": false, "error": "Expected a JSON object"}
-	var data := json.data as Dictionary
-	if not data.has("ahead_by") or not data.has("behind_by"):
-		return {"success": false, "error": "Compare response is missing ahead_by or behind_by"}
-	var ahead_by := int(data.get("ahead_by", -1))
-	var behind_by := int(data.get("behind_by", -1))
-	if ahead_by < 0 or behind_by < 0:
-		return {"success": false, "error": "Compare response contains invalid commit counts"}
-	return {
-		"success": true,
-		"ahead_by": ahead_by,
-		"behind_by": behind_by
-	}
+func _normalize_history_commits(raw_commits) -> Array[String]:
+	var commits: Array[String] = []
+	if not (raw_commits is Array):
+		return commits
+	for raw_commit in raw_commits as Array:
+		var commit := str(raw_commit).strip_edges()
+		if not commit.is_empty() and not commits.has(commit):
+			commits.append(commit)
+	return commits
