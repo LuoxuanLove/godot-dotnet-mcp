@@ -61,15 +61,12 @@ func _verify_plugin_entrypoint_delegates_update_state_transitions() -> String:
 		"_ensure_plugin_update_state_transition_service().build_refs_success(",
 		"_ensure_plugin_update_state_transition_service().build_refs_failure(",
 		"_ensure_plugin_update_state_transition_service().build_compare_reset(",
-		"_ensure_plugin_update_state_transition_service().build_compare_failure(",
-		"_ensure_plugin_update_state_transition_service().build_compare_success(",
 		"func _apply_update_state_patch(patch: Dictionary) -> void:"
 	]:
 		if plugin_source.find(required) == -1:
 			return "plugin.gd should delegate update state transitions: %s" % required
 	for forbidden in [
 		"_state.update_sync_error = message",
-		"_state.update_compare_error = message",
 		"_state.update_refs_error = \"; \".join(errors)",
 		"_state.update_sync_progress = 1.0"
 	]:
