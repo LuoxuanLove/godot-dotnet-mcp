@@ -199,9 +199,9 @@ func run_case(tree: SceneTree) -> Dictionary:
 	var custom_branch_row := _instance.find_child("CustomBranchRow", true, false) as GridContainer
 	var custom_branch := _instance.find_child("CustomBranchValue", true, false) as OptionButton
 	var action_grid := _instance.find_child("UpdateActionGrid", true, false) as GridContainer
-	var details_button := _instance.find_child("DetailsButton", true, false) as Button
-	var details_panel := _instance.find_child("DetailsPanel", true, false) as PanelContainer
-	var details_text := _instance.find_child("UpdatesDetails", true, false) as Label
+	var status_text := _instance.find_child("UpdatesStatus", true, false) as Label
+	var version_toolbar := _instance.find_child("VersionToolbar", true, false) as GridContainer
+	var audit_text := _instance.find_child("UpdatesAudit", true, false) as Label
 	var version_tree := _instance.find_child("VersionTree", true, false) as Tree
 	if _instance.find_child("SourceOption", true, false) != null or _instance.find_child("ReleaseTagRow", true, false) != null or _instance.find_child("ReleaseTagValue", true, false) != null or _instance.find_child("CustomBranchValue", true, false) is LineEdit:
 		return _failure("Settings tab should not render removed source/release controls or manual LineEdit controls for update refs.")
@@ -221,8 +221,12 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should hide the branch selector while the Stable channel is active.")
 	if version_tree == null or not version_tree.visible or version_tree.get_root() == null or version_tree.get_root().get_first_child() == null:
 		return _failure("Settings tab should render the version management table for discovered stable releases.")
-	if version_tree.select_mode != Tree.SELECT_ROW or channel_tabs.get_index() + 1 != custom_branch_row.get_index() or custom_branch_row.get_index() + 1 != version_tree.get_index():
-		return _failure("Settings tab should group the release/development selector directly above a row-selecting version table.")
+	if custom_branch_row.get_index() + 1 != action_grid.get_index():
+		return _failure("Settings tab should place the Development branch selector directly above the update actions.")
+	if version_toolbar == null or version_toolbar.get_index() + 1 != version_tree.get_index() or channel_tabs.get_parent() != version_toolbar or audit_text.get_parent() != version_toolbar:
+		return _failure("Settings tab should group channel selection and refresh audit metadata in one toolbar directly above the version table.")
+	if version_tree.select_mode != Tree.SELECT_ROW:
+		return _failure("Settings tab version management should keep row selection enabled.")
 	var stable_row := version_tree.get_root().get_first_child()
 	if version_tree.columns != 3 or stable_row.get_button_count(2) == 0 or stable_row.get_next() == null or stable_row.get_next().get_button_count(2) == 0:
 		return _failure("Settings tab should render Switch actions for non-current discovered versions.")
@@ -236,8 +240,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 		return _failure("Settings tab should remove redundant update policy and repository metadata copy.")
 	if _find_label_containing(labels, "Current Version:") == null or _find_label_containing(labels, "1.0.1 (abcdef1)") == null:
 		return _failure("Settings tab should display the compact current-version summary above the version table.")
-	if _find_label_containing(labels, "Synced v1.2.3.") == null or details_button == null or details_button.visible or details_panel == null or details_panel.visible or details_text == null or not details_text.text.is_empty():
-		return _failure("Settings tab should show sync success once and hide empty diagnostic details.")
+	if _find_label_containing(labels, "Synced v1.2.3.") == null or _instance.find_child("DetailsButton", true, false) != null or _instance.find_child("DetailsPanel", true, false) != null or _instance.find_child("UpdatesDetails", true, false) != null:
+		return _failure("Settings tab should show sync status once without rendering the removed update-details disclosure.")
 	var check_button := _instance.find_child("CheckButton", true, false) as Button
 	if check_button == null or not check_button.visible or check_button.disabled or check_button.text != "Refresh List":
 		return _failure("Settings update Refresh List should be visible and enabled so refs refresh only when the user clicks it.")
@@ -369,7 +373,7 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_instance.custom_minimum_size.x = 0.0
 	await tree.process_frame
 	await tree.process_frame
-	if general_form.columns != 1 or custom_branch_row.columns != 1 or action_grid.columns != 1:
+	if general_form.columns != 1 or custom_branch_row.columns != 1 or action_grid.columns != 1 or version_toolbar.columns != 1:
 		return _failure("Settings tab should stack fields and actions at ultra-narrow Dock widths.")
 	_instance.size = Vector2(520, 900)
 	_instance.custom_minimum_size.x = 0.0
@@ -377,9 +381,8 @@ func run_case(tree: SceneTree) -> Dictionary:
 	_instance.call("_apply_responsive_layout")
 	await tree.process_frame
 	await tree.process_frame
-	if general_form.columns != 2 or custom_branch_row.columns != 2 or action_grid.columns != 2:
-		return _failure("Settings tab should restore compact two-column forms and actions above the ultra-narrow breakpoint (general=%d branch=%d actions=%d width=%.1f)." % [general_form.columns, custom_branch_row.columns, action_grid.columns, _instance.size.x])
-	details_button.button_pressed = false
+	if general_form.columns != 2 or custom_branch_row.columns != 2 or action_grid.columns != 2 or version_toolbar.columns != 2:
+		return _failure("Settings tab should restore compact two-column forms, actions, and version toolbar above the ultra-narrow breakpoint (general=%d branch=%d actions=%d toolbar=%d width=%.1f)." % [general_form.columns, custom_branch_row.columns, action_grid.columns, version_toolbar.columns, _instance.size.x])
 	_instance.apply_model({
 		"localization": FakeLocalization.new(),
 		"editor_scale": 1.0,
@@ -389,13 +392,18 @@ func run_case(tree: SceneTree) -> Dictionary:
 		"log_levels": ["debug", "info", "warning", "error"],
 		"update_refs_state": "success",
 		"update_refs_refresh_state": "error",
-		"update_refs_refresh_error": "Background version refresh failed; cached versions are still shown.",
+		"update_refs_refresh_error": "Background version refresh failed; cached versions are still shown. diagnostic-token-abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789",
+		"update_refs_last_trigger": "manual-trigger-abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789",
+		"update_refs_last_checked_unix": 1783986931,
+		"update_refs_last_http_status": 503,
 		"update_refs_commits": {"dev": "1234567890abcdef"},
 		"plugin_freshness": {}
 	})
 	await tree.process_frame
-	if not details_button.button_pressed or not details_panel.visible or not details_text.text.contains("Background version refresh failed"):
-		return _failure("Settings tab should automatically expand details for a background refresh failure while preserving cached update state.")
+	if status_text == null or not status_text.text.contains("Background version refresh failed") or status_text.autowrap_mode == TextServer.AUTOWRAP_OFF or not status_text.clip_text or status_text.tooltip_text != status_text.text:
+		return _failure("Settings tab should keep background errors visible in the wrapping primary status without restoring update details or overflowing the Dock.")
+	if audit_text == null or audit_text.text.is_empty() or not audit_text.text.contains("HTTP 503") or not audit_text.clip_text or audit_text.text_overrun_behavior == TextServer.OVERRUN_NO_TRIMMING or audit_text.tooltip_text != audit_text.text:
+		return _failure("Settings tab should constrain long update audit metadata and preserve its full text in a tooltip.")
 
 	return {"name": "settings_tab_rendering_contracts", "success": true, "error": ""}
 

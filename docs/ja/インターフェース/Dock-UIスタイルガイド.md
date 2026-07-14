@@ -60,9 +60,9 @@ list、table、preview、editor の scope を決める selector は、その sur
 - 1 card に常設 description は最大 1 つ、live status region は 1 つとします。controls、status、empty state だけで workflow が分かる場合は description を省き、同じ guidance を重複させません。
 - idle guidance は next action を示します。loading は active scope を示し、競合 action を lock し、測定可能なら progress を表示します。
 - success text は短くします。error text は原因と、既知なら recovery action を保持します。
-- trigger source、HTTP status、rate-limit reset、hash、comparison count は collapsible details に置きます。
-- persistent status region は primary result を担当します。details は supplemental とし、同じ error や summary を繰り返さず、actionable diagnostic evidence を追加する場合だけ自動展開します。
-- error または rate limit exhausted で details がその evidence を追加する場合は自動展開できますが、通常の audit は折りたたみます。
+- trigger source、HTTP status、refresh time などの operational metadata は、説明対象と compact な contextual row を共有できます。長い値は ellipsis で制約し、完全な値を tooltip で提供します。
+- persistent status region は primary result と必要な actionable diagnostics を担当します。同じ error や summary を別の領域で繰り返しません。
+- routine audit information は secondary な visual hierarchy を保ち、page を押し広げたり Dock から overflow したりしてはいけません。
 
 ## リスト、テーブル、空状態
 

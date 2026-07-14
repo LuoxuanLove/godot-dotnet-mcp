@@ -60,9 +60,9 @@ list, table, preview, editor의 scope를 정하는 selector는 해당 surface �
 - 한 card에는 상시 description 최대 하나와 live status region 하나만 둡니다. controls, status, empty state만으로 workflow가 설명되면 description을 생략하고 같은 guidance를 반복하지 않습니다.
 - idle guidance는 next action을 알려야 합니다. loading은 active scope를 표시하고 충돌 action을 잠그며 측정 가능하면 progress를 보여 줍니다.
 - success text는 짧게 유지합니다. error text는 원인과 알려진 경우 recovery action을 보존합니다.
-- trigger source, HTTP status, rate-limit reset, hash, comparison count는 collapsible details에 둡니다.
-- persistent status region은 primary result를 담당합니다. details는 supplemental이어야 하며 같은 error나 summary를 반복하지 않고 actionable diagnostic evidence를 추가할 때만 자동으로 펼칩니다.
-- error 또는 rate limit exhausted 상태에서 details가 해당 evidence를 추가하면 자동으로 펼칠 수 있지만 일반 audit은 접힌 상태로 둡니다.
+- trigger source, HTTP status, refresh time 같은 operational metadata는 설명 대상과 compact contextual row를 공유할 수 있습니다. 긴 값은 ellipsis로 제한하고 전체 값은 tooltip으로 제공합니다.
+- persistent status region은 primary result와 필요한 actionable diagnostics를 담당합니다. 같은 error나 summary를 다른 영역에서 반복하지 않습니다.
+- routine audit information은 secondary visual hierarchy를 유지하며 page를 늘리거나 Dock 밖으로 overflow해서는 안 됩니다.
 
 ## 목록, 테이블, 빈 상태
 
